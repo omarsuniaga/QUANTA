@@ -163,7 +163,8 @@ export interface Subscription {
 export interface AIConfig {
   enabled: boolean;
   level: 'soft' | 'medium' | 'aggressive';
-  dataSharing?: boolean; 
+  dataSharing?: boolean;
+  userGeminiApiKey?: string; // User's personal Gemini API key
 }
 
 export interface NotificationConfig {

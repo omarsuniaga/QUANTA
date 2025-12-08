@@ -2,26 +2,86 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, Category, Goal, DashboardStats, AIInsight } from '../types';
 
+// Store for user's API key
+let userApiKey: string = '';
+
 // Safely retrieve API key
-const getApiKey = () => {
-  // Disable AI in production to protect API key
-  if (typeof process !== 'undefined' && process.env.IS_PRODUCTION === 'true') {
-    return '';
+const getApiKey = (): string => {
+  // Priority 1: User's personal API key
+  if (userApiKey && userApiKey.trim() !== '') {
+    return userApiKey;
   }
-  if (typeof process !== 'undefined' && process.env.API_KEY && process.env.API_KEY !== 'undefined') {
-    return process.env.API_KEY;
+  
+  // Priority 2: Development environment key
+  if (typeof process !== 'undefined' && process.env.IS_PRODUCTION !== 'true') {
+    if (process.env.API_KEY && process.env.API_KEY !== 'undefined') {
+      return process.env.API_KEY;
+    }
   }
+  
   return '';
 };
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+// Function to set user's API key
+export const setUserGeminiApiKey = (apiKey: string) => {
+  userApiKey = apiKey;
+};
+
+// Function to get current API key (for testing)
+export const hasValidApiKey = (): boolean => {
+  return getApiKey().length > 0;
+};
 
 export const geminiService = {
+  /**
+   * Test if the current API key works
+   */
+  async testApiKey(apiKey?: string): Promise<{ success: boolean; message: string }> {
+    const testKey = apiKey || getApiKey();
+    
+    if (!testKey || testKey.trim() === '') {
+      return { 
+        success: false, 
+        message: 'No se proporcionó una API key' 
+      };
+    }
+
+    try {
+      const testAi = new GoogleGenAI({ apiKey: testKey });
+      const response = await testAi.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: 'Responde solo con "OK" si puedes leer esto.',
+      });
+      
+      const text = response.text;
+      if (text && text.length > 0) {
+        return { 
+          success: true, 
+          message: '✅ API Key válida y funcional' 
+        };
+      }
+      
+      return { 
+        success: false, 
+        message: 'La API key no generó una respuesta válida' 
+      };
+    } catch (error: any) {
+      console.error("API Key test error:", error);
+      return { 
+        success: false, 
+        message: `❌ Error: ${error.message || 'API Key inválida'}` 
+      };
+    }
+  },
+
   /**
    * Parses natural language input into a structured transaction object.
    */
   async parseTransaction(input: string): Promise<Partial<Transaction> | null> {
-    if (!getApiKey()) return null;
+    const apiKey = getApiKey();
+    if (!apiKey) return null;
+    
+    const ai = new GoogleGenAI({ apiKey });
 
     try {
       const response = await ai.models.generateContent({
@@ -68,7 +128,10 @@ export const geminiService = {
     stats: DashboardStats,
     goals: Goal[]
   ): Promise<AIInsight[]> {
-    if (!getApiKey() || transactions.length === 0) return [];
+    const apiKey = getApiKey();
+    if (!apiKey || transactions.length === 0) return [];
+
+    const ai = new GoogleGenAI({ apiKey });
 
     try {
       // 1. Prepare Context (Summarized to save tokens)

@@ -3,6 +3,7 @@ import { AppSettings, QuickAction, Goal, Promo, Account, Budget } from '../types
 import { storageService } from '../services/storageService';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { setUserGeminiApiKey } from '../services/geminiService';
 
 interface SettingsContextType {
   settings: AppSettings | null;
@@ -117,6 +118,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       setPromos(ps);
       setAccounts(accs);
       setBudgets(bdgs);
+      
+      // Sync user's Gemini API key with service
+      if (sts?.aiConfig?.userGeminiApiKey) {
+        setUserGeminiApiKey(sts.aiConfig.userGeminiApiKey);
+      }
     } catch (error) {
       console.error('Error loading settings data:', error);
     } finally {
@@ -132,6 +138,12 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const updateSettings = useCallback(async (updates: Partial<AppSettings>) => {
     const newSettings = { ...settings, ...updates } as AppSettings;
     setSettings(newSettings);
+    
+    // Sync Gemini API key if it was updated
+    if (updates.aiConfig?.userGeminiApiKey !== undefined) {
+      setUserGeminiApiKey(updates.aiConfig.userGeminiApiKey);
+    }
+    
     try {
       await storageService.saveSettings(newSettings);
     } catch (error) {

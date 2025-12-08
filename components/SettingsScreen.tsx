@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts';
+import { GeminiApiKeySettings } from './GeminiApiKeySettings';
 
 interface SettingsScreenProps {
   settings: AppSettings;
@@ -36,6 +37,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     onUpdateSettings({
       ...settings,
       aiConfig: { ...settings.aiConfig, enabled: !settings.aiConfig.enabled }
+    });
+  };
+
+  const handleSaveApiKey = (apiKey: string) => {
+    onUpdateSettings({
+      ...settings,
+      aiConfig: { ...settings.aiConfig, userGeminiApiKey: apiKey }
     });
   };
 
@@ -278,6 +286,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${settings.aiConfig.enabled ? 'left-7' : 'left-1'}`}></div>
                 </button>
               </div>
+
+              {/* Gemini API Key Configuration */}
+              {settings.aiConfig.enabled && (
+                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                  <GeminiApiKeySettings
+                    currentApiKey={settings.aiConfig.userGeminiApiKey || ''}
+                    onSave={handleSaveApiKey}
+                  />
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
