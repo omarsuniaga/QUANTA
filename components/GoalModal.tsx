@@ -1,0 +1,144 @@
+import React, { useState, useEffect } from 'react';
+import { X, Plane, Shield, Gift, Car, Home, Save, Trash2 } from 'lucide-react';
+import { Goal } from '../types';
+import { Button } from './Button';
+
+interface GoalModalProps {
+  goal?: Goal | null;
+  onSave: (goal: Goal) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+  currencySymbol?: string;
+}
+
+const ICONS = [
+  { name: 'plane', icon: Plane },
+  { name: 'shield', icon: Shield },
+  { name: 'gift', icon: Gift },
+  { name: 'car', icon: Car },
+  { name: 'home', icon: Home },
+  { name: 'save', icon: Save },
+];
+
+const COLORS = ['indigo', 'emerald', 'purple', 'rose', 'blue', 'amber'];
+
+export const GoalModal: React.FC<GoalModalProps> = ({ goal, onSave, onDelete, onClose, currencySymbol = '$' }) => {
+  const [name, setName] = useState(goal?.name || '');
+  const [target, setTarget] = useState(goal?.targetAmount.toString() || '');
+  const [current, setCurrent] = useState(goal?.currentAmount.toString() || '');
+  const [icon, setIcon] = useState(goal?.icon || 'save');
+  const [color, setColor] = useState(goal?.color || 'indigo');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave({
+      id: goal?.id || Math.random().toString(36).substr(2, 9),
+      name,
+      targetAmount: parseFloat(target) || 0,
+      currentAmount: parseFloat(current) || 0,
+      icon,
+      color,
+    });
+    onClose();
+  };
+
+  const handleDelete = () => {
+    if (goal && window.confirm('¿Eliminar esta meta?')) {
+      onDelete(goal.id);
+      onClose();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 relative">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{goal ? 'Editar Meta' : 'Nueva Meta'}</h2>
+          <button onClick={onClose} className="bg-slate-50 dark:bg-slate-800 p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <div>
+            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Nombre de la Meta</label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: Viaje a Europa"
+              className="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Objetivo ({currencySymbol})</label>
+              <input
+                type="number"
+                required
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                className="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Ahorrado ({currencySymbol})</label>
+              <input
+                type="number"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                className="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Icono</label>
+             <div className="flex flex-wrap gap-2">
+               {ICONS.map((item) => (
+                 <button
+                   key={item.name}
+                   type="button"
+                   onClick={() => setIcon(item.name)}
+                   className={`p-3 rounded-xl transition-all ${icon === item.name ? `bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-md` : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                 >
+                   <item.icon className="w-5 h-5" />
+                 </button>
+               ))}
+             </div>
+          </div>
+
+          <div>
+             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Color</label>
+             <div className="flex gap-2">
+               {COLORS.map((c) => (
+                 <button
+                   key={c}
+                   type="button"
+                   onClick={() => setColor(c)}
+                   className={`w-8 h-8 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`}
+                   style={{ backgroundColor: `var(--color-${c}-500, ${c})` }} 
+                 >
+                   <div className={`w-full h-full rounded-full bg-${c}-500`}></div>
+                 </button>
+               ))}
+             </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            {goal && (
+              <Button type="button" variant="danger" onClick={handleDelete} className="px-4">
+                <Trash2 className="w-5 h-5" />
+              </Button>
+            )}
+            <Button type="submit" fullWidth className="shadow-lg shadow-indigo-200 dark:shadow-none">
+              Guardar Meta
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
