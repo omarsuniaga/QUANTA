@@ -210,25 +210,6 @@ export default function App() {
   };
 
   // Inicializar notificaciones push
-  React.useEffect(() => {
-    const initializeNotifications = async () => {
-      if (user && pushNotificationService.isNotificationSupported()) {
-        await pushNotificationService.initialize();
-
-        // Mostrar prompt si no se ha mostrado antes y hay transacciones
-        const hasShown = localStorage.getItem('notificationPromptShown');
-        if (!hasShown && transactions.length > 0) {
-          // Esperar 5 segundos después de que el usuario vea la app
-          setTimeout(() => {
-            setShowNotificationPrompt(true);
-          }, 5000);
-        }
-      }
-    };
-
-    initializeNotifications();
-  }, [user, transactions.length]);
-
   const handleLogout = async () => {
     await logout();
     setActiveTab('dashboard');
