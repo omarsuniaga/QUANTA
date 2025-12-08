@@ -134,6 +134,14 @@ export interface Promo {
   color: string; 
 }
 
+export interface Budget {
+  category: string;
+  limit: number;
+  spent?: number;
+  period?: 'monthly' | 'yearly';
+  createdAt?: number;
+}
+
 export interface Subscription {
   id: string;
   name: string;

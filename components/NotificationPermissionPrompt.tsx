@@ -25,7 +25,9 @@ export const NotificationPermissionPrompt: React.FC<NotificationPermissionPrompt
         const granted = await pushNotificationService.requestPermission();
 
         if (granted) {
-            localStorage.setItem('notificationPromptShown', 'true');
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('notificationPromptShown', 'true');
+            }
             setStep('success');
             setTimeout(() => onClose(), 2000);
         } else {

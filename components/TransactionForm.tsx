@@ -26,6 +26,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
 
   // Close on Escape key
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };

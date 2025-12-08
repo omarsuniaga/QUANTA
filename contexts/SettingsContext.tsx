@@ -77,6 +77,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   );
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => setSystemPrefersDark(e.matches);
     mediaQuery.addEventListener('change', handler);

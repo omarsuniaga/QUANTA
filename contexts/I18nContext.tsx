@@ -18,6 +18,7 @@ export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Load language from localStorage on mount
     useEffect(() => {
+        if (typeof window === 'undefined') return;
         const saved = localStorage.getItem('language') as Language;
         if (saved && (saved === 'es' || saved === 'en')) {
             setLanguageState(saved);
@@ -26,7 +27,9 @@ export const I18nProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const setLanguage = (lang: Language) => {
         setLanguageState(lang);
-        localStorage.setItem('language', lang);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('language', lang);
+        }
     };
 
     const value: I18nContextType = {

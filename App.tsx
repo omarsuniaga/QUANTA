@@ -83,7 +83,7 @@ export default function App() {
         notificationsInitialized.current = true;
 
         // Mostrar prompt si no se ha mostrado antes y hay transacciones
-        const hasShown = localStorage.getItem('notificationPromptShown');
+        const hasShown = typeof window !== 'undefined' && localStorage.getItem('notificationPromptShown');
         if (!hasShown && transactions.length > 0) {
           // Esperar 5 segundos después de que el usuario vea la app
           setTimeout(() => {

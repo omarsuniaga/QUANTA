@@ -105,7 +105,9 @@ class PushNotificationService {
         };
 
         // Guardar en localStorage por ahora
-        localStorage.setItem('fcm_token', JSON.stringify(tokenData));
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('fcm_token', JSON.stringify(tokenData));
+        }
         
         console.log('FCM Token obtained and saved:', token.substring(0, 20) + '...');
       } else {
