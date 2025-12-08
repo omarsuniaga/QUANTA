@@ -4,7 +4,11 @@ import { Transaction, Category, Goal, DashboardStats, AIInsight } from '../types
 
 // Safely retrieve API key
 const getApiKey = () => {
-  if (typeof process !== 'undefined' && process.env.API_KEY) {
+  // Disable AI in production to protect API key
+  if (typeof process !== 'undefined' && process.env.IS_PRODUCTION === 'true') {
+    return '';
+  }
+  if (typeof process !== 'undefined' && process.env.API_KEY && process.env.API_KEY !== 'undefined') {
     return process.env.API_KEY;
   }
   return '';
