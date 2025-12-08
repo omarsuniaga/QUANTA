@@ -77,7 +77,7 @@ export const storageService = {
 
     // Update Login Timestamp (Silent fail if permissions denied)
     try {
-      await getUserRef(uid).update({ lastLoginAt: Date.now() });
+      await getUserRef(uid).set({ lastLoginAt: Date.now(), email: email, uid: uid }, { merge: true });
     } catch (e) {
       console.warn("Could not update lastLoginAt (Permissions?)", e);
     }

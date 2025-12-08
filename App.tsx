@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
 import { ActionModal } from './components/ActionModal';
@@ -68,6 +68,33 @@ export default function App() {
 
   // === LOADING STATE ===
   const loading = authLoading || txLoading || settingsLoading;
+
+  // === EFFECTS ===
+  // Ref to track if notifications have been initialized
+  const notificationsInitialized = useRef(false);
+
+  // Inicializar notificaciones push (solo una vez)
+  useEffect(() => {
+    if (notificationsInitialized.current) return;
+
+    const initializeNotifications = async () => {
+      if (user && pushNotificationService.isNotificationSupported()) {
+        await pushNotificationService.initialize();
+        notificationsInitialized.current = true;
+
+        // Mostrar prompt si no se ha mostrado antes y hay transacciones
+        const hasShown = localStorage.getItem('notificationPromptShown');
+        if (!hasShown && transactions.length > 0) {
+          // Esperar 5 segundos después de que el usuario vea la app
+          setTimeout(() => {
+            setShowNotificationPrompt(true);
+          }, 5000);
+        }
+      }
+    };
+
+    initializeNotifications();
+  }, [user, transactions.length]);
 
   if (loading) {
     return (
@@ -458,4 +485,3 @@ export default function App() {
     </div>
   );
 }
-```
