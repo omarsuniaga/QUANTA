@@ -13,10 +13,103 @@ import {
   Plane,
   Shield,
   Gift,
-  AlertCircle
+  AlertCircle,
+  // Extended icon set for custom categories
+  Coffee,
+  Utensils,
+  Pizza,
+  Wine,
+  ShoppingBag,
+  Shirt,
+  Smartphone,
+  Laptop,
+  Gamepad2,
+  Music,
+  BookOpen,
+  GraduationCap,
+  Dumbbell,
+  Stethoscope,
+  Pill,
+  Baby,
+  Dog,
+  Cat,
+  Fuel,
+  Bus,
+  Train,
+  Bike,
+  Receipt,
+  CreditCard,
+  Wallet,
+  PiggyBank,
+  TrendingUp,
+  TrendingDown,
+  Building2,
+  Store,
+  Hammer,
+  Wrench,
+  Sparkles,
+  PartyPopper,
+  Cake,
+  Camera,
+  Tv,
+  Wifi,
+  Phone,
+  Mail,
+  Globe,
+  Map,
+  Umbrella,
+  Sun,
+  Moon,
+  Star,
+  Crown,
+  Trophy,
+  Target,
+  Lightbulb,
+  Scissors,
+  Palette,
+  Brush,
+  PenTool,
+  Coins,
+  Banknote
 } from 'lucide-react';
 
+// Extended icon map for dynamic icon resolution
+export const ALL_ICONS: Record<string, any> = {
+  // Original category icons
+  Home, ShoppingCart, Zap, Car, Heart, Film, Briefcase, DollarSign, Layers, 
+  MoreHorizontal, Plane, Shield, Gift, AlertCircle,
+  // Food & Drink
+  Coffee, Utensils, Pizza, Wine,
+  // Shopping
+  ShoppingBag, Shirt,
+  // Tech
+  Smartphone, Laptop, Gamepad2,
+  // Entertainment
+  Music, BookOpen, GraduationCap,
+  // Health & Fitness
+  Dumbbell, Stethoscope, Pill,
+  // Family & Pets
+  Baby, Dog, Cat,
+  // Transport
+  Fuel, Bus, Train, Bike,
+  // Finance
+  Receipt, CreditCard, Wallet, PiggyBank, TrendingUp, TrendingDown, Coins, Banknote,
+  // Business
+  Building2, Store, Hammer, Wrench,
+  // Events
+  Sparkles, PartyPopper, Cake, Camera,
+  // Home & Tech
+  Tv, Wifi, Phone, Mail,
+  // Travel
+  Globe, Map, Umbrella, Sun, Moon,
+  // Achievement
+  Star, Crown, Trophy, Target, Lightbulb,
+  // Creative
+  Scissors, Palette, Brush, PenTool
+};
+
 export const CATEGORY_COLORS: Record<string, string> = {
+  // Enum values (legacy support)
   [Category.Salary]: '#10b981', // Emerald 500
   [Category.Freelance]: '#34d399', // Emerald 400
   [Category.Investments]: '#059669', // Emerald 600
@@ -31,9 +124,42 @@ export const CATEGORY_COLORS: Record<string, string> = {
   [Category.Eventual]: '#f97316', // Orange 500
   [Category.Unexpected]: '#ef4444', // Red 500
   [Category.Leisure]: '#d946ef', // Fuchsia 500
+  // Default category IDs (from getDefaultCategories)
+  'food': '#f97316', // orange
+  'transport': '#3b82f6', // blue
+  'leisure': '#a855f7', // purple
+  'utilities': '#f59e0b', // amber
+  'subscriptions': '#6366f1', // indigo
+  'health': '#f43f5e', // rose
+  'housing': '#14b8a6', // teal
+  'shopping': '#ec4899', // pink
+  'education': '#06b6d4', // cyan
+  'other_expense': '#64748b', // slate
+  'salary': '#10b981', // emerald
+  'freelance': '#8b5cf6', // violet
+  'investments': '#84cc16', // lime
+  'gifts': '#d946ef', // fuchsia
+  'other_income': '#0ea5e9', // sky
+  // Additional common category keys
+  'Food': '#f97316',
+  'Transportation': '#3b82f6',
+  'Leisure': '#a855f7',
+  'Utilities': '#f59e0b',
+  'Subscriptions': '#6366f1',
+  'Health': '#f43f5e',
+  'Housing': '#14b8a6',
+  'Shopping': '#ec4899',
+  'Education': '#06b6d4',
+  'Other': '#64748b',
+  'Salary': '#10b981',
+  'Freelance': '#8b5cf6',
+  'Investments': '#84cc16',
+  'Gifts': '#d946ef',
+  'OtherIncome': '#0ea5e9',
 };
 
 export const CATEGORY_ICONS: Record<string, any> = {
+  // Enum values (legacy support)
   [Category.Salary]: DollarSign,
   [Category.Freelance]: Briefcase,
   [Category.Investments]: Layers,
@@ -48,6 +174,38 @@ export const CATEGORY_ICONS: Record<string, any> = {
   [Category.Eventual]: AlertCircle,
   [Category.Unexpected]: AlertCircle,
   [Category.Leisure]: Gift,
+  // Default category IDs (from getDefaultCategories)
+  'food': Utensils,
+  'transport': Car,
+  'leisure': Gamepad2,
+  'utilities': Zap,
+  'subscriptions': Tv,
+  'health': Heart,
+  'housing': Home,
+  'shopping': ShoppingBag,
+  'education': GraduationCap,
+  'other_expense': MoreHorizontal,
+  'salary': Briefcase,
+  'freelance': Laptop,
+  'investments': TrendingUp,
+  'gifts': Gift,
+  'other_income': Coins,
+  // Additional common category keys
+  'Food': Utensils,
+  'Transportation': Car,
+  'Leisure': Gamepad2,
+  'Utilities': Zap,
+  'Subscriptions': Tv,
+  'Health': Heart,
+  'Housing': Home,
+  'Shopping': ShoppingBag,
+  'Education': GraduationCap,
+  'Other': MoreHorizontal,
+  'Salary': Briefcase,
+  'Freelance': Laptop,
+  'Investments': TrendingUp,
+  'Gifts': Gift,
+  'OtherIncome': Coins,
 };
 
 export const PAYMENT_METHODS = [

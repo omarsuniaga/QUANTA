@@ -29,7 +29,7 @@ const TAILWIND_COLORS: Record<string, string> = {
   yellow: '#eab308',
   gray: '#6b7280',
 };
-import { Wallet, ArrowUpRight, ArrowDownRight, BellRing, TrendingUp, HelpCircle, Smile, Frown, Zap, Trophy, PieChart as PieChartIcon, Filter } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownRight, BellRing, TrendingUp, HelpCircle, Smile, Frown, Zap, Trophy, PieChart as PieChartIcon, Filter, Info, X } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 import { storageService } from '../services/storageService';
 import { InsightCard } from './InsightCard';
@@ -48,6 +48,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
   const { t, language } = useI18n();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  const [showOracleHelp, setShowOracleHelp] = useState(false);
   
   // Load subscriptions and custom categories on mount
   useEffect(() => {
@@ -229,7 +230,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
               </div>
               <span className="text-xs font-bold uppercase tracking-wider text-indigo-200">{t.dashboard.oracle}</span>
             </div>
-            <span className="text-xs text-slate-400 bg-slate-800/50 px-2 py-1 rounded-md border border-slate-700">{t.dashboard.endOfMonth}</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowOracleHelp(true)}
+                className="p-1.5 bg-indigo-500/20 hover:bg-indigo-500/40 rounded-lg transition-colors"
+                aria-label="Info"
+              >
+                <Info className="w-4 h-4 text-indigo-300" />
+              </button>
+              <span className="text-xs text-slate-400 bg-slate-800/50 px-2 py-1 rounded-md border border-slate-700">{t.dashboard.endOfMonth}</span>
+            </div>
           </div>
 
           <div className="flex items-end justify-between">
@@ -246,6 +256,45 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
             {t.dashboard.recurringBillsInfo}
           </div>
         </div>
+
+        {/* Oracle Help Modal */}
+        {showOracleHelp && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowOracleHelp(false)}>
+            <div 
+              className="bg-gradient-to-br from-indigo-900 to-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-indigo-500/30"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-500/30 rounded-xl">
+                    <HelpCircle className="w-6 h-6 text-indigo-300" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">{t.dashboard.oracleHelpTitle}</h3>
+                </div>
+                <button
+                  onClick={() => setShowOracleHelp(false)}
+                  className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+              <p className="text-slate-300 text-sm leading-relaxed mb-4">
+                {t.dashboard.oracleHelpContent}
+              </p>
+              <div className="bg-indigo-500/20 rounded-xl p-3 mb-4">
+                <p className="text-indigo-200 text-sm">
+                  {t.dashboard.oracleHelpTip}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowOracleHelp(false)}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors"
+              >
+                {t.dashboard.gotIt}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MAIN STATS GRID */}
