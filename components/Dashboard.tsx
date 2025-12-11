@@ -4,8 +4,31 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
-import { Transaction, DashboardStats, Category, AppSettings, Goal, Subscription } from '../types';
+import { Transaction, DashboardStats, Category, AppSettings, Goal, Subscription, CustomCategory } from '../types';
 import { CATEGORY_COLORS } from '../constants';
+
+// Tailwind color name to hex mapping for custom categories
+const TAILWIND_COLORS: Record<string, string> = {
+  orange: '#f97316',
+  blue: '#3b82f6',
+  purple: '#a855f7',
+  amber: '#f59e0b',
+  indigo: '#6366f1',
+  rose: '#f43f5e',
+  teal: '#14b8a6',
+  pink: '#ec4899',
+  cyan: '#06b6d4',
+  slate: '#64748b',
+  emerald: '#10b981',
+  violet: '#8b5cf6',
+  lime: '#84cc16',
+  fuchsia: '#d946ef',
+  sky: '#0ea5e9',
+  red: '#ef4444',
+  green: '#22c55e',
+  yellow: '#eab308',
+  gray: '#6b7280',
+};
 import { Wallet, ArrowUpRight, ArrowDownRight, BellRing, TrendingUp, HelpCircle, Smile, Frown, Zap, Trophy, PieChart as PieChartIcon, Filter } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 import { storageService } from '../services/storageService';
@@ -24,23 +47,33 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals, onAddClick, onFilter, currencyConfig }) => {
   const { t, language } = useI18n();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   
-  // Load subscriptions on mount
+  // Load subscriptions and custom categories on mount
   useEffect(() => {
-    const loadSubscriptions = async () => {
+    const loadData = async () => {
       try {
-        const subs = await storageService.getSubscriptions();
+        const [subs, cats] = await Promise.all([
+          storageService.getSubscriptions(),
+          storageService.getCategories()
+        ]);
         setSubscriptions(subs);
+        setCustomCategories(cats);
       } catch (error) {
-        console.error('Error loading subscriptions:', error);
+        console.error('Error loading data:', error);
       }
     };
-    loadSubscriptions();
+    loadData();
   }, [transactions]); // Reload when transactions change (in case a new service was added)
   
   // Check for notifications
   const upcomingPayments = notificationService.getUpcomingTransactions(transactions);
   const symbol = currencyConfig?.localSymbol || '$';
+  const code = currencyConfig?.localCode || 'USD';
+  
+  // Helper to format currency as "1,234.56 USD"
+  const formatCurrency = (amount: number) => `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`;
+  const formatCurrencyShort = (amount: number) => `${amount.toLocaleString()} ${code}`;
 
   // --- ORACLE: CASH FLOW PREDICTION ---
   const predictedBalance = useMemo(() => {
@@ -73,13 +106,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
     const data = transactions.reduce((acc, curr) => {
       if (curr.type === 'expense') {
         if (!acc[curr.category]) {
-          // Get translated category name
-          const translatedName = (t.categories as Record<string, string>)[curr.category] || curr.category;
+          // First, try to find in custom categories (by id or key)
+          const customCat = customCategories.find(c => c.id === curr.category || c.key === curr.category);
+          let translatedName: string;
+          let categoryColor: string;
+          
+          if (customCat) {
+            // Use custom category name based on language
+            translatedName = customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+            // Convert Tailwind color name to hex
+            categoryColor = TAILWIND_COLORS[customCat.color] || CATEGORY_COLORS[curr.category] || '#94a3b8';
+          } else {
+            // Fallback to translation system for default categories
+            translatedName = (t.categories as Record<string, string>)[curr.category] || curr.category;
+            categoryColor = CATEGORY_COLORS[curr.category] || '#94a3b8';
+          }
+          
           acc[curr.category] = { 
             name: translatedName, 
             originalName: curr.category, // Keep original for filtering
             value: 0, 
-            color: CATEGORY_COLORS[curr.category] || '#94a3b8' 
+            color: categoryColor
           };
         }
         acc[curr.category].value += curr.amount;
@@ -87,7 +134,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
       return acc;
     }, {} as Record<string, any>);
     return Object.values(data).sort((a: any, b: any) => b.value - a.value);
-  }, [transactions, t.categories]);
+  }, [transactions, t.categories, customCategories, language]);
 
   // --- EMOTIONAL DASHBOARD: Mood Correlation ---
   const moodStats = useMemo(() => {
@@ -133,7 +180,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
           <p className="text-xs font-semibold text-gray-900 dark:text-white mb-1">{label}</p>
           {payload.map((p: any, idx: number) => (
             <p key={idx} className="text-xs" style={{ color: p.color }}>
-              {p.name === 'income' ? t.dashboard.income : t.dashboard.expenses}: {symbol}{p.value.toLocaleString()}
+              {p.name === 'income' ? t.dashboard.income : t.dashboard.expenses}: {formatCurrencyShort(p.value)}
             </p>
           ))}
         </div>
@@ -188,11 +235,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
           <div className="flex items-end justify-between">
             <div>
               <p className="text-slate-400 text-sm mb-1">{t.dashboard.balanceProjection}</p>
-              <h3 className="text-3xl font-bold">{symbol}{predictedBalance.toLocaleString()}</h3>
+              <h3 className="text-3xl font-bold">{formatCurrencyShort(predictedBalance)}</h3>
             </div>
             <div className="text-right">
               <p className="text-xs text-rose-300 mb-0.5">{t.dashboard.pending}</p>
-              <p className="font-semibold text-rose-400">-{symbol}{(stats.balance - predictedBalance).toLocaleString()}</p>
+              <p className="font-semibold text-rose-400">-{formatCurrencyShort(stats.balance - predictedBalance)}</p>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-white/10 text-xs text-slate-400 leading-relaxed">
@@ -210,7 +257,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
             </div>
             <span className="text-[10px] sm:text-xs font-bold">{t.dashboard.income}</span>
           </div>
-          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{symbol}{stats.totalIncome.toLocaleString()}</span>
+          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(stats.totalIncome)}</span>
         </div>
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col">
           <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 mb-2">
@@ -219,7 +266,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
             </div>
             <span className="text-[10px] sm:text-xs font-bold">{t.dashboard.expenses}</span>
           </div>
-          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{symbol}{stats.totalExpense.toLocaleString()}</span>
+          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(stats.totalExpense)}</span>
         </div>
         {/* Balance Card - Visible on tablet/desktop */}
         <div className="hidden md:flex bg-gradient-to-br from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-700 rounded-2xl p-3 sm:p-4 shadow-sm flex-col text-white">
@@ -229,7 +276,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
             </div>
             <span className="text-[10px] sm:text-xs font-bold opacity-90">Balance</span>
           </div>
-          <span className="text-lg sm:text-xl font-bold">{symbol}{stats.balance.toLocaleString()}</span>
+          <span className="text-lg sm:text-xl font-bold">{formatCurrencyShort(stats.balance)}</span>
         </div>
         {/* Savings Rate - Visible on tablet/desktop */}
         <div className="hidden md:flex bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex-col">
@@ -279,7 +326,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
                 <RechartsTooltip
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   itemStyle={{ fontSize: '12px', fontWeight: '600' }}
-                  formatter={(value: number) => `${symbol}${value.toLocaleString()}`}
+                  formatter={(value: number) => formatCurrencyShort(value)}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -308,7 +355,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
                     </div>
                   </div>
                 </div>
-                <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">{symbol}{cat.value.toLocaleString()}</span>
+                <span className="text-xs sm:text-sm font-semibold text-slate-600 dark:text-slate-300">{formatCurrencyShort(cat.value)}</span>
               </div>
             ))}
           </div>
@@ -326,13 +373,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
               <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
                 <Frown className="w-3 h-3 text-rose-500" /> {t.dashboard.stress}
               </div>
-              <p className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">{symbol}{(moodStats.stressed || 0).toLocaleString()}</p>
+              <p className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">{formatCurrencyShort(moodStats.stressed || 0)}</p>
             </div>
             <div className="bg-white dark:bg-slate-700 p-2 sm:p-3 rounded-xl border border-indigo-50 dark:border-slate-600 shadow-sm">
               <div className="flex items-center gap-1 sm:gap-2 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
                 <Zap className="w-3 h-3 text-amber-500" /> {t.dashboard.tiredness}
               </div>
-              <p className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">{symbol}{(moodStats.tired || 0).toLocaleString()}</p>
+              <p className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">{formatCurrencyShort(moodStats.tired || 0)}</p>
             </div>
           </div>
           <p className="text-[10px] sm:text-xs text-indigo-600 dark:text-indigo-400 mt-2 sm:mt-3 font-medium">
@@ -362,7 +409,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(val) => `${symbol}${val / 1000}k`} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(val) => `${(val / 1000).toFixed(0)}k ${code}`} />
               <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.1)' }} />
               <Bar dataKey="income" fill="#10b981" radius={[4, 4, 4, 4]} barSize={8} />
               <Bar dataKey="expense" fill="#f43f5e" radius={[4, 4, 4, 4]} barSize={8} />

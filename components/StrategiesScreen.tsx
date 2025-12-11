@@ -21,6 +21,7 @@ interface StrategiesScreenProps {
   transactions: Transaction[];
   stats: DashboardStats;
   currencySymbol: string;
+  currencyCode: string;
   onBack: () => void;
 }
 
@@ -28,6 +29,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
   transactions,
   stats,
   currencySymbol,
+  currencyCode,
   onBack
 }) => {
   const [strategies, setStrategies] = useState<FinancialStrategy[]>([]);
@@ -281,7 +283,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
 
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-500 dark:text-slate-400">
-                          Actual: {currencySymbol}{alloc.currentAmount.toLocaleString()}
+                          Actual: {alloc.currentAmount.toLocaleString()} {currencyCode}
                         </span>
                         <span className={`font-medium ${
                           alloc.status === 'on_track' 
@@ -326,8 +328,8 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                           </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                             {isOver 
-                              ? `Estás gastando ${diff}% más de lo recomendado. Intenta reducir ${currencySymbol}${amountDiff.toFixed(0)} este mes.`
-                              : `Estás ${diff}% por debajo. Intenta destinar ${currencySymbol}${amountDiff.toFixed(0)} adicionales.`
+                              ? `Estás gastando ${diff}% más de lo recomendado. Intenta reducir ${amountDiff.toFixed(0)} ${currencyCode} este mes.`
+                              : `Estás ${diff}% por debajo. Intenta destinar ${amountDiff.toFixed(0)} ${currencyCode} adicionales.`
                             }
                           </p>
                         </div>

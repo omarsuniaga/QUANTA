@@ -30,6 +30,7 @@ interface ChallengesScreenProps {
   stats: DashboardStats;
   goals: Goal[];
   currencySymbol: string;
+  currencyCode: string;
   onBack: () => void;
 }
 
@@ -38,6 +39,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
   stats,
   goals,
   currencySymbol,
+  currencyCode,
   onBack
 }) => {
   const [challenges, setChallenges] = useState<SavingsChallenge[]>([]);
@@ -479,7 +481,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
                   <div>
                     <p className="text-xs text-emerald-600 dark:text-emerald-400">Meta de ahorro</p>
                     <p className="font-bold text-emerald-700 dark:text-emerald-300">
-                      {currencySymbol}{selectedChallenge.targetAmount}
+                      {selectedChallenge.targetAmount} {currencyCode}
                     </p>
                   </div>
                 </div>

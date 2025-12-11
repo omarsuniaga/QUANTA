@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { Transaction, Category } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Transaction, Category, CustomCategory } from '../types';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '../constants';
 import { Trash2, Edit2, RefreshCcw, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, DollarSign, CalendarDays } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
+import { storageService } from '../services/storageService';
 
 type SortOption = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc';
 
@@ -13,11 +14,37 @@ interface TransactionListProps {
   activeFilter?: { type: 'category' | 'date', value: string } | null;
   onClearFilter?: () => void;
   currencySymbol?: string;
+  currencyCode?: string;
 }
 
-export const TransactionList: React.FC<TransactionListProps> = ({ transactions, onEdit, onDelete, activeFilter, onClearFilter, currencySymbol = '$' }) => {
+export const TransactionList: React.FC<TransactionListProps> = ({ transactions, onEdit, onDelete, activeFilter, onClearFilter, currencySymbol = '$', currencyCode = 'USD' }) => {
   const { t, language } = useI18n();
   const [sortBy, setSortBy] = useState<SortOption>('date-desc');
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+
+  // Load custom categories
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const cats = await storageService.getCategories();
+        setCustomCategories(cats);
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+    };
+    loadCategories();
+  }, []);
+
+  // Helper to get translated category name
+  const getCategoryName = (categoryId: string): string => {
+    // First try custom categories
+    const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
+    if (customCat) {
+      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+    }
+    // Fallback to translations
+    return (t.categories as Record<string, string>)[categoryId] || categoryId;
+  };
   
   // Sort transactions based on selected option
   const sorted = useMemo(() => {
@@ -129,7 +156,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
             <div>
               <p className="text-xs font-medium text-indigo-200 uppercase tracking-wide">{t.transactions.activeFilter}</p>
               <p className="font-bold text-sm">
-                {activeFilter.type === 'category' ? t.transactions.category : (language === 'es' ? 'Mes' : 'Month')}: {activeFilter.value}
+                {activeFilter.type === 'category' ? t.transactions.category : (language === 'es' ? 'Mes' : 'Month')}: {activeFilter.type === 'category' ? getCategoryName(activeFilter.value) : activeFilter.value}
               </p>
             </div>
           </div>
@@ -172,7 +199,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
 
             <div className="flex items-center gap-2 sm:gap-3 ml-2">
               <span className={`font-bold text-sm sm:text-base whitespace-nowrap ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
-                {t.type === 'income' ? '+' : '-'}{currencySymbol}{t.amount.toLocaleString(locale, { minimumFractionDigits: 2 })}
+                {t.type === 'income' ? '+' : '-'}{t.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} {currencyCode}
               </span>
               
               <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">

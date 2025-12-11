@@ -15,6 +15,7 @@ interface SettingsContextType {
   loading: boolean;
   isDarkMode: boolean;
   currencySymbol: string;
+  currencyCode: string;
   
   // Settings
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
@@ -133,6 +134,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   // Computed values
   const isDarkMode = settings?.theme === 'dark' || (settings?.theme === 'system' && systemPrefersDark);
   const currencySymbol = settings?.currency?.localSymbol || '$';
+  const currencyCode = settings?.currency?.localCode || 'USD';
 
   // Settings actions
   const updateSettings = useCallback(async (updates: Partial<AppSettings>) => {
@@ -265,6 +267,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       loading,
       isDarkMode,
       currencySymbol,
+      currencyCode,
       updateSettings,
       updateQuickActions,
       addQuickAction,

@@ -30,6 +30,7 @@ interface AICoachScreenProps {
   stats: DashboardStats;
   goals: Goal[];
   currencySymbol: string;
+  currencyCode: string;
   onBack: () => void;
   onOpenSavingsPlanner: () => void;
   onOpenChallenges: () => void;
@@ -41,6 +42,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   stats,
   goals,
   currencySymbol,
+  currencyCode,
   onBack,
   onOpenSavingsPlanner,
   onOpenChallenges,
@@ -341,6 +343,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                       key={rec.id}
                       recommendation={rec}
                       currencySymbol={currencySymbol}
+                      currencyCode={currencyCode}
                     />
                   ))}
               </div>
@@ -367,7 +370,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                               {cat.category}
                             </span>
                             <span className="text-sm font-bold text-slate-800 dark:text-white">
-                              {currencySymbol}{cat.amount.toLocaleString()}
+                              {cat.amount.toLocaleString()} {currencyCode}
                             </span>
                           </div>
                           <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -425,7 +428,8 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
 const RecommendationCard: React.FC<{
   recommendation: AIRecommendation;
   currencySymbol: string;
-}> = ({ recommendation, currencySymbol }) => {
+  currencyCode: string;
+}> = ({ recommendation, currencySymbol, currencyCode }) => {
   const TypeIcon = getTypeIconForRec(recommendation.type);
   const priorityColor = recommendation.priority === 'high' ? 'rose' : recommendation.priority === 'medium' ? 'amber' : 'blue';
 
@@ -451,7 +455,7 @@ const RecommendationCard: React.FC<{
           {recommendation.potentialSavings && (
             <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-sm font-medium">
               <DollarSign className="w-4 h-4" />
-              Ahorro potencial: {currencySymbol}{recommendation.potentialSavings.toLocaleString()}
+              Ahorro potencial: {recommendation.potentialSavings.toLocaleString()} {currencyCode}
             </div>
           )}
 

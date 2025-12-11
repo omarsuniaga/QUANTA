@@ -8,10 +8,13 @@ import {
   PieChart,
   TrendingUp,
   Flame,
-  Award
+  Award,
+  Info,
+  X
 } from 'lucide-react';
 import { Transaction, DashboardStats, Goal, SavingsChallenge } from '../types';
 import { aiCoachService } from '../services/aiCoachService';
+import { useI18n } from '../contexts/I18nContext';
 
 interface AICoachWidgetProps {
   transactions: Transaction[];
@@ -32,10 +35,12 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
   onOpenChallenges,
   onOpenStrategies
 }) => {
+  const { language } = useI18n();
   const [quickTips, setQuickTips] = useState<string[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -72,8 +77,94 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
     }
   };
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (showInfoModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showInfoModal]);
+
+  const modalContent = {
+    es: {
+      title: 'Coach Financiero IA',
+      description: 'Tu asistente financiero inteligente que analiza tus transacciones, comportamiento de gasto y metas para ofrecerte consejos personalizados.',
+      features: [
+        '🧠 Análisis inteligente de tus finanzas',
+        '💡 Consejos personalizados en tiempo real',
+        '📊 Identifica patrones de gasto',
+        '🎯 Recomendaciones para tus metas',
+        '⚡ Alertas de gastos inusuales',
+        '🏆 Desafíos de ahorro gamificados'
+      ],
+      howItWorks: '¿Cómo funciona?',
+      howItWorksText: 'El Coach IA utiliza modelos de lenguaje avanzados (Gemini) para analizar tu historial financiero y darte insights accionables. Puedes usar tu propia API key de Google AI Studio o usar el servicio predeterminado.'
+    },
+    en: {
+      title: 'AI Financial Coach',
+      description: 'Your intelligent financial assistant that analyzes your transactions, spending behavior and goals to offer personalized advice.',
+      features: [
+        '🧠 Smart analysis of your finances',
+        '💡 Personalized real-time tips',
+        '📊 Identifies spending patterns',
+        '🎯 Recommendations for your goals',
+        '⚡ Unusual spending alerts',
+        '🏆 Gamified savings challenges'
+      ],
+      howItWorks: 'How it works?',
+      howItWorksText: 'The AI Coach uses advanced language models (Gemini) to analyze your financial history and give you actionable insights. You can use your own Google AI Studio API key or use the default service.'
+    }
+  };
+
+  const content = modalContent[language as 'es' | 'en'] || modalContent.es;
+
   return (
     <div className="space-y-4">
+      {/* Info Modal */}
+      {showInfoModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" 
+          onClick={() => setShowInfoModal(false)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full shadow-xl my-auto" 
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/40 dark:to-violet-900/40 text-indigo-600 dark:text-indigo-400">
+                <Brain className="w-6 h-6" />
+              </div>
+              <button 
+                onClick={() => setShowInfoModal(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{content.title}</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">{content.description}</p>
+            
+            <div className="space-y-2 mb-4">
+              {content.features.map((feature, index) => (
+                <div key={index} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 shrink-0"></span>
+                  <span>{feature}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 border border-indigo-100 dark:border-indigo-800">
+              <h4 className="text-sm font-bold text-indigo-900 dark:text-indigo-300 mb-2">{content.howItWorks}</h4>
+              <p className="text-xs text-indigo-700 dark:text-indigo-400 leading-relaxed">{content.howItWorksText}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main AI Coach Card */}
       <button
         onClick={onOpenAICoach}
@@ -94,8 +185,17 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
                 <p className="text-indigo-200 text-sm">Análisis inteligente personalizado</p>
               </div>
             </div>
-            <div className="p-2 bg-white/10 rounded-full group-hover:bg-white/20 transition-colors">
-              <ChevronRight className="w-5 h-5" />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
+                aria-label="Información sobre el Coach IA"
+              >
+                <Info className="w-4 h-4" />
+              </button>
+              <div className="p-2 bg-white/10 rounded-full group-hover:bg-white/20 transition-colors">
+                <ChevronRight className="w-5 h-5" />
+              </div>
             </div>
           </div>
 
@@ -133,7 +233,7 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
             </div>
             <div className="bg-white/10 backdrop-blur rounded-lg p-2 text-center">
               <Flame className="w-4 h-4 mx-auto mb-1 text-orange-300" />
-              <p className="text-xs text-indigo-200">Challenges</p>
+              <p className="text-xs text-indigo-200">{language === 'es' ? 'Desafíos' : 'Challenges'}</p>
               <p className="text-sm font-bold">{activeChallenges}</p>
             </div>
           </div>
@@ -167,7 +267,7 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
             <Zap className="w-5 h-5 text-amber-600 dark:text-amber-400" />
           </div>
           <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 text-center">
-            Challenges
+            {language === 'es' ? 'Desafíos' : 'Challenges'}
           </p>
         </button>
 

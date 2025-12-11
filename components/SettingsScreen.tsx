@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, QuickAction, Account } from '../types';
 import { Button } from './Button';
-import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages } from 'lucide-react';
+import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts';
 import { GeminiApiKeySettings } from './GeminiApiKeySettings';
+import { AVAILABLE_CURRENCIES, CurrencyOption } from '../constants';
 
 interface SettingsScreenProps {
   settings: AppSettings;
@@ -13,14 +14,46 @@ interface SettingsScreenProps {
   onUpdateQuickActions: (qa: QuickAction[]) => void;
   onLogout: () => void;
   userEmail: string;
+  onOpenNotificationPrefs?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
-  settings, onUpdateSettings, quickActions, onUpdateQuickActions, onLogout, userEmail
+  settings, onUpdateSettings, quickActions, onUpdateQuickActions, onLogout, userEmail, onOpenNotificationPrefs
 }) => {
   const [activeSection, setActiveSection] = useState<'general' | 'actions' | 'accounts' | 'data'>('general');
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
+  const [currencySearch, setCurrencySearch] = useState('');
   const { language, setLanguage, t } = useI18n();
+
+  // Get current currency from settings
+  const currentCurrency = AVAILABLE_CURRENCIES.find(c => c.code === settings.currency.localCode) || AVAILABLE_CURRENCIES[0];
+
+  // Filter currencies by search
+  const filteredCurrencies = AVAILABLE_CURRENCIES.filter(c => {
+    const search = currencySearch.toLowerCase();
+    const name = language === 'es' ? c.nameEs : c.name;
+    return c.code.toLowerCase().includes(search) || 
+           name.toLowerCase().includes(search) ||
+           c.symbol.toLowerCase().includes(search);
+  });
+
+  // Handle currency selection
+  const handleSelectCurrency = (currency: CurrencyOption) => {
+    onUpdateSettings({
+      ...settings,
+      currency: {
+        ...settings.currency,
+        localCode: currency.code,
+        localSymbol: currency.symbol,
+        rateToBase: currency.rateToUSD,
+        flag: currency.flag,
+        name: language === 'es' ? currency.nameEs : currency.name
+      }
+    });
+    setShowCurrencyPicker(false);
+    setCurrencySearch('');
+  };
 
   useEffect(() => {
     storageService.getAccounts().then(setAccounts);
@@ -209,53 +242,45 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
             {/* Currency Configuration */}
             <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-              <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-3 sm:mb-4">Moneda</h3>
+              <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-3 sm:mb-4">
+                {language === 'es' ? 'Moneda' : 'Currency'}
+              </h3>
               <div className="space-y-3 sm:space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-1.5 sm:p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
-                    <Globe className="w-4 h-4 sm:w-5 sm:h-5" />
+                {/* Currency Selector Button */}
+                <button
+                  onClick={() => setShowCurrencyPicker(true)}
+                  className="w-full flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 hover:border-emerald-300 dark:hover:border-emerald-600 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-3xl">{currentCurrency.flag}</span>
+                    <div className="text-left">
+                      <p className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">
+                        {currentCurrency.code} - {currentCurrency.symbol}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                        {language === 'es' ? currentCurrency.nameEs : currentCurrency.name}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">Configuración Local</p>
-                    <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Moneda base: USD</p>
-                  </div>
-                </div>
+                  <ChevronDown className="w-5 h-5 text-slate-400" />
+                </button>
 
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 block">Código (ISO)</label>
-                    <input
-                      className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white uppercase"
-                      placeholder="USD"
-                      value={settings.currency.localCode}
-                      onChange={(e) => onUpdateSettings({
-                        ...settings,
-                        currency: { ...settings.currency, localCode: e.target.value.toUpperCase() }
-                      })}
-                    />
+                {/* Exchange Rate Display */}
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 sm:p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400">
+                      {language === 'es' ? 'Tasa de Cambio' : 'Exchange Rate'}
+                    </span>
+                    <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                      1 {settings.currency.localCode} = {settings.currency.rateToBase.toFixed(4)} USD
+                    </span>
                   </div>
-                  <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 block">Símbolo</label>
-                    <input
-                      className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white"
-                      placeholder="$"
-                      value={settings.currency.localSymbol}
-                      onChange={(e) => onUpdateSettings({
-                        ...settings,
-                        currency: { ...settings.currency, localSymbol: e.target.value }
-                      })}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 block">Tasa de Cambio (1 {settings.currency.localCode} = ? USD)</label>
                   <div className="relative">
                     <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2 sm:left-3 top-2 sm:top-2.5" />
                     <input
                       type="number"
                       step="0.0001"
-                      className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg pl-7 sm:pl-9 pr-2 sm:pr-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white"
+                      className="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg pl-7 sm:pl-9 pr-2 sm:pr-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white"
                       value={settings.currency.rateToBase}
                       onChange={(e) => onUpdateSettings({
                         ...settings,
@@ -263,7 +288,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       })}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Usado para reportes globales en dólares.</p>
+                  <p className="text-[10px] text-slate-400 mt-2">
+                    {language === 'es' ? 'Ajusta manualmente si necesitas una tasa diferente.' : 'Adjust manually if you need a different rate.'}
+                  </p>
+                </div>
+
+                {/* Preview */}
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-3 sm:p-4">
+                  <p className="text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 mb-2">
+                    {language === 'es' ? 'Vista previa de formato' : 'Format Preview'}
+                  </p>
+                  <p className="text-lg sm:text-xl font-bold text-indigo-900 dark:text-indigo-100">
+                    1,234.56 {settings.currency.localCode}
+                  </p>
                 </div>
               </div>
             </div>
@@ -310,12 +347,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">Alertas de pagos y servicios</p>
                   </div>
                 </div>
-                <button
-                  onClick={toggleNotifications}
-                  className={`w-10 sm:w-12 h-5 sm:h-6 rounded-full transition-colors relative ${settings.notifications.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-600'}`}
-                >
-                  <div className={`w-3.5 sm:w-4 h-3.5 sm:h-4 bg-white rounded-full absolute top-[3px] sm:top-1 transition-transform ${settings.notifications.enabled ? 'left-5 sm:left-7' : 'left-1'}`}></div>
-                </button>
+                <div className="flex items-center gap-2">
+                  {onOpenNotificationPrefs && (
+                    <button
+                      onClick={onOpenNotificationPrefs}
+                      className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                      title="Configuración avanzada"
+                    >
+                      <Settings2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={toggleNotifications}
+                    className={`w-10 sm:w-12 h-5 sm:h-6 rounded-full transition-colors relative ${settings.notifications.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-600'}`}
+                  >
+                    <div className={`w-3.5 sm:w-4 h-3.5 sm:h-4 bg-white rounded-full absolute top-[3px] sm:top-1 transition-transform ${settings.notifications.enabled ? 'left-5 sm:left-7' : 'left-1'}`}></div>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -535,6 +583,86 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
         )}
       </div>
+
+      {/* Currency Picker Modal */}
+      {showCurrencyPicker && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 transition-all duration-300">
+          <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 max-h-[85vh] sm:max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+                {language === 'es' ? 'Seleccionar Moneda' : 'Select Currency'}
+              </h2>
+              <button 
+                onClick={() => { setShowCurrencyPicker(false); setCurrencySearch(''); }}
+                className="bg-slate-50 dark:bg-slate-800 p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+
+            {/* Search */}
+            <div className="p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder={language === 'es' ? 'Buscar moneda...' : 'Search currency...'}
+                  value={currencySearch}
+                  onChange={(e) => setCurrencySearch(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Currency List */}
+            <div className="flex-1 overflow-y-auto p-2 sm:p-4">
+              <div className="space-y-1">
+                {filteredCurrencies.map((currency) => {
+                  const isSelected = currency.code === settings.currency.localCode;
+                  return (
+                    <button
+                      key={currency.code}
+                      onClick={() => handleSelectCurrency(currency)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
+                        isSelected 
+                          ? 'bg-indigo-50 dark:bg-indigo-900/30 border-2 border-indigo-500' 
+                          : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'
+                      }`}
+                    >
+                      <span className="text-2xl">{currency.flag}</span>
+                      <div className="flex-1 text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-slate-800 dark:text-white">{currency.code}</span>
+                          <span className="text-slate-400 text-sm">{currency.symbol}</span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {language === 'es' ? currency.nameEs : currency.name}
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center">
+                          <Check className="w-4 h-4 text-white" />
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+
+                {filteredCurrencies.length === 0 && (
+                  <div className="text-center py-8">
+                    <Globe className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">
+                      {language === 'es' ? 'No se encontraron monedas' : 'No currencies found'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

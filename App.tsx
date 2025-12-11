@@ -20,6 +20,9 @@ import { useI18n } from './contexts';
 import { useAuth, useTransactions, useSettings, useToast } from './contexts';
 import { Goal, Promo, Transaction } from './types';
 import { pushNotificationService } from './services/pushNotificationService';
+import { smartNotificationService } from './services/smartNotificationService';
+import { NotificationCenter, NotificationBell } from './components/NotificationCenter';
+import { NotificationPreferences } from './components/NotificationPreferences';
 
 export default function App() {
   // === CONTEXT HOOKS (replacing local state) ===
@@ -44,6 +47,7 @@ export default function App() {
     quickActions,
     isDarkMode,
     currencySymbol,
+    currencyCode,
     updateSettings,
     updateQuickActions,
     addGoal,
@@ -77,6 +81,10 @@ export default function App() {
   const [showChallenges, setShowChallenges] = useState(false);
   const [showStrategies, setShowStrategies] = useState(false);
 
+  // Notification system state
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
+
   // === LOADING STATE ===
   const loading = authLoading || txLoading || settingsLoading;
 
@@ -106,6 +114,31 @@ export default function App() {
 
     initializeNotifications();
   }, [user, transactions.length]);
+
+  // Ejecutar verificaciones de notificaciones inteligentes
+  useEffect(() => {
+    if (!user || transactions.length === 0) return;
+    
+    // Ejecutar verificaciones de notificaciones (pagos, metas, presupuesto, etc.)
+    const runNotificationChecks = async () => {
+      try {
+        await smartNotificationService.runAllChecks(
+          transactions,
+          goals,
+          stats.balance,
+          {} // budgets - se obtienen internamente del storageService
+        );
+      } catch (error) {
+        console.error('Error running notification checks:', error);
+      }
+    };
+
+    // Ejecutar al cargar y cada 30 minutos
+    runNotificationChecks();
+    const interval = setInterval(runNotificationChecks, 30 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [user, transactions, goals, stats.balance]);
 
   if (loading) {
     return (
@@ -210,6 +243,59 @@ export default function App() {
     setShowGoalModal(false);
   };
 
+  // Handle goal contribution
+  const handleAddContribution = async (goalId: string, amount: number) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal) return;
+    
+    // Check if there are sufficient funds
+    if (stats.balance < amount) {
+      toast.error('Fondos insuficientes', `Necesitas ${amount.toLocaleString()} ${currencyCode} para hacer esta reservación`);
+      return;
+    }
+
+    // Update the goal with new contribution
+    const updatedGoal: Goal = {
+      ...goal,
+      currentAmount: goal.currentAmount + amount,
+      lastContributionDate: new Date().toISOString(),
+      contributionHistory: [
+        ...(goal.contributionHistory || []),
+        { date: new Date().toISOString(), amount }
+      ]
+    };
+
+    // Calculate next contribution date
+    const nextDate = new Date();
+    switch (goal.contributionFrequency) {
+      case 'weekly':
+        nextDate.setDate(nextDate.getDate() + 7);
+        break;
+      case 'biweekly':
+        nextDate.setDate(nextDate.getDate() + 14);
+        break;
+      case 'monthly':
+      default:
+        nextDate.setMonth(nextDate.getMonth() + 1);
+        break;
+    }
+    updatedGoal.nextContributionDate = nextDate.toISOString();
+
+    await updateGoal(updatedGoal);
+    
+    // Create a transaction to record this transfer to savings
+    await addTransaction({
+      type: 'expense',
+      category: 'savings' as any,
+      amount: amount,
+      description: `Aporte a meta: ${goal.name}`,
+      date: new Date().toISOString().split('T')[0],
+      paymentMethod: 'Transferencia'
+    });
+
+    toast.success('Aporte realizado', `Se han reservado ${amount.toLocaleString()} ${currencyCode} para "${goal.name}"`);
+  };
+
   const handleOpenPromoModal = (promo?: Promo) => {
     setEditingPromo(promo || null);
     setShowPromoModal(true);
@@ -264,9 +350,12 @@ export default function App() {
 
             {/* User Info */}
             <div className="mb-8 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t.dashboard.hello}, {user.name}</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t.dashboard.hello}, {user.name}</p>
+                <NotificationBell onClick={() => setShowNotificationCenter(true)} />
+              </div>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                {currencySymbol}{stats.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+                {stats.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencyCode}
               </p>
               <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1">{t.dashboard.availableToday}</p>
               {!isOnline && (
@@ -337,16 +426,19 @@ export default function App() {
               )}
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold mt-1 tracking-tight text-slate-900 dark:text-white">
-              {currencySymbol}{stats.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+              {stats.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })} {currencyCode}
             </h2>
             <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1 bg-indigo-50 dark:bg-indigo-900/30 inline-block px-2 py-0.5 rounded-md">{t.dashboard.availableToday}</p>
           </div>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className="p-2 rounded-full transition-colors bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-white"
-          >
-            <SettingsIcon className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <NotificationBell onClick={() => setShowNotificationCenter(true)} />
+            <button
+              onClick={() => setActiveTab('settings')}
+              className="p-2 rounded-full transition-colors bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-white"
+            >
+              <SettingsIcon className="w-5 h-5" />
+            </button>
+          </div>
         </header>
 
         {/* Main Content */}
@@ -405,10 +497,12 @@ export default function App() {
 
               <GoalsWidget
                 goals={goals}
-                onAddContribution={() => { }}
+                onAddContribution={handleAddContribution}
                 onEditGoal={handleOpenGoalModal}
                 onAddGoal={() => handleOpenGoalModal()}
                 currencySymbol={currencySymbol}
+                currencyCode={currencyCode}
+                availableBalance={stats.balance}
               />
 
               <PromoCarousel
@@ -464,6 +558,7 @@ export default function App() {
                 activeFilter={filters.category ? { type: 'category' as const, value: filters.category } : null}
                 onClearFilter={handleClearFilter}
                 currencySymbol={currencySymbol}
+                currencyCode={currencyCode}
               />
             </div>
           )}
@@ -476,6 +571,7 @@ export default function App() {
               onUpdateQuickActions={updateQuickActions}
               onLogout={handleLogout}
               userEmail={user.email}
+              onOpenNotificationPrefs={() => setShowNotificationPrefs(true)}
             />
           )}
         </main>
@@ -551,6 +647,8 @@ export default function App() {
             onSave={handleSaveGoal}
             onDelete={handleDeleteGoal}
             currencySymbol={currencySymbol}
+            currencyCode={currencyCode}
+            availableBalance={stats.balance}
           />
         )}
 
@@ -590,6 +688,7 @@ export default function App() {
               stats={stats}
               goals={goals}
               currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
               onBack={() => setShowAICoach(false)}
               onOpenSavingsPlanner={() => {
                 setShowAICoach(false);
@@ -615,10 +714,15 @@ export default function App() {
               transactions={transactions}
               stats={stats}
               currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
               onBack={() => setShowSavingsPlanner(false)}
               onEditGoal={(goal) => {
                 setShowSavingsPlanner(false);
                 handleOpenGoalModal(goal);
+              }}
+              onAddGoal={() => {
+                setShowSavingsPlanner(false);
+                handleOpenGoalModal();
               }}
             />
           </div>
@@ -632,6 +736,7 @@ export default function App() {
               stats={stats}
               goals={goals}
               currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
               onBack={() => setShowChallenges(false)}
             />
           </div>
@@ -644,9 +749,28 @@ export default function App() {
               transactions={transactions}
               stats={stats}
               currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
               onBack={() => setShowStrategies(false)}
             />
           </div>
+        )}
+
+        {/* Notification Center Modal */}
+        {showNotificationCenter && (
+          <NotificationCenter
+            onClose={() => setShowNotificationCenter(false)}
+            onOpenSettings={() => {
+              setShowNotificationCenter(false);
+              setShowNotificationPrefs(true);
+            }}
+          />
+        )}
+
+        {/* Notification Preferences Modal */}
+        {showNotificationPrefs && (
+          <NotificationPreferences
+            onClose={() => setShowNotificationPrefs(false)}
+          />
         )}
         </div>
       </div>

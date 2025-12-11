@@ -127,6 +127,19 @@ export interface Goal {
   icon?: string; 
   color?: string;
   linkedAccountId?: string;
+  // New savings plan fields
+  contributionAmount?: number;      // Amount to contribute each period
+  contributionFrequency?: 'weekly' | 'biweekly' | 'monthly'; // How often to contribute
+  calculationMode?: 'time' | 'amount'; // Calculate time to reach goal OR amount needed per period
+  targetDate?: string;              // Target date to reach goal (for 'amount' mode)
+  autoDeduct?: boolean;             // Automatically deduct from available balance
+  // Contribution tracking
+  lastContributionDate?: string;    // Last time a contribution was made
+  nextContributionDate?: string;    // Next scheduled contribution date
+  contributionHistory?: {           // History of contributions
+    date: string;
+    amount: number;
+  }[];
 }
 
 export interface Promo {
@@ -179,11 +192,13 @@ export interface NotificationConfig {
 }
 
 export interface CurrencyConfig {
-  localCode: string; 
-  localSymbol: string; 
-  rateToBase: number; 
-  baseCode?: string; 
-  lastUpdated?: number;
+  localCode: string;      // ISO 4217 code (USD, EUR, DOP, etc.)
+  localSymbol: string;    // Currency symbol ($, €, RD$, etc.)
+  rateToBase: number;     // Exchange rate to base currency (USD)
+  baseCode?: string;      // Base currency code (usually USD)
+  lastUpdated?: number;   // Timestamp of last rate update
+  flag?: string;          // Emoji flag for the currency country
+  name?: string;          // Full currency name
 }
 
 export interface AppSettings {
