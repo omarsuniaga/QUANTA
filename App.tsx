@@ -10,7 +10,12 @@ import { LandingPage } from './components/LandingPage';
 import { SearchBar } from './components/SearchBar';
 import { FilterModal } from './components/FilterModal';
 import { NotificationPermissionPrompt } from './components/NotificationPermissionPrompt';
-import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon } from 'lucide-react';
+import { AICoachWidget } from './components/AICoachWidget';
+import { AICoachScreen } from './components/AICoachScreen';
+import { SavingsPlanner } from './components/SavingsPlanner';
+import { ChallengesScreen } from './components/ChallengesScreen';
+import { StrategiesScreen } from './components/StrategiesScreen';
+import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain } from 'lucide-react';
 import { useI18n } from './contexts';
 import { useAuth, useTransactions, useSettings, useToast } from './contexts';
 import { Goal, Promo, Transaction } from './types';
@@ -65,6 +70,12 @@ export default function App() {
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  
+  // AI Coach screens state
+  const [showAICoach, setShowAICoach] = useState(false);
+  const [showSavingsPlanner, setShowSavingsPlanner] = useState(false);
+  const [showChallenges, setShowChallenges] = useState(false);
+  const [showStrategies, setShowStrategies] = useState(false);
 
   // === LOADING STATE ===
   const loading = authLoading || txLoading || settingsLoading;
@@ -294,6 +305,9 @@ export default function App() {
             <div className="mt-8">
               <p className="text-xs font-bold text-slate-400 uppercase mb-3">Acciones Rápidas</p>
               <div className="space-y-2">
+                <button onClick={() => setShowAICoach(true)} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-indigo-600 dark:text-indigo-400 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-900/20 dark:to-violet-900/20 hover:from-indigo-100 hover:to-violet-100 dark:hover:from-indigo-900/30 dark:hover:to-violet-900/30 transition-colors border border-indigo-100 dark:border-indigo-800">
+                  <Brain className="w-4 h-4" /> Coach IA
+                </button>
                 <button onClick={() => openModal('income')} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
                   <ArrowUpRight className="w-4 h-4" /> Nuevo Ingreso
                 </button>
@@ -353,6 +367,17 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* AI Coach Widget */}
+              <AICoachWidget
+                transactions={transactions}
+                stats={stats}
+                goals={goals}
+                onOpenAICoach={() => setShowAICoach(true)}
+                onOpenSavingsPlanner={() => setShowSavingsPlanner(true)}
+                onOpenChallenges={() => setShowChallenges(true)}
+                onOpenStrategies={() => setShowStrategies(true)}
+              />
 
               {/* Quick Actions Grid - Mobile/Tablet only (hidden on desktop since it's in sidebar) */}
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 lg:hidden">
@@ -555,6 +580,73 @@ export default function App() {
           <NotificationPermissionPrompt
             onClose={() => setShowNotificationPrompt(false)}
           />
+        )}
+
+        {/* AI Coach Full Screen */}
+        {showAICoach && (
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+            <AICoachScreen
+              transactions={transactions}
+              stats={stats}
+              goals={goals}
+              currencySymbol={currencySymbol}
+              onBack={() => setShowAICoach(false)}
+              onOpenSavingsPlanner={() => {
+                setShowAICoach(false);
+                setShowSavingsPlanner(true);
+              }}
+              onOpenChallenges={() => {
+                setShowAICoach(false);
+                setShowChallenges(true);
+              }}
+              onOpenStrategies={() => {
+                setShowAICoach(false);
+                setShowStrategies(true);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Savings Planner Full Screen */}
+        {showSavingsPlanner && (
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+            <SavingsPlanner
+              goals={goals}
+              transactions={transactions}
+              stats={stats}
+              currencySymbol={currencySymbol}
+              onBack={() => setShowSavingsPlanner(false)}
+              onEditGoal={(goal) => {
+                setShowSavingsPlanner(false);
+                handleOpenGoalModal(goal);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Challenges Full Screen */}
+        {showChallenges && (
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+            <ChallengesScreen
+              transactions={transactions}
+              stats={stats}
+              goals={goals}
+              currencySymbol={currencySymbol}
+              onBack={() => setShowChallenges(false)}
+            />
+          </div>
+        )}
+
+        {/* Strategies Full Screen */}
+        {showStrategies && (
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+            <StrategiesScreen
+              transactions={transactions}
+              stats={stats}
+              currencySymbol={currencySymbol}
+              onBack={() => setShowStrategies(false)}
+            />
+          </div>
         )}
         </div>
       </div>

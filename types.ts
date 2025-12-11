@@ -211,6 +211,109 @@ export interface QuickAction {
   };
 }
 
+// --- AI COACH & FINANCIAL ANALYSIS ---
+
+export interface FinancialAnalysis {
+  healthScore: number; // 0-100
+  healthStatus: 'excellent' | 'good' | 'warning' | 'critical';
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  monthlyTrend: 'improving' | 'stable' | 'declining';
+  savingsRate: number; // percentage
+  riskLevel: 'low' | 'medium' | 'high';
+  topExpenseCategories: Array<{ category: string; amount: number; percentage: number }>;
+  recommendations: AIRecommendation[];
+}
+
+export interface AIRecommendation {
+  id: string;
+  type: 'savings' | 'budget' | 'investment' | 'expense_reduction' | 'goal';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  potentialSavings?: number;
+  actionLabel?: string;
+  category?: string;
+}
+
+export interface SavingsPlan {
+  id: string;
+  goalId: string;
+  goalName: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline?: string;
+  monthlyTarget: number;
+  weeklyTarget: number;
+  dailyTarget: number;
+  strategy: 'aggressive' | 'moderate' | 'relaxed';
+  projectedCompletion: string; // ISO date
+  isOnTrack: boolean;
+  suggestions: string[];
+  milestones: SavingsMilestone[];
+}
+
+export interface SavingsMilestone {
+  percentage: number; // 25, 50, 75, 100
+  amount: number;
+  projectedDate: string;
+  isCompleted: boolean;
+}
+
+export interface FinancialStrategy {
+  id: string;
+  name: string;
+  description: string;
+  rule: string; // e.g., "50/30/20"
+  allocations: StrategyAllocation[];
+  isActive: boolean;
+  compatibility: number; // 0-100 how well user follows this
+}
+
+export interface StrategyAllocation {
+  category: 'needs' | 'wants' | 'savings' | 'investments' | 'debt';
+  label: string;
+  targetPercentage: number;
+  currentPercentage: number;
+  currentAmount: number;
+  status: 'on_track' | 'over' | 'under';
+}
+
+export interface SavingsChallenge {
+  id: string;
+  type: 'no_spend' | 'reduce_category' | 'save_amount' | 'streak' | 'custom';
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  duration: number; // days
+  startDate: string;
+  endDate: string;
+  targetAmount?: number;
+  targetCategory?: string;
+  currentProgress: number;
+  targetProgress: number;
+  status: 'active' | 'completed' | 'failed' | 'not_started';
+  reward: string;
+  streakDays?: number;
+}
+
+export interface ChallengeTemplate {
+  id: string;
+  type: SavingsChallenge['type'];
+  title: string;
+  description: string;
+  icon: string;
+  color: string;
+  difficulty: SavingsChallenge['difficulty'];
+  duration: number;
+  targetAmount?: number;
+  targetCategory?: string;
+  reward: string;
+}
+
 // --- DASHBOARD ---
 
 export interface DashboardStats {
