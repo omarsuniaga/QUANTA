@@ -109,6 +109,9 @@ export interface Transaction {
   gigType?: string; 
   receiptUrl?: string; 
   
+  // Income specific
+  incomeType?: 'salary' | 'extra'; // Salary = regular monthly/biweekly, Extra = additional income
+  
   // Sharing
   sharedWith?: string[]; 
   
@@ -214,4 +217,20 @@ export interface DashboardStats {
   totalIncome: number;
   totalExpense: number;
   balance: number;
+}
+
+// --- CUSTOM CATEGORIES ---
+
+export interface CustomCategory {
+  id: string;
+  key: string; // Unique identifier (e.g., 'food', 'transport')
+  name: {
+    es: string;
+    en: string;
+  };
+  icon: string; // Lucide icon name
+  color: string; // Tailwind color (e.g., 'rose', 'emerald', 'blue')
+  type: 'income' | 'expense' | 'both'; // Category type
+  isDefault?: boolean; // System default categories
+  order?: number;
 }

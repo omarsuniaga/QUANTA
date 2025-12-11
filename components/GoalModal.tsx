@@ -50,75 +50,75 @@ export const GoalModal: React.FC<GoalModalProps> = ({ goal, onSave, onDelete, on
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 relative">
-        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">{goal ? 'Editar Meta' : 'Nueva Meta'}</h2>
-          <button onClick={onClose} className="bg-slate-50 dark:bg-slate-800 p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-            <X className="w-5 h-5" />
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 transition-all duration-300">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-lg shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 relative max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{goal ? 'Editar Meta' : 'Nueva Meta'}</h2>
+          <button onClick={onClose} className="bg-slate-50 dark:bg-slate-800 p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
           <div>
-            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Nombre de la Meta</label>
+            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">Nombre de la Meta</label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Viaje a Europa"
-              className="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+              className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Objetivo ({currencySymbol})</label>
+              <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">Objetivo ({currencySymbol})</label>
               <input
                 type="number"
                 required
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                className="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Ahorrado ({currencySymbol})</label>
+              <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">Ahorrado ({currencySymbol})</label>
               <input
                 type="number"
                 value={current}
                 onChange={(e) => setCurrent(e.target.value)}
-                className="block w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
               />
             </div>
           </div>
 
           <div>
-             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Icono</label>
-             <div className="flex flex-wrap gap-2">
+             <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 sm:mb-2 block">Icono</label>
+             <div className="flex flex-wrap gap-1.5 sm:gap-2">
                {ICONS.map((item) => (
                  <button
                    key={item.name}
                    type="button"
                    onClick={() => setIcon(item.name)}
-                   className={`p-3 rounded-xl transition-all ${icon === item.name ? `bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-md` : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                   className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all ${icon === item.name ? `bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-md` : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
                  >
-                   <item.icon className="w-5 h-5" />
+                   <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                  </button>
                ))}
              </div>
           </div>
 
           <div>
-             <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Color</label>
-             <div className="flex gap-2">
+             <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 sm:mb-2 block">Color</label>
+             <div className="flex gap-1.5 sm:gap-2">
                {COLORS.map((c) => (
                  <button
                    key={c}
                    type="button"
                    onClick={() => setColor(c)}
-                   className={`w-8 h-8 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`}
+                   className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`}
                    style={{ backgroundColor: `var(--color-${c}-500, ${c})` }} 
                  >
                    <div className={`w-full h-full rounded-full bg-${c}-500`}></div>
@@ -127,13 +127,13 @@ export const GoalModal: React.FC<GoalModalProps> = ({ goal, onSave, onDelete, on
              </div>
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-2 sm:gap-3 pt-2">
             {goal && (
-              <Button type="button" variant="danger" onClick={handleDelete} className="px-4">
-                <Trash2 className="w-5 h-5" />
+              <Button type="button" variant="danger" onClick={handleDelete} className="px-3 sm:px-4">
+                <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
             )}
-            <Button type="submit" fullWidth className="shadow-lg shadow-indigo-200 dark:shadow-none">
+            <Button type="submit" fullWidth className="shadow-lg shadow-indigo-200 dark:shadow-none text-xs sm:text-sm py-2 sm:py-2.5">
               Guardar Meta
             </Button>
           </div>

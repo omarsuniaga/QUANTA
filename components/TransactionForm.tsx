@@ -67,38 +67,38 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-all duration-300">
-      <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-slide-up border border-white/20">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 transition-all duration-300">
+      <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl animate-slide-up border border-white/20">
+        <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900">
               {initialData ? 'Editar Transacción' : 'Nueva Transacción'}
             </h2>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Introduce los detalles financieros</p>
+            <p className="text-[10px] sm:text-xs text-slate-500 font-medium mt-0.5">Introduce los detalles financieros</p>
           </div>
-          <button onClick={onClose} className="bg-slate-100 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="bg-slate-100 p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors">
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Smart Add Toggle */}
           {!initialData && process.env.API_KEY && (
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-1 rounded-2xl border border-indigo-100">
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-1 rounded-xl sm:rounded-2xl border border-indigo-100">
               <button 
                 onClick={() => setShowSmartAdd(!showSmartAdd)}
-                className="w-full flex justify-between items-center p-3 rounded-xl hover:bg-white/50 transition-colors group"
+                className="w-full flex justify-between items-center p-2.5 sm:p-3 rounded-lg sm:rounded-xl hover:bg-white/50 transition-colors group"
               >
-                 <div className="flex items-center gap-3">
-                   <div className="bg-white p-2 rounded-lg shadow-sm text-indigo-600 group-hover:text-indigo-700 group-hover:scale-110 transition-all">
-                     <Wand2 className="w-4 h-4" /> 
+                 <div className="flex items-center gap-2 sm:gap-3">
+                   <div className="bg-white p-1.5 sm:p-2 rounded-lg shadow-sm text-indigo-600 group-hover:text-indigo-700 group-hover:scale-110 transition-all">
+                     <Wand2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> 
                    </div>
                    <div className="text-left">
-                     <p className="text-sm font-bold text-slate-800">Smart Add con IA</p>
-                     <p className="text-xs text-slate-500">Escribe en lenguaje natural</p>
+                     <p className="text-xs sm:text-sm font-bold text-slate-800">Smart Add con IA</p>
+                     <p className="text-[10px] sm:text-xs text-slate-500">Escribe en lenguaje natural</p>
                    </div>
                  </div>
-                 <span className="text-xs font-semibold text-indigo-600 bg-indigo-100 px-2 py-1 rounded-lg">
+                 <span className="text-[10px] sm:text-xs font-semibold text-indigo-600 bg-indigo-100 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg">
                    {showSmartAdd ? 'Ocultar' : 'Probar'}
                  </span>
               </button>
@@ -125,13 +125,13 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
             {/* Type Toggle */}
-            <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-xl">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 p-1 sm:p-1.5 bg-slate-100 rounded-lg sm:rounded-xl">
               <button
                 type="button"
                 onClick={() => setType('income')}
-                className={`py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                className={`py-2 sm:py-2.5 rounded-md sm:rounded-lg text-xs sm:text-sm font-bold transition-all duration-200 ${
                   type === 'income' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -140,7 +140,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
               <button
                 type="button"
                 onClick={() => setType('expense')}
-                className={`py-2.5 rounded-lg text-sm font-bold transition-all duration-200 ${
+                className={`py-2 sm:py-2.5 rounded-md sm:rounded-lg text-xs sm:text-sm font-bold transition-all duration-200 ${
                   type === 'expense' ? 'bg-white shadow-sm text-rose-600' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -150,10 +150,10 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
 
             {/* Amount */}
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Monto</label>
+              <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 sm:mb-1.5 block">Monto</label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <span className="text-slate-400 text-lg font-medium">$</span>
+                <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                  <span className="text-slate-400 text-base sm:text-lg font-medium">$</span>
                 </div>
                 <input
                   type="number"
@@ -161,24 +161,24 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
                   required
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="block w-full pl-9 pr-4 py-3.5 bg-slate-50 rounded-xl border border-slate-200 text-slate-900 text-xl font-bold placeholder-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all outline-none"
+                  className="block w-full pl-7 sm:pl-9 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-slate-50 rounded-lg sm:rounded-xl border border-slate-200 text-slate-900 text-lg sm:text-xl font-bold placeholder-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all outline-none"
                   placeholder="0.00"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
               {/* Category */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Categoría</label>
+                <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 sm:mb-1.5 block">Categoría</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Tag className="w-4 h-4 text-slate-400" />
+                  <div className="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
+                    <Tag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400" />
                   </div>
                   <select
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="block w-full pl-9 pr-8 py-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white appearance-none outline-none transition-all"
+                    className="block w-full pl-7 sm:pl-9 pr-6 sm:pr-8 py-2.5 sm:py-3 bg-slate-50 rounded-lg sm:rounded-xl border border-slate-200 text-slate-700 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white appearance-none outline-none transition-all"
                   >
                     {Object.values(Category).map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -189,17 +189,17 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
 
               {/* Date */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Fecha</label>
+                <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 sm:mb-1.5 block">Fecha</label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Calendar className="w-4 h-4 text-slate-400" />
+                  <div className="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
+                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400" />
                   </div>
                   <input
                     type="date"
                     required
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
-                    className="block w-full pl-9 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white outline-none transition-all"
+                    className="block w-full pl-7 sm:pl-9 pr-2 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 rounded-lg sm:rounded-xl border border-slate-200 text-slate-700 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white outline-none transition-all"
                   />
                 </div>
               </div>
@@ -207,43 +207,43 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
 
             {/* Description */}
             <div>
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5 block">Descripción</label>
+              <label className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 sm:mb-1.5 block">Descripción</label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <AlignLeft className="w-4 h-4 text-slate-400" />
+                <div className="absolute inset-y-0 left-0 pl-2 sm:pl-3 flex items-center pointer-events-none">
+                  <AlignLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400" />
                 </div>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="block w-full pl-9 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white outline-none transition-all"
+                  className="block w-full pl-7 sm:pl-9 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-slate-50 rounded-lg sm:rounded-xl border border-slate-200 text-slate-700 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white outline-none transition-all"
                   placeholder="Ej: Renta mensual"
                 />
               </div>
             </div>
 
             {/* Recurring Checkbox */}
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 transition-all hover:border-indigo-200">
+            <div className="bg-slate-50 p-3 sm:p-4 rounded-lg sm:rounded-xl border border-slate-200 transition-all hover:border-indigo-200">
               <div className="flex items-center">
                 <input
                   id="isRecurring"
                   type="checkbox"
                   checked={isRecurring}
                   onChange={(e) => setIsRecurring(e.target.checked)}
-                  className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded-md cursor-pointer"
+                  className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded-md cursor-pointer"
                 />
-                <label htmlFor="isRecurring" className="ml-3 block text-sm text-slate-700 font-semibold cursor-pointer">
+                <label htmlFor="isRecurring" className="ml-2 sm:ml-3 block text-xs sm:text-sm text-slate-700 font-semibold cursor-pointer">
                   Pago Recurrente
                 </label>
               </div>
               
               {isRecurring && (
-                <div className="mt-4 pl-8 animate-in fade-in slide-in-from-top-1">
-                  <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wide">Frecuencia</label>
+                <div className="mt-3 sm:mt-4 pl-6 sm:pl-8 animate-in fade-in slide-in-from-top-1">
+                  <label className="block text-[10px] sm:text-xs font-bold text-slate-500 mb-1 sm:mb-1.5 uppercase tracking-wide">Frecuencia</label>
                   <select
                     value={frequency}
                     onChange={(e) => setFrequency(e.target.value as any)}
-                    className="block w-full py-2.5 px-3 bg-white text-sm rounded-lg border border-slate-200 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="block w-full py-2 sm:py-2.5 px-2 sm:px-3 bg-white text-xs sm:text-sm rounded-lg border border-slate-200 focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="semanal">Semanal</option>
                     <option value="mensual">Mensual</option>
@@ -253,11 +253,11 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({ initialData, o
               )}
             </div>
 
-            <div className="pt-4 flex gap-3">
-              <Button type="button" variant="ghost" onClick={onClose} className="flex-1">
+            <div className="pt-3 sm:pt-4 flex gap-2 sm:gap-3">
+              <Button type="button" variant="ghost" onClick={onClose} className="flex-1 text-xs sm:text-sm py-2 sm:py-2.5">
                 Cancelar
               </Button>
-              <Button type="submit" variant="primary" className="flex-1 shadow-indigo-300 shadow-lg">
+              <Button type="submit" variant="primary" className="flex-1 shadow-indigo-300 shadow-lg text-xs sm:text-sm py-2 sm:py-2.5">
                 Guardar
               </Button>
             </div>

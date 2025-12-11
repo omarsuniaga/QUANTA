@@ -134,6 +134,29 @@ export default function App() {
       if (modalMode === 'service') {
         // Handle subscription (service)
         const sub = await import('./services/storageService').then(m => m.storageService.addSubscription(data));
+        
+        // Also create a recurring transaction so it appears in the transaction list and affects balance
+        const today = new Date();
+        // Calculate the next charge date based on chargeDay
+        let chargeDate = new Date(today.getFullYear(), today.getMonth(), data.chargeDay);
+        // If the charge day has already passed this month, use next month
+        if (chargeDate < today) {
+          chargeDate = new Date(today.getFullYear(), today.getMonth() + 1, data.chargeDay);
+        }
+        
+        const transactionData = {
+          type: 'expense' as const,
+          amount: data.amount,
+          category: data.category || 'Services',
+          description: data.name,
+          date: chargeDate.toISOString().split('T')[0],
+          isRecurring: true,
+          frequency: data.frequency || 'monthly',
+          paymentMethod: data.paymentMethod,
+          subscriptionId: sub.id, // Link to subscription for future reference
+        };
+        
+        await addTransaction(transactionData);
         toast.success(t.common.serviceSaved, `${data.name} - ${t.common.remindersActive}`);
       } else {
         // Handle transaction (income/expense)
@@ -217,10 +240,79 @@ export default function App() {
 
   return (
     <div className={`${isDarkMode ? 'dark' : ''} h-full`}>
-      <div className={`min-h-screen flex flex-col max-w-md mx-auto shadow-2xl relative overflow-hidden font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100`}>
+      <div className={`min-h-screen flex flex-col lg:flex-row max-w-7xl mx-auto relative overflow-hidden font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100`}>
 
-        {/* Header */}
-        <header className={`px-6 pt-12 pb-4 sticky top-0 z-30 border-b flex justify-between items-start transition-all backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-slate-200/50 dark:border-slate-800`}>
+        {/* Desktop Sidebar */}
+        <aside className="hidden lg:flex lg:flex-col lg:w-64 xl:w-72 lg:fixed lg:inset-y-0 lg:left-1/2 lg:-translate-x-[calc(50%+28rem)] xl:-translate-x-[calc(50%+32rem)] bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-40">
+          <div className="flex-1 flex flex-col p-6">
+            {/* Logo/Brand */}
+            <div className="mb-8">
+              <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">QUANTA</h1>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Finance Tracker</p>
+            </div>
+
+            {/* User Info */}
+            <div className="mb-8 p-4 bg-slate-50 dark:bg-slate-700/50 rounded-2xl">
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t.dashboard.hello}, {user.name}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                {currencySymbol}{stats.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1">{t.dashboard.availableToday}</p>
+              {!isOnline && (
+                <span className="flex items-center gap-1 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full mt-2 w-fit">
+                  <WifiOff className="w-3 h-3" /> {t.common.offline}
+                </span>
+              )}
+            </div>
+
+            {/* Navigation */}
+            <nav className="space-y-2">
+              <button
+                onClick={() => { setActiveTab('dashboard'); clearFilters(); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'dashboard' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                <LayoutGrid className="w-5 h-5" />
+                {t.nav.dashboard}
+              </button>
+              <button
+                onClick={() => setActiveTab('transactions')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'transactions' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                <ListFilter className="w-5 h-5" />
+                {t.nav.transactions}
+              </button>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'settings' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                <SettingsIcon className="w-5 h-5" />
+                {t.nav.settings}
+              </button>
+            </nav>
+
+            {/* Quick Actions */}
+            <div className="mt-8">
+              <p className="text-xs font-bold text-slate-400 uppercase mb-3">Acciones Rápidas</p>
+              <div className="space-y-2">
+                <button onClick={() => openModal('income')} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+                  <ArrowUpRight className="w-4 h-4" /> Nuevo Ingreso
+                </button>
+                <button onClick={() => openModal('expense')} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors">
+                  <ArrowDownRight className="w-4 h-4" /> Nuevo Gasto
+                </button>
+                <button onClick={() => openModal('service')} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors">
+                  <Zap className="w-4 h-4" /> Nuevo Servicio
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content Area */}
+        <div className="flex-1 lg:ml-64 xl:ml-72 flex flex-col max-w-3xl mx-auto w-full">
+
+        {/* Header - Mobile/Tablet only */}
+        <header className={`px-4 sm:px-6 pt-8 sm:pt-12 pb-4 sticky top-0 z-30 border-b flex justify-between items-start transition-all backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-slate-200/50 dark:border-slate-800 lg:hidden`}>
           <div>
             <div className="flex items-center gap-2">
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{t.dashboard.hello}, {user.name} 👋</p>
@@ -230,7 +322,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <h2 className="text-3xl font-bold mt-1 tracking-tight text-slate-900 dark:text-white">
+            <h2 className="text-2xl sm:text-3xl font-bold mt-1 tracking-tight text-slate-900 dark:text-white">
               {currencySymbol}{stats.balance.toLocaleString('es-ES', { minimumFractionDigits: 2 })}
             </h2>
             <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1 bg-indigo-50 dark:bg-indigo-900/30 inline-block px-2 py-0.5 rounded-md">{t.dashboard.availableToday}</p>
@@ -244,10 +336,10 @@ export default function App() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-28">
+        <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-28 lg:pb-8 lg:pt-8">
 
           {activeTab === 'dashboard' && (
-            <div className="p-6 space-y-8 animate-in fade-in duration-300">
+            <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300">
 
               {/* Ghost Money Alerts */}
               {ghostMoneyAlerts.length > 0 && (
@@ -262,20 +354,20 @@ export default function App() {
                 </div>
               )}
 
-              {/* Quick Actions Grid */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Quick Actions Grid - Mobile/Tablet only (hidden on desktop since it's in sidebar) */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 lg:hidden">
                 {quickActions.filter(qa => qa.showOnHome).sort((a, b) => a.order - b.order).map(action => (
                   <button
                     key={action.id}
                     onClick={() => openModal(action.type, action.defaults)}
-                    className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border active:scale-95 transition-all bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:shadow-sm`}
+                    className={`flex flex-col items-center justify-center gap-2 p-3 sm:p-4 rounded-2xl border active:scale-95 transition-all bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:shadow-sm`}
                   >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm bg-${action.color}-50 dark:bg-${action.color}-900/30 text-${action.color}-600 dark:text-${action.color}-400`}>
-                      {action.type === 'income' ? <ArrowUpRight className="w-5 h-5" /> :
-                        action.type === 'expense' ? <ArrowDownRight className="w-5 h-5" /> :
-                          <Zap className="w-5 h-5" />}
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shadow-sm bg-${action.color}-50 dark:bg-${action.color}-900/30 text-${action.color}-600 dark:text-${action.color}-400`}>
+                      {action.type === 'income' ? <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5" /> :
+                        action.type === 'expense' ? <ArrowDownRight className="w-4 h-4 sm:w-5 sm:h-5" /> :
+                          <Zap className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </div>
-                    <span className="text-xs font-bold truncate w-full text-center">{action.name}</span>
+                    <span className="text-[10px] sm:text-xs font-bold truncate w-full text-center">{action.name}</span>
                   </button>
                 ))}
 
@@ -312,7 +404,7 @@ export default function App() {
           )}
 
           {activeTab === 'transactions' && (
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 lg:p-8 space-y-4">
               {/* Search Bar */}
               <SearchBar
                 value={filters.search}
@@ -380,10 +472,11 @@ export default function App() {
           </div>
         )}
 
-        {/* Bottom Navigation */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 max-w-md mx-auto">
-          <div className="h-12 pointer-events-none absolute bottom-full w-full bg-gradient-to-t from-slate-50 dark:from-slate-900 to-transparent"></div>
-          <nav className="backdrop-blur-lg border-t px-6 py-3 flex justify-between items-center rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800">
+        {/* Bottom Navigation - Mobile/Tablet only */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
+          <div className="max-w-3xl mx-auto">
+            <div className="h-12 pointer-events-none absolute bottom-full w-full bg-gradient-to-t from-slate-50 dark:from-slate-900 to-transparent"></div>
+            <nav className="backdrop-blur-lg border-t px-6 py-3 flex justify-between items-center rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800">
 
             <button
               onClick={() => { setActiveTab('dashboard'); clearFilters(); }}
@@ -408,7 +501,8 @@ export default function App() {
             >
               <ListFilter className="w-6 h-6" strokeWidth={activeTab === 'transactions' ? 2.5 : 2} />
             </button>
-          </nav>
+            </nav>
+          </div>
         </div>
 
         {/* Modals */}
@@ -462,6 +556,7 @@ export default function App() {
             onClose={() => setShowNotificationPrompt(false)}
           />
         )}
+        </div>
       </div>
     </div>
   );

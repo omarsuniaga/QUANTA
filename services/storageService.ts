@@ -1,8 +1,60 @@
 import { 
-  Transaction, User, Goal, Subscription, AppSettings, QuickAction, Account, Promo, AuditLog, MonetaryAmount 
+  Transaction, User, Goal, Subscription, AppSettings, QuickAction, Account, Promo, AuditLog, MonetaryAmount, CustomCategory 
 } from '../types';
 import { auth, db } from '../firebaseConfig';
 import firebase from 'firebase/compat/app';
+
+// ============ LOCAL STORAGE HELPERS ============
+// Prefix for all localStorage keys
+const LS_PREFIX = 'quanta_';
+
+// Local Storage Keys
+const LS_KEYS = {
+  SETTINGS: `${LS_PREFIX}settings`,
+  TRANSACTIONS: `${LS_PREFIX}transactions`,
+  ACCOUNTS: `${LS_PREFIX}accounts`,
+  GOALS: `${LS_PREFIX}goals`,
+  PROMOS: `${LS_PREFIX}promos`,
+  QUICK_ACTIONS: `${LS_PREFIX}quick_actions`,
+  SUBSCRIPTIONS: `${LS_PREFIX}subscriptions`,
+  BUDGETS: `${LS_PREFIX}budgets`,
+  CATEGORIES: `${LS_PREFIX}categories`,
+  USER: `${LS_PREFIX}user`,
+  LAST_SYNC: `${LS_PREFIX}last_sync`,
+};
+
+// Safe localStorage getter
+const getFromLocal = <T>(key: string, defaultValue: T): T => {
+  if (typeof window === 'undefined') return defaultValue;
+  try {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (e) {
+    console.warn(`Error reading ${key} from localStorage`, e);
+    return defaultValue;
+  }
+};
+
+// Safe localStorage setter
+const saveToLocal = <T>(key: string, value: T): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Error saving ${key} to localStorage`, e);
+  }
+};
+
+// Check if online
+const isOnline = (): boolean => {
+  if (typeof navigator === 'undefined') return true;
+  return navigator.onLine;
+};
+
+// Check if Firebase is available and user is authenticated
+const canUseFirebase = (): boolean => {
+  return !!(auth?.currentUser && db && isOnline());
+};
 
 // Helper to get current User ID or throw
 const getUserId = () => {
@@ -176,34 +228,43 @@ export const storageService = {
   // --- TRANSACTIONS ---
 
   async getTransactions(): Promise<Transaction[]> {
-    const uid = getUserId();
-    try {
-      const snapshot = await getUserRef(uid).collection('transactions').get();
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        // Flatten "amount" object back to number for UI
-        const amountVal = typeof data.amount === 'object' ? data.amount.value : data.amount;
-        
-        return { 
-          id: doc.id,
-          ...data,
-          amount: amountVal,
-          monetaryDetails: typeof data.amount === 'object' ? data.amount : undefined,
-          paymentMethod: data.paymentMethodId, // Map back for UI
-          description: data.description || '' 
-        } as Transaction;
-      });
-    } catch(e) { 
-        console.warn("Failed to fetch transactions", e);
-        return []; 
+    // 1. Get from localStorage first
+    const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('transactions').get();
+        const firebaseTxs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const amountVal = typeof data.amount === 'object' ? data.amount.value : data.amount;
+          
+          return { 
+            id: doc.id,
+            ...data,
+            amount: amountVal,
+            monetaryDetails: typeof data.amount === 'object' ? data.amount : undefined,
+            paymentMethod: data.paymentMethodId,
+            description: data.description || '' 
+          } as Transaction;
+        });
+        // Save to local for offline use
+        saveToLocal(LS_KEYS.TRANSACTIONS, firebaseTxs);
+        return firebaseTxs;
+      } catch(e) { 
+        console.warn("Failed to fetch transactions from Firebase (using local)", e);
+      }
     }
+    
+    return localTxs;
   },
 
   async addTransaction(transaction: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction> {
-    const uid = getUserId();
     const settings = await this.getSettings(); 
+    const localId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // Construct Monetary Structure (The "amount" object in Firestore)
+    // Construct Monetary Structure
     const monetaryAmount: MonetaryAmount = {
       value: transaction.amount,
       currency: settings.currency?.localCode || 'USD',
@@ -212,113 +273,179 @@ export const storageService = {
       baseCurrency: settings.currency?.baseCode || 'USD'
     };
 
-    // Construct Payload matching Schema
-    // Ensure recurring fields are explicitly handled
-    const newTxPayload = {
+    const newTransaction: Transaction = {
+      id: localId,
       type: transaction.type,
       category: transaction.category,
-      description: transaction.description,
+      description: transaction.description || '',
       date: transaction.date,
+      amount: transaction.amount,
       notes: transaction.notes || '',
-      
-      amount: monetaryAmount, // Stored as Object
-
-      paymentMethodId: transaction.paymentMethod, // Stored as ID
-      isRecurring: !!transaction.isRecurring, // Ensure boolean
-      frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : null, // Default to monthly if missing but recurring
-      gigType: transaction.gigType || null,
-      mood: transaction.mood || null,
-      receiptUrl: transaction.receiptUrl || null,
+      paymentMethod: transaction.paymentMethod,
+      isRecurring: !!transaction.isRecurring,
+      frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : undefined,
+      gigType: transaction.gigType,
+      mood: transaction.mood,
+      receiptUrl: transaction.receiptUrl,
       sharedWith: transaction.sharedWith || [],
-      
+      monetaryDetails: monetaryAmount,
       createdAt: Date.now()
     };
 
-    const docRef = await getUserRef(uid).collection('transactions').add(newTxPayload);
+    // 1. Always save to localStorage first
+    const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+    localTxs.push(newTransaction);
+    saveToLocal(LS_KEYS.TRANSACTIONS, localTxs);
     
-    // Update Account Balance
-    if (transaction.paymentMethod) {
-      this._updateAccountBalance(uid, transaction.paymentMethod, transaction.amount, transaction.type === 'income');
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const newTxPayload = {
+          type: transaction.type,
+          category: transaction.category,
+          description: transaction.description,
+          date: transaction.date,
+          notes: transaction.notes || '',
+          amount: monetaryAmount,
+          paymentMethodId: transaction.paymentMethod,
+          isRecurring: !!transaction.isRecurring,
+          frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : null,
+          gigType: transaction.gigType || null,
+          mood: transaction.mood || null,
+          receiptUrl: transaction.receiptUrl || null,
+          sharedWith: transaction.sharedWith || [],
+          createdAt: Date.now()
+        };
+
+        const docRef = await getUserRef(uid).collection('transactions').add(newTxPayload);
+        
+        // Update local with Firebase ID
+        newTransaction.id = docRef.id;
+        const updatedLocalTxs = localTxs.map(t => t.id === localId ? newTransaction : t);
+        saveToLocal(LS_KEYS.TRANSACTIONS, updatedLocalTxs);
+        
+        // Update Account Balance
+        if (transaction.paymentMethod) {
+          this._updateAccountBalance(uid, transaction.paymentMethod, transaction.amount, transaction.type === 'income');
+        }
+      } catch(e) {
+        console.warn("Failed to save transaction to Firebase (saved locally)", e);
+      }
     }
 
-    // Return internal structure
-    return { 
-      id: docRef.id, 
-      ...transaction, 
-      monetaryDetails: monetaryAmount,
-      isRecurring: newTxPayload.isRecurring,
-      frequency: newTxPayload.frequency,
-      createdAt: newTxPayload.createdAt 
-    };
+    return newTransaction;
   },
 
   async updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
-    const uid = getUserId();
     const settings = await this.getSettings();
     
-    // Construct update payload
-    const updatePayload: any = {};
+    // 1. Update in localStorage first
+    const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+    const updatedLocalTxs = localTxs.map(t => {
+      if (t.id === id) {
+        return { ...t, ...updates };
+      }
+      return t;
+    });
+    saveToLocal(LS_KEYS.TRANSACTIONS, updatedLocalTxs);
     
-    if (updates.type) updatePayload.type = updates.type;
-    if (updates.category) updatePayload.category = updates.category;
-    if (updates.description) updatePayload.description = updates.description;
-    if (updates.date) updatePayload.date = updates.date;
-    if (updates.notes !== undefined) updatePayload.notes = updates.notes;
-    if (updates.paymentMethod) updatePayload.paymentMethodId = updates.paymentMethod;
-    if (updates.isRecurring !== undefined) updatePayload.isRecurring = updates.isRecurring;
-    if (updates.frequency) updatePayload.frequency = updates.frequency;
-    if (updates.gigType) updatePayload.gigType = updates.gigType;
-    if (updates.mood) updatePayload.mood = updates.mood;
-    if (updates.receiptUrl) updatePayload.receiptUrl = updates.receiptUrl;
-    if (updates.sharedWith) updatePayload.sharedWith = updates.sharedWith;
-    
-    // Update amount if provided (convert to MonetaryAmount structure)
-    if (updates.amount !== undefined) {
-      const monetaryAmount: MonetaryAmount = {
-        value: updates.amount,
-        currency: settings.currency?.localCode || 'USD',
-        exchangeRate: settings.currency?.rateToBase || 1,
-        valueInBase: updates.amount * (settings.currency?.rateToBase || 1),
-        baseCurrency: settings.currency?.baseCode || 'USD'
-      };
-      updatePayload.amount = monetaryAmount;
-    }
-    
-    try {
-      await getUserRef(uid).collection('transactions').doc(id).update(updatePayload);
-    } catch(e) {
-      console.warn("Update transaction failed", e);
-      throw e;
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      // Construct update payload
+      const updatePayload: any = {};
+      
+      if (updates.type) updatePayload.type = updates.type;
+      if (updates.category) updatePayload.category = updates.category;
+      if (updates.description) updatePayload.description = updates.description;
+      if (updates.date) updatePayload.date = updates.date;
+      if (updates.notes !== undefined) updatePayload.notes = updates.notes;
+      if (updates.paymentMethod) updatePayload.paymentMethodId = updates.paymentMethod;
+      if (updates.isRecurring !== undefined) updatePayload.isRecurring = updates.isRecurring;
+      if (updates.frequency) updatePayload.frequency = updates.frequency;
+      if (updates.gigType) updatePayload.gigType = updates.gigType;
+      if (updates.mood) updatePayload.mood = updates.mood;
+      if (updates.receiptUrl) updatePayload.receiptUrl = updates.receiptUrl;
+      if (updates.sharedWith) updatePayload.sharedWith = updates.sharedWith;
+      
+      // Update amount if provided
+      if (updates.amount !== undefined) {
+        const monetaryAmount: MonetaryAmount = {
+          value: updates.amount,
+          currency: settings.currency?.localCode || 'USD',
+          exchangeRate: settings.currency?.rateToBase || 1,
+          valueInBase: updates.amount * (settings.currency?.rateToBase || 1),
+          baseCurrency: settings.currency?.baseCode || 'USD'
+        };
+        updatePayload.amount = monetaryAmount;
+      }
+      
+      try {
+        await getUserRef(uid).collection('transactions').doc(id).update(updatePayload);
+      } catch(e) {
+        console.warn("Update transaction in Firebase failed (saved locally)", e);
+      }
     }
   },
 
   async deleteTransaction(id: string): Promise<void> {
-    const uid = getUserId();
-    try {
-      await getUserRef(uid).collection('transactions').doc(id).delete();
-    } catch (e) { console.warn("Delete transaction failed", e); }
+    // 1. Delete from localStorage first
+    const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+    const filteredTxs = localTxs.filter(t => t.id !== id);
+    saveToLocal(LS_KEYS.TRANSACTIONS, filteredTxs);
+    
+    // 2. Try to delete from Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        await getUserRef(uid).collection('transactions').doc(id).delete();
+      } catch (e) { 
+        console.warn("Delete transaction from Firebase failed (deleted locally)", e); 
+      }
+    }
   },
 
   // --- ACCOUNTS ---
 
   async getAccounts(): Promise<Account[]> {
-    const uid = getUserId();
-    try {
-      const snapshot = await getUserRef(uid).collection('accounts').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
-    } catch (e) { return []; }
+    // 1. Get from localStorage first
+    const localAccounts = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('accounts').get();
+        const firebaseAccounts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        saveToLocal(LS_KEYS.ACCOUNTS, firebaseAccounts);
+        return firebaseAccounts;
+      } catch (e) { 
+        console.warn("Failed to fetch accounts from Firebase (using local)", e);
+      }
+    }
+    
+    return localAccounts;
   },
 
   async saveAccounts(accounts: Account[]): Promise<void> {
-    const uid = getUserId();
-    const batch = db!.batch();
-    accounts.forEach(acc => {
-      const ref = getUserRef(uid).collection('accounts').doc(acc.id);
-      batch.set(ref, { ...acc, updatedAt: Date.now() });
-    });
-    try {
-      await batch.commit();
-    } catch(e) { console.warn("Save accounts failed", e); }
+    // 1. Always save to localStorage first
+    saveToLocal(LS_KEYS.ACCOUNTS, accounts);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const batch = db!.batch();
+      accounts.forEach(acc => {
+        const ref = getUserRef(uid).collection('accounts').doc(acc.id);
+        batch.set(ref, { ...acc, updatedAt: Date.now() });
+      });
+      try {
+        await batch.commit();
+      } catch(e) { 
+        console.warn("Save accounts to Firebase failed (saved locally)", e); 
+      }
+    }
   },
 
   async _updateAccountBalance(uid: string, accountId: string, amount: number, isIncome: boolean) {
@@ -338,119 +465,218 @@ export const storageService = {
   // --- GOALS ---
 
   async getGoals(): Promise<Goal[]> {
-    const uid = getUserId();
-    try {
-      const snapshot = await getUserRef(uid).collection('goals').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
-    } catch(e) { return []; }
+    // 1. Get from localStorage first
+    const localGoals = getFromLocal<Goal[]>(LS_KEYS.GOALS, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('goals').get();
+        const firebaseGoals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+        saveToLocal(LS_KEYS.GOALS, firebaseGoals);
+        return firebaseGoals;
+      } catch(e) { 
+        console.warn("Failed to fetch goals from Firebase (using local)", e);
+      }
+    }
+    
+    return localGoals;
   },
 
   async saveGoals(goals: Goal[]): Promise<void> {
-    const uid = getUserId();
-    const batch = db!.batch();
-    goals.forEach(g => {
-      const ref = getUserRef(uid).collection('goals').doc(g.id);
-      batch.set(ref, g);
-    });
-    try {
-      await batch.commit();
-    } catch(e) { console.warn("Save goals failed", e); }
+    // 1. Always save to localStorage first
+    saveToLocal(LS_KEYS.GOALS, goals);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const batch = db!.batch();
+      goals.forEach(g => {
+        const ref = getUserRef(uid).collection('goals').doc(g.id);
+        batch.set(ref, g);
+      });
+      try {
+        await batch.commit();
+      } catch(e) { 
+        console.warn("Save goals to Firebase failed (saved locally)", e); 
+      }
+    }
   },
 
   async deleteGoal(id: string): Promise<void> {
-    const uid = getUserId();
-    try {
-      await getUserRef(uid).collection('goals').doc(id).delete();
-    } catch(e) { console.warn("Delete goal failed", e); }
+    // 1. Delete from localStorage first
+    const localGoals = getFromLocal<Goal[]>(LS_KEYS.GOALS, []);
+    const filteredGoals = localGoals.filter(g => g.id !== id);
+    saveToLocal(LS_KEYS.GOALS, filteredGoals);
+    
+    // 2. Try to delete from Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        await getUserRef(uid).collection('goals').doc(id).delete();
+      } catch(e) { 
+        console.warn("Delete goal from Firebase failed (deleted locally)", e); 
+      }
+    }
   },
 
   // --- SETTINGS ---
 
   async getSettings(): Promise<AppSettings> {
-    const uid = getUserId();
-    try {
-      const doc = await getUserRef(uid).collection('settings').doc('config').get();
-      if (doc.exists) {
-        const data = doc.data() as Partial<AppSettings>;
-        // Deep merge with defaults to prevent null property access errors
-        return {
-          theme: data.theme || DEFAULT_SETTINGS.theme,
-          language: data.language || DEFAULT_SETTINGS.language,
-          currency: { ...DEFAULT_SETTINGS.currency, ...data.currency },
-          notifications: { ...DEFAULT_SETTINGS.notifications, ...data.notifications },
-          aiConfig: { ...DEFAULT_SETTINGS.aiConfig, ...data.aiConfig },
-        };
+    // 1. Always try to get from localStorage first (fast)
+    const localSettings = getFromLocal<AppSettings | null>(LS_KEYS.SETTINGS, null);
+    
+    // 2. If online and authenticated, try to sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const doc = await getUserRef(uid).collection('settings').doc('config').get();
+        if (doc.exists) {
+          const data = doc.data() as Partial<AppSettings>;
+          const mergedSettings: AppSettings = {
+            theme: data.theme || DEFAULT_SETTINGS.theme,
+            language: data.language || DEFAULT_SETTINGS.language,
+            currency: { ...DEFAULT_SETTINGS.currency, ...data.currency },
+            notifications: { ...DEFAULT_SETTINGS.notifications, ...data.notifications },
+            aiConfig: { ...DEFAULT_SETTINGS.aiConfig, ...data.aiConfig },
+          };
+          // Save to local for offline use
+          saveToLocal(LS_KEYS.SETTINGS, mergedSettings);
+          return mergedSettings;
+        }
+      } catch(e) {
+        console.warn("Failed to load settings from Firebase (using local/defaults)", e);
       }
-    } catch(e) {
-      console.warn("Failed to load settings (using defaults)", e);
     }
     
-    return DEFAULT_SETTINGS;
+    // 3. Return local settings or defaults
+    return localSettings || DEFAULT_SETTINGS;
   },
 
   async saveSettings(settings: AppSettings): Promise<void> {
-    const uid = getUserId();
-    try {
-      await getUserRef(uid).collection('settings').doc('config').set(settings);
-      this._logAudit(uid, 'settings_update');
-    } catch(e) { console.warn("Save settings failed", e); }
+    // Always save to localStorage first
+    saveToLocal(LS_KEYS.SETTINGS, settings);
+    
+    // Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        await getUserRef(uid).collection('settings').doc('config').set(settings);
+        this._logAudit(uid, 'settings_update');
+      } catch(e) { 
+        console.warn("Save settings to Firebase failed (saved locally)", e); 
+      }
+    }
   },
 
   // --- QUICK ACTIONS ---
 
   async getQuickActions(): Promise<QuickAction[]> {
-    const uid = getUserId();
-    try {
-      const snapshot = await getUserRef(uid).collection('quick_actions').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuickAction));
-    } catch(e) { return []; }
+    // 1. Get from localStorage first
+    const localActions = getFromLocal<QuickAction[]>(LS_KEYS.QUICK_ACTIONS, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('quick_actions').get();
+        const firebaseActions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuickAction));
+        saveToLocal(LS_KEYS.QUICK_ACTIONS, firebaseActions);
+        return firebaseActions;
+      } catch(e) { 
+        console.warn("Failed to fetch quick actions from Firebase (using local)", e);
+      }
+    }
+    
+    return localActions;
   },
 
   async saveQuickActions(actions: QuickAction[]): Promise<void> {
-    const uid = getUserId();
-    const batch = db!.batch();
-    actions.forEach(qa => {
-      const ref = getUserRef(uid).collection('quick_actions').doc(qa.id);
-      batch.set(ref, qa);
-    });
-    try {
-      await batch.commit();
-    } catch(e) { console.warn("Save actions failed", e); }
+    // 1. Always save to localStorage first
+    saveToLocal(LS_KEYS.QUICK_ACTIONS, actions);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const batch = db!.batch();
+      actions.forEach(qa => {
+        const ref = getUserRef(uid).collection('quick_actions').doc(qa.id);
+        batch.set(ref, qa);
+      });
+      try {
+        await batch.commit();
+      } catch(e) { 
+        console.warn("Save quick actions to Firebase failed (saved locally)", e); 
+      }
+    }
   },
 
   // --- SUBSCRIPTIONS ---
 
   async getSubscriptions(): Promise<Subscription[]> {
-    const uid = getUserId();
-    try {
-      const snapshot = await getUserRef(uid).collection('subscriptions').get();
-      return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return { 
-          id: doc.id, 
-          ...data,
-          paymentMethod: data.autoPaymentAccount // Map back for UI
-        } as Subscription;
-      });
-    } catch(e) { return []; }
+    // 1. Get from localStorage first
+    const localSubs = getFromLocal<Subscription[]>(LS_KEYS.SUBSCRIPTIONS, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('subscriptions').get();
+        const firebaseSubs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return { 
+            id: doc.id, 
+            ...data,
+            paymentMethod: data.autoPaymentAccount
+          } as Subscription;
+        });
+        saveToLocal(LS_KEYS.SUBSCRIPTIONS, firebaseSubs);
+        return firebaseSubs;
+      } catch(e) { 
+        console.warn("Failed to fetch subscriptions from Firebase (using local)", e);
+      }
+    }
+    
+    return localSubs;
   },
 
   async addSubscription(sub: Omit<Subscription, 'id'>): Promise<Subscription> {
-    const uid = getUserId();
-    const newSubPayload = {
-      name: sub.name,
-      amount: sub.amount, // Schema allows number here
-      chargeDay: sub.chargeDay,
-      frequency: sub.frequency,
-      autoPaymentAccount: sub.paymentMethod, // Map to schema field
-      reminderDays: sub.reminderDays,
-      category: sub.category,
-      lastPaidDate: sub.lastPaidDate || null,
-      isActive: true
-    };
+    const localId = `local_sub_${Date.now()}`;
+    const newSub: Subscription = { id: localId, ...sub };
     
-    const docRef = await getUserRef(uid).collection('subscriptions').add(newSubPayload);
-    return { id: docRef.id, ...sub };
+    // 1. Save to localStorage first
+    const localSubs = getFromLocal<Subscription[]>(LS_KEYS.SUBSCRIPTIONS, []);
+    localSubs.push(newSub);
+    saveToLocal(LS_KEYS.SUBSCRIPTIONS, localSubs);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const newSubPayload = {
+        name: sub.name,
+        amount: sub.amount,
+        chargeDay: sub.chargeDay,
+        frequency: sub.frequency,
+        autoPaymentAccount: sub.paymentMethod,
+        reminderDays: sub.reminderDays,
+        category: sub.category,
+        lastPaidDate: sub.lastPaidDate || null,
+        isActive: true
+      };
+      
+      try {
+        const docRef = await getUserRef(uid).collection('subscriptions').add(newSubPayload);
+        // Update local with Firebase ID
+        const updatedSubs = localSubs.map(s => s.id === localId ? { ...s, id: docRef.id } : s);
+        saveToLocal(LS_KEYS.SUBSCRIPTIONS, updatedSubs);
+        return { id: docRef.id, ...sub };
+      } catch(e) {
+        console.warn("Add subscription to Firebase failed (saved locally)", e);
+      }
+    }
+    
+    return newSub;
   },
 
   async checkDueSubscriptions(): Promise<Subscription[]> {
@@ -468,34 +694,66 @@ export const storageService = {
   },
 
   async markSubscriptionPaid(id: string): Promise<void> {
-    const uid = getUserId();
-    try {
-      await getUserRef(uid).collection('subscriptions').doc(id).update({
-        lastPaidDate: new Date().toISOString()
-      });
-    } catch(e) { console.warn("Mark paid failed", e); }
+    const paidDate = new Date().toISOString();
+    
+    // 1. Update localStorage first
+    const localSubs = getFromLocal<Subscription[]>(LS_KEYS.SUBSCRIPTIONS, []);
+    const updatedSubs = localSubs.map(s => s.id === id ? { ...s, lastPaidDate: paidDate } : s);
+    saveToLocal(LS_KEYS.SUBSCRIPTIONS, updatedSubs);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        await getUserRef(uid).collection('subscriptions').doc(id).update({
+          lastPaidDate: paidDate
+        });
+      } catch(e) { 
+        console.warn("Mark subscription paid in Firebase failed (updated locally)", e); 
+      }
+    }
   },
 
   // --- PROMOS ---
   
   async getPromos(): Promise<Promo[]> {
-    const uid = getUserId();
-    try {
-      const snapshot = await getUserRef(uid).collection('promos').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promo));
-    } catch(e) { return []; }
+    // 1. Get from localStorage first
+    const localPromos = getFromLocal<Promo[]>(LS_KEYS.PROMOS, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('promos').get();
+        const firebasePromos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promo));
+        saveToLocal(LS_KEYS.PROMOS, firebasePromos);
+        return firebasePromos;
+      } catch(e) { 
+        console.warn("Failed to fetch promos from Firebase (using local)", e);
+      }
+    }
+    
+    return localPromos;
   },
 
   async savePromos(promos: Promo[]): Promise<void> {
-    const uid = getUserId();
-    const batch = db!.batch();
-    promos.forEach(p => {
-      const ref = getUserRef(uid).collection('promos').doc(p.id);
-      batch.set(ref, p);
-    });
-    try {
-      await batch.commit();
-    } catch(e) { console.warn("Save promos failed", e); }
+    // 1. Always save to localStorage first
+    saveToLocal(LS_KEYS.PROMOS, promos);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const batch = db!.batch();
+      promos.forEach(p => {
+        const ref = getUserRef(uid).collection('promos').doc(p.id);
+        batch.set(ref, p);
+      });
+      try {
+        await batch.commit();
+      } catch(e) { 
+        console.warn("Save promos to Firebase failed (saved locally)", e); 
+      }
+    }
   },
 
   // --- EXPORT ---
@@ -529,23 +787,279 @@ export const storageService = {
   // --- BUDGETS ---
 
   async getBudgets(): Promise<any[]> {
-    const uid = getUserId();
-    try {
-      const snapshot = await getUserRef(uid).collection('budgets').get();
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-    } catch(e) { return []; }
+    // 1. Get from localStorage first
+    const localBudgets = getFromLocal<any[]>(LS_KEYS.BUDGETS, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('budgets').get();
+        const firebaseBudgets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        saveToLocal(LS_KEYS.BUDGETS, firebaseBudgets);
+        return firebaseBudgets;
+      } catch(e) { 
+        console.warn("Failed to fetch budgets from Firebase (using local)", e);
+      }
+    }
+    
+    return localBudgets;
   },
 
   async saveBudgets(budgets: any[]): Promise<void> {
-    const uid = getUserId();
-    const batch = db!.batch();
-    budgets.forEach(b => {
-      const ref = getUserRef(uid).collection('budgets').doc(b.category);
-      batch.set(ref, b);
+    // 1. Always save to localStorage first
+    saveToLocal(LS_KEYS.BUDGETS, budgets);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const batch = db!.batch();
+      budgets.forEach(b => {
+        const ref = getUserRef(uid).collection('budgets').doc(b.category);
+        batch.set(ref, b);
+      });
+      try {
+        await batch.commit();
+      } catch(e) { 
+        console.warn("Save budgets to Firebase failed (saved locally)", e); 
+      }
+    }
+  },
+
+  // --- CUSTOM CATEGORIES ---
+
+  async getCategories(): Promise<CustomCategory[]> {
+    // 1. Get from localStorage first
+    const localCategories = getFromLocal<CustomCategory[]>(LS_KEYS.CATEGORIES, []);
+    
+    // 2. If online and authenticated, sync from Firebase
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const snapshot = await getUserRef(uid).collection('categories').orderBy('order').get();
+        if (snapshot.empty) {
+          const defaults = this.getDefaultCategories();
+          saveToLocal(LS_KEYS.CATEGORIES, defaults);
+          return defaults;
+        }
+        const firebaseCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CustomCategory));
+        saveToLocal(LS_KEYS.CATEGORIES, firebaseCategories);
+        return firebaseCategories;
+      } catch(e) { 
+        console.warn("Failed to fetch categories from Firebase (using local)", e);
+      }
+    }
+    
+    // Return local or defaults
+    return localCategories.length > 0 ? localCategories : this.getDefaultCategories();
+  },
+
+  async saveCategories(categories: CustomCategory[]): Promise<void> {
+    // 1. Always save to localStorage first
+    saveToLocal(LS_KEYS.CATEGORIES, categories);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const batch = db!.batch();
+      categories.forEach((cat, index) => {
+        const ref = getUserRef(uid).collection('categories').doc(cat.id);
+        batch.set(ref, { ...cat, order: index });
+      });
+      try {
+        await batch.commit();
+      } catch(e) { 
+        console.warn("Save categories to Firebase failed (saved locally)", e); 
+      }
+    }
+  },
+
+  async addCategory(category: Omit<CustomCategory, 'id'>): Promise<CustomCategory> {
+    const localId = `local_cat_${Date.now()}`;
+    const newCategory: CustomCategory = { id: localId, ...category };
+    
+    // 1. Save to localStorage first
+    const localCategories = getFromLocal<CustomCategory[]>(LS_KEYS.CATEGORIES, []);
+    localCategories.push(newCategory);
+    saveToLocal(LS_KEYS.CATEGORIES, localCategories);
+    
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        const docRef = await getUserRef(uid).collection('categories').add(category);
+        // Update local with Firebase ID
+        const updatedCategories = localCategories.map(c => c.id === localId ? { ...c, id: docRef.id } : c);
+        saveToLocal(LS_KEYS.CATEGORIES, updatedCategories);
+        return { id: docRef.id, ...category };
+      } catch(e) {
+        console.warn("Add category to Firebase failed (saved locally)", e);
+      }
+    }
+    
+    return newCategory;
+  },
+
+  async deleteCategory(id: string): Promise<void> {
+    // 1. Delete from localStorage first
+    const localCategories = getFromLocal<CustomCategory[]>(LS_KEYS.CATEGORIES, []);
+    const filteredCategories = localCategories.filter(c => c.id !== id);
+    saveToLocal(LS_KEYS.CATEGORIES, filteredCategories);
+    
+    // 2. Try to delete from Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        await getUserRef(uid).collection('categories').doc(id).delete();
+      } catch(e) { 
+        console.warn("Delete category from Firebase failed (deleted locally)", e); 
+      }
+    }
+  },
+
+  getDefaultCategories(): CustomCategory[] {
+    return [
+      // Expense Categories
+      { id: 'food', key: 'Food', name: { es: 'Alimentación', en: 'Food' }, icon: 'Utensils', color: 'orange', type: 'expense', isDefault: true, order: 0 },
+      { id: 'transport', key: 'Transportation', name: { es: 'Transporte', en: 'Transportation' }, icon: 'Car', color: 'blue', type: 'expense', isDefault: true, order: 1 },
+      { id: 'leisure', key: 'Leisure', name: { es: 'Ocio', en: 'Leisure' }, icon: 'Gamepad2', color: 'purple', type: 'expense', isDefault: true, order: 2 },
+      { id: 'utilities', key: 'Utilities', name: { es: 'Servicios', en: 'Utilities' }, icon: 'Zap', color: 'amber', type: 'expense', isDefault: true, order: 3 },
+      { id: 'subscriptions', key: 'Subscriptions', name: { es: 'Suscripciones', en: 'Subscriptions' }, icon: 'Tv', color: 'indigo', type: 'expense', isDefault: true, order: 4 },
+      { id: 'health', key: 'Health', name: { es: 'Salud', en: 'Health' }, icon: 'Heart', color: 'rose', type: 'expense', isDefault: true, order: 5 },
+      { id: 'housing', key: 'Housing', name: { es: 'Vivienda', en: 'Housing' }, icon: 'Home', color: 'teal', type: 'expense', isDefault: true, order: 6 },
+      { id: 'shopping', key: 'Shopping', name: { es: 'Compras', en: 'Shopping' }, icon: 'ShoppingBag', color: 'pink', type: 'expense', isDefault: true, order: 7 },
+      { id: 'education', key: 'Education', name: { es: 'Educación', en: 'Education' }, icon: 'GraduationCap', color: 'cyan', type: 'expense', isDefault: true, order: 8 },
+      { id: 'other_expense', key: 'Other', name: { es: 'Otros', en: 'Other' }, icon: 'MoreHorizontal', color: 'slate', type: 'expense', isDefault: true, order: 9 },
+      // Income Categories
+      { id: 'salary', key: 'Salary', name: { es: 'Salario', en: 'Salary' }, icon: 'Briefcase', color: 'emerald', type: 'income', isDefault: true, order: 10 },
+      { id: 'freelance', key: 'Freelance', name: { es: 'Freelance', en: 'Freelance' }, icon: 'Laptop', color: 'violet', type: 'income', isDefault: true, order: 11 },
+      { id: 'investments', key: 'Investments', name: { es: 'Inversiones', en: 'Investments' }, icon: 'TrendingUp', color: 'lime', type: 'income', isDefault: true, order: 12 },
+      { id: 'gifts', key: 'Gifts', name: { es: 'Regalos', en: 'Gifts' }, icon: 'Gift', color: 'fuchsia', type: 'income', isDefault: true, order: 13 },
+      { id: 'other_income', key: 'OtherIncome', name: { es: 'Otros Ingresos', en: 'Other Income' }, icon: 'Coins', color: 'sky', type: 'income', isDefault: true, order: 14 },
+    ];
+  },
+
+  // --- LOCAL STORAGE UTILITIES ---
+
+  /**
+   * Clear all local data (call on logout)
+   */
+  clearLocalData(): void {
+    Object.values(LS_KEYS).forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn(`Failed to remove ${key} from localStorage`, e);
+      }
     });
+  },
+
+  /**
+   * Check if app is online
+   */
+  isOnline(): boolean {
+    return isOnline();
+  },
+
+  /**
+   * Check if Firebase is available
+   */
+  isFirebaseAvailable(): boolean {
+    return canUseFirebase();
+  },
+
+  /**
+   * Force sync all local data to Firebase (if online)
+   */
+  async syncToCloud(): Promise<{ success: boolean; synced: string[]; failed: string[] }> {
+    const synced: string[] = [];
+    const failed: string[] = [];
+    
+    if (!canUseFirebase()) {
+      return { success: false, synced, failed: ['Not authenticated or offline'] };
+    }
+
     try {
-      await batch.commit();
-    } catch(e) { console.warn("Save budgets failed", e); }
+      // Sync settings
+      const settings = getFromLocal<AppSettings | null>(LS_KEYS.SETTINGS, null);
+      if (settings) {
+        await this.saveSettings(settings);
+        synced.push('settings');
+      }
+
+      // Sync transactions
+      const transactions = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+      if (transactions.length > 0) {
+        const uid = getUserId();
+        const batch = db!.batch();
+        transactions.forEach(tx => {
+          if (!tx.id.startsWith('local_')) {
+            const ref = getUserRef(uid).collection('transactions').doc(tx.id);
+            batch.set(ref, tx);
+          }
+        });
+        await batch.commit();
+        synced.push('transactions');
+      }
+
+      // Sync accounts
+      const accounts = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+      if (accounts.length > 0) {
+        await this.saveAccounts(accounts);
+        synced.push('accounts');
+      }
+
+      // Sync goals
+      const goals = getFromLocal<Goal[]>(LS_KEYS.GOALS, []);
+      if (goals.length > 0) {
+        await this.saveGoals(goals);
+        synced.push('goals');
+      }
+
+      // Sync quick actions
+      const quickActions = getFromLocal<QuickAction[]>(LS_KEYS.QUICK_ACTIONS, []);
+      if (quickActions.length > 0) {
+        await this.saveQuickActions(quickActions);
+        synced.push('quick_actions');
+      }
+
+      // Sync promos
+      const promos = getFromLocal<Promo[]>(LS_KEYS.PROMOS, []);
+      if (promos.length > 0) {
+        await this.savePromos(promos);
+        synced.push('promos');
+      }
+
+      // Sync budgets
+      const budgets = getFromLocal<any[]>(LS_KEYS.BUDGETS, []);
+      if (budgets.length > 0) {
+        await this.saveBudgets(budgets);
+        synced.push('budgets');
+      }
+
+      // Sync categories
+      const categories = getFromLocal<CustomCategory[]>(LS_KEYS.CATEGORIES, []);
+      if (categories.length > 0) {
+        await this.saveCategories(categories);
+        synced.push('categories');
+      }
+
+      // Update last sync timestamp
+      saveToLocal(LS_KEYS.LAST_SYNC, Date.now());
+
+      return { success: true, synced, failed };
+    } catch (e) {
+      console.error('Sync to cloud failed', e);
+      failed.push('sync_error');
+      return { success: false, synced, failed };
+    }
+  },
+
+  /**
+   * Get last sync timestamp
+   */
+  getLastSyncTime(): number | null {
+    return getFromLocal<number | null>(LS_KEYS.LAST_SYNC, null);
   },
 
   // --- AUDIT LOGGING ---

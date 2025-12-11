@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw } from 'lucide-react';
-import { Category, TransactionType, Frequency, PaymentMethod, Mood, Account } from '../types';
+import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil } from 'lucide-react';
+import { Category, TransactionType, Frequency, PaymentMethod, Mood, Account, CustomCategory } from '../types';
 import { Button } from './Button';
 import { storageService } from '../services/storageService';
+import { useI18n } from '../contexts/I18nContext';
+import { DynamicIcon, getColorClasses, IconPicker } from './IconPicker';
 
 type ModalMode = 'income' | 'expense' | 'service';
 
@@ -41,8 +43,12 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
   const [gigType, setGigType] = useState<string>('');
 
   // Shared Transactions
+  const [isShared, setIsShared] = useState(false);
   const [sharedWith, setSharedWith] = useState<string[]>(initialValues?.sharedWith || []);
   const [sharedInput, setSharedInput] = useState('');
+
+  // Income Type
+  const [incomeType, setIncomeType] = useState<'salary' | 'extra'>('salary');
 
   // Service Specific
   const [chargeDay, setChargeDay] = useState(1);
@@ -52,14 +58,27 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  
+  // New Category Form
+  const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
+  const [newCatName, setNewCatName] = useState({ es: '', en: '' });
+  const [newCatIcon, setNewCatIcon] = useState('Tag');
+  const [newCatColor, setNewCatColor] = useState('slate');
+  const [showIconPicker, setShowIconPicker] = useState(false);
+
+  // i18n
+  const { language } = useI18n();
 
   // Load data on mount
   useEffect(() => {
     const loadData = async () => {
       const concepts = await storageService.getCommonConcepts(mode);
       const accs = await storageService.getAccounts();
+      const cats = await storageService.getCategories();
       setSuggestions(concepts);
       setAccounts(accs);
+      setCustomCategories(cats);
 
       if (!paymentMethodId && accs.length > 0) {
         setPaymentMethodId(accs[0].id);
@@ -69,9 +88,9 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
 
     // Set default category
     if (!category) {
-      if (mode === 'expense') setCategory(Category.Food);
-      if (mode === 'service') setCategory(Category.Services);
-      if (mode === 'income') setCategory(Category.Salary);
+      if (mode === 'expense') setCategory('food');
+      if (mode === 'service') setCategory('subscriptions');
+      if (mode === 'income') setCategory('salary');
     }
   }, [mode, category, paymentMethodId]);
 
@@ -92,7 +111,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
     setTimeout(() => {
       setAmount('45.50');
       setConcept('Supermarket Checkout');
-      setCategory(Category.Food);
+      setCategory('food');
       setDate(new Date().toISOString().split('T')[0]);
       setIsScanning(false);
     }, 1500);
@@ -136,6 +155,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
         notes,
         mood,
         gigType: mode === 'income' ? gigType : undefined,
+        incomeType: mode === 'income' ? incomeType : undefined,
         sharedWith: sharedWith.length > 0 ? sharedWith : undefined,
         isRecurring: isRecurring,
         frequency: isRecurring ? frequency : null
@@ -180,21 +200,21 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center transition-all duration-300">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-md h-[90vh] sm:h-auto sm:rounded-3xl rounded-t-3xl shadow-2xl animate-slide-up flex flex-col relative overflow-hidden">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center transition-all duration-300 p-0 sm:p-4">
+      <div className="bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl animate-slide-up flex flex-col relative overflow-hidden">
 
         {/* Header */}
-        <div className="flex justify-between items-center p-6 pb-2">
-          <div className={`flex items-center gap-3 px-3 py-1.5 rounded-full border ${colorClasses[config.color] || colorClasses['slate']}`}>
-            <config.icon className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wide">{config.title}</span>
+        <div className="flex justify-between items-center p-4 sm:p-6 pb-2">
+          <div className={`flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border ${colorClasses[config.color] || colorClasses['slate']}`}>
+            <config.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">{config.title}</span>
           </div>
-          <button onClick={onClose} className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-400 transition-colors">
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="p-1.5 sm:p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-400 transition-colors">
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 pt-2">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2">
 
           {/* Receipt Scanner Button (Expense Only) */}
           {mode === 'expense' && (
@@ -210,12 +230,12 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
 
             {/* Amount Field */}
-            <div className="text-center py-2">
-              <div className="inline-flex items-center justify-center relative">
-                <span className="text-slate-300 dark:text-slate-600 text-3xl font-bold absolute -left-8 sm:-left-6">{currencySymbol}</span>
+            <div className="text-center py-1 sm:py-2">
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-slate-300 dark:text-slate-600 text-2xl sm:text-3xl font-bold">{currencySymbol}</span>
                 <input
                   type="number"
                   value={amount}
@@ -224,7 +244,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
                   required
                   autoFocus
                   step="0.01"
-                  className="w-32 text-center text-4xl font-bold text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-700 outline-none bg-transparent"
+                  className="w-40 sm:w-48 text-center text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-700 outline-none bg-transparent"
                 />
               </div>
             </div>
@@ -291,21 +311,105 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
             {/* EXPENSE CATEGORY CHIPS */}
             {mode === 'expense' && (
               <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide block">Categoría</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide block">Categoría</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCategoryForm(!showNewCategoryForm)}
+                    className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Nueva
+                  </button>
+                </div>
+
+                {/* New Category Form */}
+                {showNewCategoryForm && (
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3 animate-in slide-in-from-top-2 fade-in">
+                    <div className="flex gap-3">
+                      {/* Icon/Color Picker Button */}
+                      <button
+                        type="button"
+                        onClick={() => setShowIconPicker(true)}
+                        className={`p-3 rounded-xl ${getColorClasses(newCatColor).bg} ${getColorClasses(newCatColor).text} hover:opacity-80 transition-opacity`}
+                      >
+                        <DynamicIcon name={newCatIcon} className="w-5 h-5" />
+                      </button>
+                      <div className="flex-1 space-y-2">
+                        <input
+                          type="text"
+                          value={newCatName.es}
+                          onChange={(e) => setNewCatName({ ...newCatName, es: e.target.value })}
+                          placeholder="Nombre (Español)"
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <input
+                          type="text"
+                          value={newCatName.en}
+                          onChange={(e) => setNewCatName({ ...newCatName, en: e.target.value })}
+                          placeholder="Name (English)"
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-medium text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (newCatName.es && newCatName.en) {
+                            const newCat = await storageService.addCategory({
+                              key: newCatName.en.replace(/\s+/g, ''),
+                              name: newCatName,
+                              icon: newCatIcon,
+                              color: newCatColor,
+                              type: 'expense',
+                              order: customCategories.length
+                            });
+                            setCustomCategories([...customCategories, newCat]);
+                            setCategory(newCat.id);
+                            setShowNewCategoryForm(false);
+                            setNewCatName({ es: '', en: '' });
+                            setNewCatIcon('Tag');
+                            setNewCatColor('slate');
+                          }
+                        }}
+                        className="flex-1 py-2 bg-emerald-600 text-white font-bold text-sm rounded-xl hover:bg-emerald-700 transition-colors"
+                      >
+                        Guardar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowNewCategoryForm(false)}
+                        className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold text-sm rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Category Chips */}
                 <div className="flex flex-wrap gap-2">
-                  {[Category.Food, Category.Transportation, Category.Leisure, Category.Utilities, Category.Services, Category.Health].map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategory(cat)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${category === cat
-                          ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900 border-slate-800 dark:border-white shadow-md'
-                          : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
-                        }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                  {customCategories
+                    .filter(cat => cat.type === 'expense' || cat.type === 'both')
+                    .map(cat => {
+                      const colorClasses = getColorClasses(cat.color);
+                      const isSelected = category === cat.id;
+                      const catName = language.startsWith('es') ? cat.name.es : cat.name.en;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setCategory(cat.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${isSelected
+                              ? `${colorClasses.bg} ${colorClasses.text} border-transparent shadow-md ring-2 ${colorClasses.ring}`
+                              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
+                            }`}
+                        >
+                          <DynamicIcon name={cat.icon} className="w-3.5 h-3.5" />
+                          {catName}
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -337,10 +441,12 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
                         className="w-full pl-9 pr-3 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none appearance-none truncate"
                       >
                         <option value="">Sin especificar</option>
+                        <option value="cash">💵 Efectivo</option>
                         {accounts.map(acc => (
-                          <option key={acc.id} value={acc.id}>{acc.name} ({acc.type})</option>
+                          <option key={acc.id} value={acc.id}>
+                            {acc.type === 'bank' ? '🏦' : acc.type === 'card' ? '💳' : acc.type === 'wallet' ? '👛' : '💰'} {acc.name}
+                          </option>
                         ))}
-                        {accounts.length === 0 && <option value="cash">Efectivo (Default)</option>}
                       </select>
                     </div>
                   </div>
@@ -378,43 +484,125 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
                   )}
                 </div>
 
-                {/* Shared With Section */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide block">
-                    Compartido Con <span className="text-slate-400 font-normal text-[10px]">(Opcional)</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Users className="w-4 h-4 text-slate-400" />
+                {/* Income Type Selector (Income Only) */}
+                {mode === 'income' && (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide block">Tipo de Ingreso</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIncomeType('salary')}
+                          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
+                            incomeType === 'salary'
+                              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 dark:shadow-none'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          <Briefcase className="w-4 h-4" />
+                          Salario
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIncomeType('extra')}
+                          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
+                            incomeType === 'extra'
+                              ? 'bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-none'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          <Zap className="w-4 h-4" />
+                          Extra
+                        </button>
                       </div>
-                      <input
-                        type="text"
-                        value={sharedInput}
-                        onChange={(e) => setSharedInput(e.target.value)}
-                        placeholder="Nombre o ID de usuario"
-                        className="block w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-100"
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSharedUser())}
-                      />
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                        {incomeType === 'salary' ? 'Ingreso regular: sueldo mensual o quincenal' : 'Ingreso adicional: freelance, bonos, ventas, etc.'}
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleAddSharedUser}
-                      className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-                    >
-                      <Plus className="w-5 h-5" />
-                    </button>
+
+                    {/* Income Category Selector */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide block">Categoría</label>
+                      <div className="flex flex-wrap gap-2">
+                        {customCategories
+                          .filter(cat => cat.type === 'income' || cat.type === 'both')
+                          .map(cat => {
+                            const colorClasses = getColorClasses(cat.color);
+                            const isSelected = category === cat.id;
+                            const catName = language.startsWith('es') ? cat.name.es : cat.name.en;
+                            return (
+                              <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => setCategory(cat.id)}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${isSelected
+                                    ? `${colorClasses.bg} ${colorClasses.text} border-transparent shadow-md ring-2 ${colorClasses.ring}`
+                                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
+                                  }`}
+                              >
+                                <DynamicIcon name={cat.icon} className="w-3.5 h-3.5" />
+                                {catName}
+                              </button>
+                            );
+                          })}
+                      </div>
+                    </div>
                   </div>
-                  {sharedWith.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {sharedWith.map((user, idx) => (
-                        <span key={idx} className="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg text-xs font-semibold animate-in fade-in zoom-in">
-                          {user}
-                          <button type="button" onClick={() => handleRemoveSharedUser(idx)} className="text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-200 ml-1">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ))}
+                )}
+
+                {/* Shared With Section - Checkbox Toggle */}
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="shared-check"
+                      checked={isShared}
+                      onChange={(e) => {
+                        setIsShared(e.target.checked);
+                        if (!e.target.checked) {
+                          setSharedWith([]);
+                          setSharedInput('');
+                        }
+                      }}
+                      className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    />
+                    <label htmlFor="shared-check" className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-pointer select-none">
+                      <Users className="w-4 h-4 text-slate-400" />
+                      Compartido con alguien
+                    </label>
+                  </div>
+
+                  {isShared && (
+                    <div className="mt-3 pl-8 space-y-2 animate-in slide-in-from-top-2 fade-in">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={sharedInput}
+                          onChange={(e) => setSharedInput(e.target.value)}
+                          placeholder="Nombre o ID de usuario"
+                          className="flex-1 px-3 py-2 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-100"
+                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSharedUser())}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddSharedUser}
+                          className="p-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+                      </div>
+                      {sharedWith.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {sharedWith.map((user, idx) => (
+                            <span key={idx} className="flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg text-xs font-semibold animate-in fade-in zoom-in">
+                              {user}
+                              <button type="button" onClick={() => handleRemoveSharedUser(idx)} className="text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-200 ml-1">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -469,8 +657,11 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
                     onChange={(e) => setPaymentMethodId(e.target.value)}
                     className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800 text-sm font-medium text-indigo-900 dark:text-indigo-300 outline-none"
                   >
+                    <option value="cash">💵 Efectivo</option>
                     {accounts.map(acc => (
-                      <option key={acc.id} value={acc.id}>{acc.name}</option>
+                      <option key={acc.id} value={acc.id}>
+                        {acc.type === 'bank' ? '🏦' : acc.type === 'card' ? '💳' : acc.type === 'wallet' ? '👛' : '💰'} {acc.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -483,6 +674,17 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
           </form>
         </div>
       </div>
+
+      {/* Icon Picker Modal */}
+      {showIconPicker && (
+        <IconPicker
+          selectedIcon={newCatIcon}
+          selectedColor={newCatColor}
+          onIconChange={setNewCatIcon}
+          onColorChange={setNewCatColor}
+          onClose={() => setShowIconPicker(false)}
+        />
+      )}
     </div>
   );
 };
