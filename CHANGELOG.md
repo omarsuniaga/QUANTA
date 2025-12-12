@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance - 2025-12-12
+
+#### Changed
+- **components/Dashboard.tsx**: Optimized with React.memo
+  - Wrapped component with `memo()` and custom comparison function
+  - Added `useCallback` for currency formatting functions
+  - Memoized `upcomingPayments` calculation
+  - Optimized `useEffect` to only trigger on `transactions.length` change
+  - Custom `arePropsEqual` compares only necessary values
+  - Prevents unnecessary re-renders when props haven't changed
+
 ### Security - 2025-12-12
 
 #### Added
@@ -90,8 +101,11 @@ Total gzipped: ~596 kB
 
 **Status:** Firestore rules created and ready to deploy!
 
+### 🔄 In Progress
+- Phase 2.1: Component Memoization
+
 ### 📋 Pending
-- Phase 2: Performance Optimization
+- Phase 2.2-2.3: Performance Optimization (continued)
 - Phase 3: Architecture Refactoring
 - Phase 4: Testing and Quality
 - Phase 5: Advanced Features
