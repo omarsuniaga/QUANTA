@@ -806,6 +806,7 @@ export default function App() {
         {/* Notification Preferences Modal */}
         {showNotificationPrefs && (
           <NotificationPreferences
+            isOpen={showNotificationPrefs}
             onClose={() => setShowNotificationPrefs(false)}
           />
         )}
