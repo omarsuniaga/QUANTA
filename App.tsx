@@ -16,6 +16,8 @@ import { SavingsPlanner } from './components/SavingsPlanner';
 import { ChallengesScreen } from './components/ChallengesScreen';
 import { StrategiesScreen } from './components/StrategiesScreen';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { QuickExpenseWidget } from './components/QuickExpenseWidget';
+import { QuickExpenseScreen } from './components/QuickExpenseScreen';
 import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain } from 'lucide-react';
 import { useI18n } from './contexts';
 import { useAuth, useTransactions, useSettings, useToast } from './contexts';
@@ -82,6 +84,7 @@ export default function App() {
   const [showSavingsPlanner, setShowSavingsPlanner] = useState(false);
   const [showChallenges, setShowChallenges] = useState(false);
   const [showStrategies, setShowStrategies] = useState(false);
+  const [showQuickExpenses, setShowQuickExpenses] = useState(false);
 
   // Notification system state
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
@@ -506,6 +509,9 @@ export default function App() {
                 onOpenStrategies={() => setShowStrategies(true)}
               />
 
+              {/* Quick Expense Widget */}
+              <QuickExpenseWidget onOpenFullScreen={() => setShowQuickExpenses(true)} />
+
               {/* Quick Actions Grid - Mobile/Tablet only (hidden on desktop since it's in sidebar) */}
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3 lg:hidden">
                 {quickActions.filter(qa => qa.showOnHome).sort((a, b) => a.order - b.order).map(action => (
@@ -791,6 +797,12 @@ export default function App() {
             />
           </div>
         )}
+
+        {/* Quick Expenses Full Screen */}
+        <QuickExpenseScreen
+          isOpen={showQuickExpenses}
+          onClose={() => setShowQuickExpenses(false)}
+        />
 
         {/* Notification Center Modal */}
         {showNotificationCenter && (

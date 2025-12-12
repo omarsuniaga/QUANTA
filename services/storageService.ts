@@ -920,22 +920,23 @@ export const storageService = {
   getDefaultCategories(): CustomCategory[] {
     return [
       // Expense Categories
-      { id: 'food', key: 'Food', name: { es: 'Alimentación', en: 'Food' }, icon: 'Utensils', color: 'orange', type: 'expense', isDefault: true, order: 0 },
-      { id: 'transport', key: 'Transportation', name: { es: 'Transporte', en: 'Transportation' }, icon: 'Car', color: 'blue', type: 'expense', isDefault: true, order: 1 },
-      { id: 'leisure', key: 'Leisure', name: { es: 'Ocio', en: 'Leisure' }, icon: 'Gamepad2', color: 'purple', type: 'expense', isDefault: true, order: 2 },
-      { id: 'utilities', key: 'Utilities', name: { es: 'Servicios', en: 'Utilities' }, icon: 'Zap', color: 'amber', type: 'expense', isDefault: true, order: 3 },
-      { id: 'subscriptions', key: 'Subscriptions', name: { es: 'Suscripciones', en: 'Subscriptions' }, icon: 'Tv', color: 'indigo', type: 'expense', isDefault: true, order: 4 },
-      { id: 'health', key: 'Health', name: { es: 'Salud', en: 'Health' }, icon: 'Heart', color: 'rose', type: 'expense', isDefault: true, order: 5 },
-      { id: 'housing', key: 'Housing', name: { es: 'Vivienda', en: 'Housing' }, icon: 'Home', color: 'teal', type: 'expense', isDefault: true, order: 6 },
-      { id: 'shopping', key: 'Shopping', name: { es: 'Compras', en: 'Shopping' }, icon: 'ShoppingBag', color: 'pink', type: 'expense', isDefault: true, order: 7 },
-      { id: 'education', key: 'Education', name: { es: 'Educación', en: 'Education' }, icon: 'GraduationCap', color: 'cyan', type: 'expense', isDefault: true, order: 8 },
-      { id: 'other_expense', key: 'Other', name: { es: 'Otros', en: 'Other' }, icon: 'MoreHorizontal', color: 'slate', type: 'expense', isDefault: true, order: 9 },
+      { id: 'express', key: 'Express', name: { es: 'Express', en: 'Express' }, icon: 'Zap', color: 'amber', type: 'expense', isDefault: true, order: 0 },
+      { id: 'food', key: 'Food', name: { es: 'Alimentación', en: 'Food' }, icon: 'Utensils', color: 'orange', type: 'expense', isDefault: true, order: 1 },
+      { id: 'transport', key: 'Transportation', name: { es: 'Transporte', en: 'Transportation' }, icon: 'Car', color: 'blue', type: 'expense', isDefault: true, order: 2 },
+      { id: 'leisure', key: 'Leisure', name: { es: 'Ocio', en: 'Leisure' }, icon: 'Gamepad2', color: 'purple', type: 'expense', isDefault: true, order: 3 },
+      { id: 'utilities', key: 'Utilities', name: { es: 'Servicios', en: 'Utilities' }, icon: 'Zap', color: 'amber', type: 'expense', isDefault: true, order: 4 },
+      { id: 'subscriptions', key: 'Subscriptions', name: { es: 'Suscripciones', en: 'Subscriptions' }, icon: 'Tv', color: 'indigo', type: 'expense', isDefault: true, order: 5 },
+      { id: 'health', key: 'Health', name: { es: 'Salud', en: 'Health' }, icon: 'Heart', color: 'rose', type: 'expense', isDefault: true, order: 6 },
+      { id: 'housing', key: 'Housing', name: { es: 'Vivienda', en: 'Housing' }, icon: 'Home', color: 'teal', type: 'expense', isDefault: true, order: 7 },
+      { id: 'shopping', key: 'Shopping', name: { es: 'Compras', en: 'Shopping' }, icon: 'ShoppingBag', color: 'pink', type: 'expense', isDefault: true, order: 8 },
+      { id: 'education', key: 'Education', name: { es: 'Educación', en: 'Education' }, icon: 'GraduationCap', color: 'cyan', type: 'expense', isDefault: true, order: 9 },
+      { id: 'other_expense', key: 'Other', name: { es: 'Otros', en: 'Other' }, icon: 'MoreHorizontal', color: 'slate', type: 'expense', isDefault: true, order: 10 },
       // Income Categories
-      { id: 'salary', key: 'Salary', name: { es: 'Salario', en: 'Salary' }, icon: 'Briefcase', color: 'emerald', type: 'income', isDefault: true, order: 10 },
-      { id: 'freelance', key: 'Freelance', name: { es: 'Freelance', en: 'Freelance' }, icon: 'Laptop', color: 'violet', type: 'income', isDefault: true, order: 11 },
-      { id: 'investments', key: 'Investments', name: { es: 'Inversiones', en: 'Investments' }, icon: 'TrendingUp', color: 'lime', type: 'income', isDefault: true, order: 12 },
-      { id: 'gifts', key: 'Gifts', name: { es: 'Regalos', en: 'Gifts' }, icon: 'Gift', color: 'fuchsia', type: 'income', isDefault: true, order: 13 },
-      { id: 'other_income', key: 'OtherIncome', name: { es: 'Otros Ingresos', en: 'Other Income' }, icon: 'Coins', color: 'sky', type: 'income', isDefault: true, order: 14 },
+      { id: 'salary', key: 'Salary', name: { es: 'Salario', en: 'Salary' }, icon: 'Briefcase', color: 'emerald', type: 'income', isDefault: true, order: 11 },
+      { id: 'freelance', key: 'Freelance', name: { es: 'Freelance', en: 'Freelance' }, icon: 'Laptop', color: 'violet', type: 'income', isDefault: true, order: 12 },
+      { id: 'investments', key: 'Investments', name: { es: 'Inversiones', en: 'Investments' }, icon: 'TrendingUp', color: 'lime', type: 'income', isDefault: true, order: 13 },
+      { id: 'gifts', key: 'Gifts', name: { es: 'Regalos', en: 'Gifts' }, icon: 'Gift', color: 'fuchsia', type: 'income', isDefault: true, order: 14 },
+      { id: 'other_income', key: 'OtherIncome', name: { es: 'Otros Ingresos', en: 'Other Income' }, icon: 'Coins', color: 'sky', type: 'income', isDefault: true, order: 15 },
     ];
   },
 

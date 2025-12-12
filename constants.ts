@@ -125,6 +125,7 @@ export const CATEGORY_COLORS: Record<string, string> = {
   [Category.Unexpected]: '#ef4444', // Red 500
   [Category.Leisure]: '#d946ef', // Fuchsia 500
   // Default category IDs (from getDefaultCategories)
+  'express': '#f59e0b', // amber - Quick expenses
   'food': '#f97316', // orange
   'transport': '#3b82f6', // blue
   'leisure': '#a855f7', // purple
@@ -175,6 +176,7 @@ export const CATEGORY_ICONS: Record<string, any> = {
   [Category.Unexpected]: AlertCircle,
   [Category.Leisure]: Gift,
   // Default category IDs (from getDefaultCategories)
+  'express': Zap,
   'food': Utensils,
   'transport': Car,
   'leisure': Gamepad2,
