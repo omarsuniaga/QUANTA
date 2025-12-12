@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { X, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, Clock, Wallet, TrendingUp, Info } from 'lucide-react';
 import { Goal } from '../types';
 import { Button } from './Button';
@@ -31,14 +31,14 @@ const FREQUENCY_OPTIONS = [
   { value: 'monthly', labelEs: 'Mensual', labelEn: 'Monthly', multiplier: 1 },
 ];
 
-export const GoalModal: React.FC<GoalModalProps> = ({ 
-  goal, 
-  onSave, 
-  onDelete, 
-  onClose, 
+const GoalModalComponent: React.FC<GoalModalProps> = ({
+  goal,
+  onSave,
+  onDelete,
+  onClose,
   currencySymbol = '$',
   currencyCode = 'USD',
-  availableBalance = 0 
+  availableBalance = 0
 }) => {
   const { t, language } = useI18n();
   
@@ -74,9 +74,9 @@ export const GoalModal: React.FC<GoalModalProps> = ({
   }, [goal]);
 
   // Get frequency multiplier (contributions per month)
-  const getFrequencyMultiplier = (freq: string): number => {
+  const getFrequencyMultiplier = useCallback((freq: string): number => {
     return FREQUENCY_OPTIONS.find(f => f.value === freq)?.multiplier || 1;
-  };
+  }, []);
 
   // Calculate remaining amount
   const remainingAmount = useMemo(() => {
@@ -106,12 +106,12 @@ export const GoalModal: React.FC<GoalModalProps> = ({
   }, [targetMonths, contributionFrequency, remainingAmount]);
 
   // Format time display
-  const formatTime = (months: number): string => {
+  const formatTime = useCallback((months: number): string => {
     if (months < 1) return language === 'es' ? 'Menos de 1 mes' : 'Less than 1 month';
-    
+
     const years = Math.floor(months / 12);
     const remainingMonths = months % 12;
-    
+
     if (language === 'es') {
       if (years === 0) return `${remainingMonths} ${remainingMonths === 1 ? 'mes' : 'meses'}`;
       if (remainingMonths === 0) return `${years} ${years === 1 ? 'año' : 'años'}`;
@@ -121,7 +121,7 @@ export const GoalModal: React.FC<GoalModalProps> = ({
       if (remainingMonths === 0) return `${years} ${years === 1 ? 'year' : 'years'}`;
       return `${years} ${years === 1 ? 'year' : 'years'} and ${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'}`;
     }
-  };
+  }, [language]);
 
   // Check if contribution is feasible with available balance
   const isFeasible = useMemo(() => {
@@ -129,16 +129,16 @@ export const GoalModal: React.FC<GoalModalProps> = ({
     return contribution <= availableBalance;
   }, [contributionAmount, availableBalance]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    
-    const finalContribution = calculationMode === 'time' 
+
+    const finalContribution = calculationMode === 'time'
       ? parseFloat(contributionAmount) || 0
       : calculatedContribution || 0;
-    
+
     const finalTargetDate = calculationMode === 'amount'
       ? getTargetDateFromMonths(parseInt(targetMonths) || 12)
-      : calculatedTime 
+      : calculatedTime
         ? getTargetDateFromMonths(calculatedTime)
         : undefined;
 
@@ -156,15 +156,15 @@ export const GoalModal: React.FC<GoalModalProps> = ({
       autoDeduct,
     });
     onClose();
-  };
+  }, [calculationMode, contributionAmount, calculatedContribution, targetMonths, calculatedTime, goal, name, target, current, icon, color, contributionFrequency, autoDeduct, onSave, onClose, getTargetDateFromMonths]);
 
-  const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     const confirmMsg = language === 'es' ? '¿Eliminar esta meta?' : 'Delete this goal?';
     if (goal && window.confirm(confirmMsg)) {
       onDelete(goal.id);
       onClose();
     }
-  };
+  }, [goal, language, onDelete, onClose]);
 
   const labels = {
     es: {
@@ -528,3 +528,18 @@ export const GoalModal: React.FC<GoalModalProps> = ({
     </div>
   );
 };
+
+// Custom comparison function for React.memo
+const arePropsEqual = (prevProps: GoalModalProps, nextProps: GoalModalProps) => {
+  return (
+    prevProps.goal === nextProps.goal &&
+    prevProps.currencySymbol === nextProps.currencySymbol &&
+    prevProps.currencyCode === nextProps.currencyCode &&
+    prevProps.availableBalance === nextProps.availableBalance &&
+    prevProps.onSave === nextProps.onSave &&
+    prevProps.onDelete === nextProps.onDelete &&
+    prevProps.onClose === nextProps.onClose
+  );
+};
+
+export const GoalModal = memo(GoalModalComponent, arePropsEqual);

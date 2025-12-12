@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo, memo } from 'react';
 import { X, Filter, Calendar, Tag, CreditCard, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from './Button';
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS } from '../constants';
@@ -16,15 +16,15 @@ interface FilterModalProps {
     onClose: () => void;
 }
 
-export const FilterModal: React.FC<FilterModalProps> = ({ filters, onApply, onClose }) => {
+const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, onClose }) => {
     const [localFilters, setLocalFilters] = useState(filters);
 
-    const handleApply = () => {
+    const handleApply = useCallback(() => {
         onApply(localFilters);
         onClose();
-    };
+    }, [localFilters, onApply, onClose]);
 
-    const handleReset = () => {
+    const handleReset = useCallback(() => {
         const resetFilters = {
             search: '',
             category: null,
@@ -35,9 +35,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({ filters, onApply, onCl
         };
         setLocalFilters(resetFilters);
         onApply(resetFilters);
-    };
+    }, [onApply]);
 
-    const allCategories = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
+    const allCategories = useMemo(() => [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES], []);
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -193,3 +193,14 @@ export const FilterModal: React.FC<FilterModalProps> = ({ filters, onApply, onCl
         </div>
     );
 };
+
+// Custom comparison function for React.memo
+const arePropsEqual = (prevProps: FilterModalProps, nextProps: FilterModalProps) => {
+    return (
+        prevProps.filters === nextProps.filters &&
+        prevProps.onApply === nextProps.onApply &&
+        prevProps.onClose === nextProps.onClose
+    );
+};
+
+export const FilterModal = memo(FilterModalComponent, arePropsEqual);

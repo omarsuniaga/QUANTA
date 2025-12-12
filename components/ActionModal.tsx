@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil } from 'lucide-react';
 import { Category, TransactionType, Frequency, PaymentMethod, Mood, Account, CustomCategory } from '../types';
 import { Button } from './Button';
@@ -22,7 +22,7 @@ interface ActionModalProps {
   currencySymbol?: string;
 }
 
-export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave, initialValues, currencySymbol = '$' }) => {
+const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSave, initialValues, currencySymbol = '$' }) => {
   // Common Fields
   const [amount, setAmount] = useState(initialValues?.amount?.toString() || '');
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
@@ -94,18 +94,18 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
     }
   }, [mode, category, paymentMethodId]);
 
-  const handleConceptChange = (val: string) => {
+  const handleConceptChange = useCallback((val: string) => {
     setConcept(val);
     if (val.length > 1) setShowSuggestions(true);
     else setShowSuggestions(false);
-  };
+  }, []);
 
-  const selectSuggestion = (val: string) => {
+  const selectSuggestion = useCallback((val: string) => {
     setConcept(val);
     setShowSuggestions(false);
-  };
+  }, []);
 
-  const handleScanReceipt = () => {
+  const handleScanReceipt = useCallback(() => {
     setIsScanning(true);
     // Simulate OCR delay
     setTimeout(() => {
@@ -115,20 +115,20 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
       setDate(new Date().toISOString().split('T')[0]);
       setIsScanning(false);
     }, 1500);
-  };
+  }, []);
 
-  const handleAddSharedUser = () => {
+  const handleAddSharedUser = useCallback(() => {
     if (sharedInput.trim()) {
       setSharedWith([...sharedWith, sharedInput.trim()]);
       setSharedInput('');
     }
-  };
+  }, [sharedInput, sharedWith]);
 
-  const handleRemoveSharedUser = (index: number) => {
+  const handleRemoveSharedUser = useCallback((index: number) => {
     setSharedWith(sharedWith.filter((_, i) => i !== index));
-  };
+  }, [sharedWith]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
     const baseData = {
@@ -162,7 +162,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
       });
     }
     onClose();
-  };
+  }, [mode, amount, concept, category, paymentMethodId, date, notes, mood, gigType, incomeType, sharedWith, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
 
   // UI Config
   const config = {
@@ -688,3 +688,16 @@ export const ActionModal: React.FC<ActionModalProps> = ({ mode, onClose, onSave,
     </div>
   );
 };
+
+// Custom comparison function for React.memo
+const arePropsEqual = (prevProps: ActionModalProps, nextProps: ActionModalProps) => {
+  return (
+    prevProps.mode === nextProps.mode &&
+    prevProps.currencySymbol === nextProps.currencySymbol &&
+    prevProps.initialValues === nextProps.initialValues &&
+    prevProps.onClose === nextProps.onClose &&
+    prevProps.onSave === nextProps.onSave
+  );
+};
+
+export const ActionModal = memo(ActionModalComponent, arePropsEqual);

@@ -18,6 +18,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Custom `arePropsEqual` compares only necessary values
   - Prevents unnecessary re-renders when props haven't changed
 
+- **components/ActionModal.tsx**: Optimized with React.memo (689 lines)
+  - Wrapped component with `memo()` and custom comparison function
+  - Added `useCallback` for all event handlers:
+    - `handleConceptChange` - Concept input changes
+    - `selectSuggestion` - Suggestion selection
+    - `handleScanReceipt` - Receipt scanning
+    - `handleAddSharedUser` - Shared user management
+    - `handleRemoveSharedUser` - Remove shared users
+    - `handleSubmit` - Form submission
+  - Custom `arePropsEqual` compares mode, currencySymbol, initialValues, and callbacks
+  - Prevents modal re-renders when parent updates
+
+- **components/GoalModal.tsx**: Optimized with React.memo (529 lines)
+  - Wrapped component with `memo()` and custom comparison function
+  - Added `useCallback` for all event handlers:
+    - `getFrequencyMultiplier` - Frequency calculations
+    - `formatTime` - Time formatting for display
+    - `handleSubmit` - Form submission
+    - `handleDelete` - Goal deletion
+  - Preserved existing `useMemo` for complex calculations:
+    - `remainingAmount` - Calculate remaining goal amount
+    - `calculatedTime` - Time to reach goal
+    - `calculatedContribution` - Required contribution
+    - `isFeasible` - Feasibility check
+  - Custom `arePropsEqual` compares goal, currency, balance, and callbacks
+  - Prevents modal re-renders when parent updates
+
+- **components/FilterModal.tsx**: Optimized with React.memo (195 lines)
+  - Wrapped component with `memo()` and custom comparison function
+  - Added `useCallback` for event handlers:
+    - `handleApply` - Apply filters
+    - `handleReset` - Reset all filters
+  - Added `useMemo` for `allCategories` array
+  - Custom `arePropsEqual` compares filters and callbacks
+  - Prevents modal re-renders when parent updates
+
 ### Security - 2025-12-12
 
 #### Added
