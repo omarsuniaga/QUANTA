@@ -166,9 +166,12 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
       )}
 
       {/* Main AI Coach Card */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onOpenAICoach}
-        className="w-full bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 rounded-2xl p-5 text-white text-left relative overflow-hidden group hover:shadow-xl hover:shadow-indigo-200 dark:hover:shadow-indigo-900/30 transition-all duration-300"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onOpenAICoach(); }}
+        className="w-full bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 rounded-2xl p-5 text-white text-left relative overflow-hidden group hover:shadow-xl hover:shadow-indigo-200 dark:hover:shadow-indigo-900/30 transition-all duration-300 cursor-pointer"
       >
         {/* Decorative elements */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-20 transition-opacity" />
@@ -238,7 +241,7 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
             </div>
           </div>
         </div>
-      </button>
+      </div>
 
       {/* Quick Action Cards */}
       <div className="grid grid-cols-3 gap-3">

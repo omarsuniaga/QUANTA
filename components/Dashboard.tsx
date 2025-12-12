@@ -365,8 +365,8 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
 
         <div className="flex flex-col md:flex-row gap-6 md:gap-8">
           {/* Pie Chart */}
-          <div className="h-[180px] sm:h-[200px] w-full md:w-1/2 relative min-w-0">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <div className="h-[180px] sm:h-[200px] w-full md:w-1/2 relative min-w-0" style={{ minHeight: 180 }}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
               <PieChart>
                 <Pie
                   data={categoryData}
@@ -455,8 +455,8 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
           <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">{t.dashboard.trend6Months}</h3>
           <span className="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-700 px-2 py-1 rounded-md hidden sm:block">{t.dashboard.tapBarsToFilter}</span>
         </div>
-        <div className="h-[180px] sm:h-[200px] md:h-[250px] w-full min-w-0">
-          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+        <div className="h-[180px] sm:h-[200px] md:h-[250px] w-full min-w-0" style={{ minHeight: 180 }}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
             <BarChart
               data={barData}
               barGap={4}
