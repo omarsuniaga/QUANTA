@@ -77,8 +77,12 @@ export interface Account {
   type: 'cash' | 'bank' | 'card' | 'wallet';
   balance: number;
   currency: string;
+  institution?: string; // Bank name, card issuer, wallet provider
+  color?: string; // Custom color for the account
+  icon?: string; // Custom icon
   isExcludedFromTotal?: boolean;
   updatedAt?: number;
+  lastReconciled?: string; // Last time balance was verified
 }
 
 export interface Transaction {

@@ -1,12 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, QuickAction, Account } from '../types';
 import { Button } from './Button';
-import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity } from 'lucide-react';
+import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity, HelpCircle, Building2, Wallet, Banknote, Edit2 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts';
 import { GeminiApiKeySettings } from './GeminiApiKeySettings';
 import { APIUsageMonitor } from './APIUsageMonitor';
 import { AVAILABLE_CURRENCIES, CurrencyOption } from '../constants';
+
+// Common financial institutions
+const FINANCIAL_INSTITUTIONS = [
+  { name: 'Banco Popular', country: 'DO', type: 'bank' },
+  { name: 'Banreservas', country: 'DO', type: 'bank' },
+  { name: 'BHD León', country: 'DO', type: 'bank' },
+  { name: 'Scotiabank', country: 'DO', type: 'bank' },
+  { name: 'Banco Santa Cruz', country: 'DO', type: 'bank' },
+  { name: 'Banco Promerica', country: 'DO', type: 'bank' },
+  { name: 'Asociación Popular', country: 'DO', type: 'bank' },
+  { name: 'Banco Caribe', country: 'DO', type: 'bank' },
+  { name: 'Banco López de Haro', country: 'DO', type: 'bank' },
+  { name: 'Banco Vimenca', country: 'DO', type: 'bank' },
+  { name: 'VISA', country: 'INT', type: 'card' },
+  { name: 'Mastercard', country: 'INT', type: 'card' },
+  { name: 'American Express', country: 'INT', type: 'card' },
+  { name: 'PayPal', country: 'INT', type: 'wallet' },
+  { name: 'Venmo', country: 'INT', type: 'wallet' },
+  { name: 'tPago', country: 'DO', type: 'wallet' },
+  { name: 'Otro', country: 'ALL', type: 'all' },
+];
 
 interface SettingsScreenProps {
   settings: AppSettings;
@@ -26,6 +47,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [currencySearch, setCurrencySearch] = useState('');
+  const [showAccountsHelp, setShowAccountsHelp] = useState(false);
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [institutionSearch, setInstitutionSearch] = useState('');
   const { language, setLanguage, t } = useI18n();
 
   // Get current currency from settings
@@ -39,6 +64,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
            name.toLowerCase().includes(search) ||
            c.symbol.toLowerCase().includes(search);
   });
+
+  // Filter institutions by search
+  const filteredInstitutions = FINANCIAL_INSTITUTIONS.filter(inst => 
+    inst.name.toLowerCase().includes(institutionSearch.toLowerCase())
+  );
+
+  // Calculate total balance across all accounts
+  const totalBalance = accounts.reduce((sum, acc) => 
+    acc.isExcludedFromTotal ? sum : sum + acc.balance, 0
+  );
 
   // Handle currency selection
   const handleSelectCurrency = (currency: CurrencyOption) => {
@@ -476,83 +511,128 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         {activeSection === 'accounts' && (
           <div className="space-y-3 sm:space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="bg-emerald-50 dark:bg-emerald-900/30 p-3 sm:p-4 rounded-lg sm:rounded-xl text-emerald-800 dark:text-emerald-400 text-xs sm:text-sm mb-3 sm:mb-4">
-              Gestiona tus fondos (Bancos, Efectivo, Tarjetas, Billeteras digitales).
+            {/* Header with Help Button */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">
+                  {language === 'es' ? 'Mis Cuentas' : 'My Accounts'}
+                </h3>
+                <button
+                  onClick={() => setShowAccountsHelp(true)}
+                  className="p-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-400 hover:text-indigo-500 transition-colors"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                </button>
+              </div>
+              <button
+                onClick={() => setShowAddAccount(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {language === 'es' ? 'Agregar' : 'Add'}
+              </button>
             </div>
 
+            {/* Total Balance Card */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 sm:p-5 rounded-2xl text-white">
+              <p className="text-indigo-200 text-xs font-medium mb-1">
+                {language === 'es' ? 'Balance Total' : 'Total Balance'}
+              </p>
+              <p className="text-2xl sm:text-3xl font-bold">
+                {settings.currency.localSymbol} {totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </p>
+              <p className="text-indigo-200 text-[10px] sm:text-xs mt-2">
+                {accounts.length} {language === 'es' ? 'cuentas registradas' : 'accounts registered'}
+              </p>
+            </div>
+
+            {/* Info Banner */}
+            <div className="bg-emerald-50 dark:bg-emerald-900/30 p-3 sm:p-4 rounded-lg sm:rounded-xl text-emerald-800 dark:text-emerald-400 text-xs sm:text-sm flex items-start gap-2">
+              <Building2 className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>
+                {language === 'es' 
+                  ? 'Registra tus cuentas bancarias, efectivo y billeteras digitales. El balance se actualiza automáticamente con tus transacciones.'
+                  : 'Register your bank accounts, cash and digital wallets. Balance updates automatically with your transactions.'}
+              </span>
+            </div>
+
+            {/* Accounts List */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-              {accounts.map((acc, idx) => (
-                <div key={acc.id} className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                  <div className="flex items-start justify-between mb-2 sm:mb-3">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className={`p-2 sm:p-2.5 rounded-lg sm:rounded-xl ${
+              {accounts.map((acc) => (
+                <div key={acc.id} className={`bg-white dark:bg-slate-800 p-4 rounded-2xl border-2 ${
+                  acc.balance < 0 
+                    ? 'border-rose-200 dark:border-rose-800' 
+                    : 'border-slate-100 dark:border-slate-700'
+                } shadow-sm hover:shadow-md transition-shadow`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl ${
                         acc.type === 'cash' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
                         acc.type === 'bank' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' :
                         acc.type === 'card' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
                         'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
                       }`}>
-                        <span className="text-sm sm:text-base">{acc.type === 'cash' ? '💵' : acc.type === 'bank' ? '🏦' : acc.type === 'card' ? '💳' : '👛'}</span>
+                        {acc.type === 'cash' ? <Banknote className="w-5 h-5" /> : 
+                         acc.type === 'bank' ? <Building2 className="w-5 h-5" /> : 
+                         acc.type === 'card' ? <CreditCard className="w-5 h-5" /> : 
+                         <Wallet className="w-5 h-5" />}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <input
-                          className="font-bold text-slate-800 dark:text-white bg-transparent outline-none focus:bg-slate-50 dark:focus:bg-slate-700 rounded px-1 -ml-1 w-full text-xs sm:text-sm truncate"
-                          value={acc.name}
-                          placeholder="Nombre de la cuenta"
-                          onChange={(e) => {
-                            const updated = accounts.map((a, i) => i === idx ? { ...a, name: e.target.value } : a);
-                            setAccounts(updated);
-                          }}
-                          onBlur={() => storageService.saveAccounts(accounts)}
-                        />
+                      <div>
+                        <p className="font-bold text-sm text-slate-800 dark:text-white">{acc.name}</p>
+                        {acc.institution && (
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400">{acc.institution}</p>
+                        )}
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDeleteAccount(acc.id)}
-                      className="p-1 sm:p-1.5 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setEditingAccount(acc)}
+                        className="p-1.5 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAccount(acc.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-2 sm:mt-3">
-                    <div>
-                      <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase mb-1 block">Tipo</label>
-                      <select
-                        value={acc.type}
-                        onChange={(e) => {
-                          const updated = accounts.map((a, i) => i === idx ? { ...a, type: e.target.value as Account['type'] } : a);
-                          setAccounts(updated);
-                          storageService.saveAccounts(updated);
-                        }}
-                        className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-1.5 sm:px-2 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-slate-700 dark:text-slate-300"
-                      >
-                        <option value="cash">💵 Efectivo</option>
-                        <option value="bank">🏦 Banco</option>
-                        <option value="card">💳 Tarjeta</option>
-                        <option value="wallet">👛 Billetera Digital</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase mb-1 block">Balance</label>
-                      <div className="relative">
-                        <span className="absolute left-1.5 sm:left-2 top-1 sm:top-1.5 text-slate-400 text-[10px] sm:text-xs">{settings.currency.localSymbol}</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg pl-4 sm:pl-6 pr-1.5 sm:pr-2 py-1 sm:py-1.5 text-[10px] sm:text-xs font-bold text-slate-800 dark:text-white text-right"
-                          value={acc.balance}
-                          onChange={(e) => {
-                            const updated = accounts.map((a, i) => i === idx ? { ...a, balance: parseFloat(e.target.value) || 0 } : a);
-                            setAccounts(updated);
-                          }}
-                          onBlur={() => storageService.saveAccounts(accounts)}
-                        />
-                    </div>
+                  {/* Balance */}
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{language === 'es' ? 'Balance' : 'Balance'}</span>
+                    <span className={`text-lg font-bold ${acc.balance < 0 ? 'text-rose-500' : 'text-slate-800 dark:text-white'}`}>
+                      {settings.currency.localSymbol} {acc.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
                   </div>
+
+                  {/* Exclude from total toggle */}
+                  {acc.isExcludedFromTotal && (
+                    <div className="mt-2 px-2 py-1 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-600 dark:text-amber-400 text-[10px] text-center">
+                      {language === 'es' ? 'Excluida del total' : 'Excluded from total'}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
             </div>
+
+            {/* Empty State */}
+            {accounts.length === 0 && (
+              <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-8 text-center">
+                <Building2 className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-slate-500 dark:text-slate-400 text-sm mb-4">
+                  {language === 'es' ? 'No tienes cuentas registradas' : 'No accounts registered'}
+                </p>
+                <button
+                  onClick={() => setShowAddAccount(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors"
+                >
+                  {language === 'es' ? 'Agregar primera cuenta' : 'Add first account'}
+                </button>
+              </div>
+            )}
 
             {/* Quick Add Buttons */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
@@ -563,7 +643,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     name: 'Efectivo',
                     type: 'cash',
                     balance: 0,
-                    currency: settings.currency.localCode
+                    currency: settings.currency.localCode,
+                    updatedAt: Date.now()
                   };
                   const updated = [...accounts, newAcc];
                   setAccounts(updated);
@@ -571,24 +652,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 }}
                 className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-dashed border-green-300 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors text-xs sm:text-sm"
               >
-                💵 Efectivo
+                <Banknote className="w-4 h-4" /> Efectivo
               </button>
               <button
-                onClick={() => {
-                  const newAcc: Account = {
-                    id: Math.random().toString(36).substr(2, 9),
-                    name: 'Banco',
-                    type: 'bank',
-                    balance: 0,
-                    currency: settings.currency.localCode
-                  };
-                  const updated = [...accounts, newAcc];
-                  setAccounts(updated);
-                  storageService.saveAccounts(updated);
-                }}
+                onClick={() => setShowAddAccount(true)}
                 className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-dashed border-blue-300 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors text-xs sm:text-sm"
               >
-                🏦 Banco
+                <Building2 className="w-4 h-4" /> Banco
               </button>
               <button
                 onClick={() => {
@@ -597,7 +667,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     name: 'Tarjeta',
                     type: 'card',
                     balance: 0,
-                    currency: settings.currency.localCode
+                    currency: settings.currency.localCode,
+                    updatedAt: Date.now()
                   };
                   const updated = [...accounts, newAcc];
                   setAccounts(updated);
@@ -605,7 +676,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 }}
                 className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-dashed border-purple-300 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors text-xs sm:text-sm"
               >
-                💳 Tarjeta
+                <CreditCard className="w-4 h-4" /> Tarjeta
               </button>
               <button
                 onClick={() => {
@@ -614,7 +685,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     name: 'Billetera',
                     type: 'wallet',
                     balance: 0,
-                    currency: settings.currency.localCode
+                    currency: settings.currency.localCode,
+                    updatedAt: Date.now()
                   };
                   const updated = [...accounts, newAcc];
                   setAccounts(updated);
@@ -622,7 +694,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 }}
                 className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-dashed border-amber-300 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors text-xs sm:text-sm"
               >
-                👛 Billetera
+                <Wallet className="w-4 h-4" /> Billetera
               </button>
             </div>
           </div>
@@ -717,6 +789,354 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Accounts Help Modal */}
+      {showAccountsHelp && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAccountsHelp(false)}>
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-700"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
+                  <Building2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                  {language === 'es' ? '¿Para qué sirven las cuentas?' : 'What are accounts for?'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAccountsHelp(false)}
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg mt-0.5">
+                  <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-white">
+                    {language === 'es' ? 'Registra tus balances reales' : 'Track your real balances'}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {language === 'es' 
+                      ? 'Ingresa el monto actual de cada cuenta bancaria, efectivo o billetera digital.'
+                      : 'Enter the current amount in each bank account, cash or digital wallet.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg mt-0.5">
+                  <ArrowDownRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-white">
+                    {language === 'es' ? 'Actualización automática' : 'Automatic updates'}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {language === 'es' 
+                      ? 'Cuando registras ingresos o gastos, puedes seleccionar de qué cuenta provienen y el balance se actualiza.'
+                      : 'When you record income or expenses, you can select which account they come from and the balance updates.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-lg mt-0.5">
+                  <Bell className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-white">
+                    {language === 'es' ? 'Alertas de saldo bajo' : 'Low balance alerts'}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {language === 'es' 
+                      ? 'Recibe notificaciones cuando el balance de una cuenta sea insuficiente para cubrir pagos próximos.'
+                      : 'Receive notifications when an account balance is insufficient to cover upcoming payments.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg mt-0.5">
+                  <CreditCard className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-white">
+                    {language === 'es' ? 'Tarjetas de crédito' : 'Credit cards'}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {language === 'es' 
+                      ? 'Puedes registrar tarjetas con balance negativo para controlar tu deuda.'
+                      : 'You can register cards with negative balance to track your debt.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAccountsHelp(false)}
+              className="w-full mt-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors"
+            >
+              {language === 'es' ? 'Entendido' : 'Got it'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Account Modal */}
+      {showAddAccount && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowAddAccount(false)}>
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                {language === 'es' ? 'Agregar Cuenta Bancaria' : 'Add Bank Account'}
+              </h3>
+              <button
+                onClick={() => setShowAddAccount(false)}
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            {/* Institution Search */}
+            <div className="mb-4">
+              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
+                {language === 'es' ? 'Selecciona tu banco' : 'Select your bank'}
+              </label>
+              <div className="relative mb-2">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder={language === 'es' ? 'Buscar institución...' : 'Search institution...'}
+                  value={institutionSearch}
+                  onChange={(e) => setInstitutionSearch(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+              
+              <div className="max-h-48 overflow-y-auto space-y-1 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-2">
+                {filteredInstitutions.map((inst) => (
+                  <button
+                    key={inst.name}
+                    onClick={() => {
+                      const newAcc: Account = {
+                        id: Math.random().toString(36).substr(2, 9),
+                        name: inst.name === 'Otro' ? '' : inst.name,
+                        institution: inst.name === 'Otro' ? '' : inst.name,
+                        type: inst.type === 'all' ? 'bank' : inst.type as Account['type'],
+                        balance: 0,
+                        currency: settings.currency.localCode,
+                        updatedAt: Date.now()
+                      };
+                      setEditingAccount(newAcc);
+                      setShowAddAccount(false);
+                      setInstitutionSearch('');
+                    }}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white dark:hover:bg-slate-600 transition-colors text-left"
+                  >
+                    <div className={`p-2 rounded-lg ${
+                      inst.type === 'bank' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' :
+                      inst.type === 'card' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
+                      inst.type === 'wallet' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' :
+                      'bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-400'
+                    }`}>
+                      {inst.type === 'bank' ? <Building2 className="w-4 h-4" /> :
+                       inst.type === 'card' ? <CreditCard className="w-4 h-4" /> :
+                       inst.type === 'wallet' ? <Wallet className="w-4 h-4" /> :
+                       <Plus className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm text-slate-800 dark:text-white">{inst.name}</p>
+                      {inst.country !== 'ALL' && (
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                          {inst.country === 'DO' ? '🇩🇴 Rep. Dominicana' : '🌎 Internacional'}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Account Modal */}
+      {editingAccount && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setEditingAccount(null)}>
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-md shadow-2xl border border-slate-200 dark:border-slate-700"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                {accounts.find(a => a.id === editingAccount.id) 
+                  ? (language === 'es' ? 'Editar Cuenta' : 'Edit Account')
+                  : (language === 'es' ? 'Nueva Cuenta' : 'New Account')}
+              </h3>
+              <button
+                onClick={() => setEditingAccount(null)}
+                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Account Name */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
+                  {language === 'es' ? 'Nombre de la cuenta' : 'Account name'}
+                </label>
+                <input
+                  type="text"
+                  value={editingAccount.name}
+                  onChange={(e) => setEditingAccount({ ...editingAccount, name: e.target.value })}
+                  placeholder={language === 'es' ? 'Ej: Cuenta de Ahorros' : 'Ex: Savings Account'}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Institution */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
+                  {language === 'es' ? 'Institución' : 'Institution'}
+                </label>
+                <input
+                  type="text"
+                  value={editingAccount.institution || ''}
+                  onChange={(e) => setEditingAccount({ ...editingAccount, institution: e.target.value })}
+                  placeholder={language === 'es' ? 'Ej: Banco Popular' : 'Ex: Chase Bank'}
+                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Account Type */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
+                  {language === 'es' ? 'Tipo de cuenta' : 'Account type'}
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { type: 'cash', icon: Banknote, label: 'Efectivo', color: 'green' },
+                    { type: 'bank', icon: Building2, label: 'Banco', color: 'blue' },
+                    { type: 'card', icon: CreditCard, label: 'Tarjeta', color: 'purple' },
+                    { type: 'wallet', icon: Wallet, label: 'Billetera', color: 'amber' },
+                  ].map(({ type, icon: Icon, label, color }) => (
+                    <button
+                      key={type}
+                      onClick={() => setEditingAccount({ ...editingAccount, type: type as Account['type'] })}
+                      className={`p-3 rounded-xl border-2 transition-all ${
+                        editingAccount.type === type
+                          ? `border-${color}-500 bg-${color}-50 dark:bg-${color}-900/30`
+                          : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 mx-auto mb-1 ${
+                        editingAccount.type === type ? `text-${color}-600` : 'text-slate-400'
+                      }`} />
+                      <p className={`text-[10px] font-medium ${
+                        editingAccount.type === type ? `text-${color}-600` : 'text-slate-500'
+                      }`}>{label}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Balance */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
+                  {language === 'es' ? 'Balance actual' : 'Current balance'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+                    {settings.currency.localSymbol}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editingAccount.balance}
+                    onChange={(e) => setEditingAccount({ ...editingAccount, balance: parseFloat(e.target.value) || 0 })}
+                    className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl pl-12 pr-4 py-3 text-lg font-bold text-slate-800 dark:text-white text-right focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {language === 'es' 
+                    ? 'Ingresa el balance actual de esta cuenta. Puede ser negativo para deudas.'
+                    : 'Enter the current balance. Can be negative for debts.'}
+                </p>
+              </div>
+
+              {/* Exclude from total */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
+                <div>
+                  <p className="text-sm font-medium text-slate-800 dark:text-white">
+                    {language === 'es' ? 'Excluir del total' : 'Exclude from total'}
+                  </p>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {language === 'es' 
+                      ? 'Esta cuenta no se sumará al balance total'
+                      : 'This account won\'t be added to total balance'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditingAccount({ ...editingAccount, isExcludedFromTotal: !editingAccount.isExcludedFromTotal })}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${
+                    editingAccount.isExcludedFromTotal ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-600'
+                  }`}
+                >
+                  <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${
+                    editingAccount.isExcludedFromTotal ? 'left-7' : 'left-1'
+                  }`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setEditingAccount(null)}
+                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+              >
+                {language === 'es' ? 'Cancelar' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => {
+                  if (!editingAccount.name.trim()) return;
+                  
+                  const existingIndex = accounts.findIndex(a => a.id === editingAccount.id);
+                  let updated: Account[];
+                  
+                  if (existingIndex >= 0) {
+                    updated = accounts.map(a => a.id === editingAccount.id ? { ...editingAccount, updatedAt: Date.now() } : a);
+                  } else {
+                    updated = [...accounts, { ...editingAccount, updatedAt: Date.now() }];
+                  }
+                  
+                  setAccounts(updated);
+                  storageService.saveAccounts(updated);
+                  setEditingAccount(null);
+                }}
+                disabled={!editingAccount.name.trim()}
+                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {language === 'es' ? 'Guardar' : 'Save'}
+              </button>
             </div>
           </div>
         </div>
