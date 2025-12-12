@@ -41,8 +41,8 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
 
   // Get expense categories from settings
   const expenseCategories = useMemo(() => {
-    return settings.categories?.filter(c => c.type === 'expense') || [];
-  }, [settings.categories]);
+    return settings?.categories?.filter(c => c.type === 'expense') || [];
+  }, [settings?.categories]);
 
   // Filter quick expenses (category = 'express' or gastos rápidos)
   const quickExpenses = useMemo(() => {
