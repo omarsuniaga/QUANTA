@@ -15,6 +15,7 @@
 import { Transaction, Goal, Subscription, DashboardStats, Budget } from '../types';
 import { pushNotificationService } from './pushNotificationService';
 import { notificationService } from './notificationService';
+import { storageService } from './storageService';
 
 // ========================
 // TIPOS DE NOTIFICACIONES
@@ -116,11 +117,35 @@ class SmartNotificationService {
   private scheduledNotifications: Map<string, NodeJS.Timeout> = new Map();
   private dailyNotificationCount: number = 0;
   private lastResetDate: string = '';
+  private isInitialized: boolean = false;
 
   constructor() {
     this.preferences = this.loadPreferences();
-    this.notifications = this.loadNotifications();
+    this.notifications = this.loadNotificationsFromLocal();
     this.resetDailyCountIfNeeded();
+  }
+
+  // Initialize with async loading from Firestore
+  async initialize(): Promise<void> {
+    if (this.isInitialized) return;
+    
+    try {
+      // Load from Firestore
+      const firestoreNotifs = await storageService.getNotifications();
+      if (firestoreNotifs.length > 0) {
+        this.notifications = firestoreNotifs.map(n => ({
+          ...n,
+          createdAt: new Date(n.createdAt)
+        }));
+      }
+      
+      // Cleanup old notifications (older than 30 days)
+      await storageService.cleanupOldNotifications();
+      
+      this.isInitialized = true;
+    } catch (e) {
+      console.error('Error initializing notifications:', e);
+    }
   }
 
   // ========================
@@ -152,7 +177,7 @@ class SmartNotificationService {
   // ALMACENAMIENTO DE NOTIFICACIONES
   // ========================
 
-  private loadNotifications(): AppNotification[] {
+  private loadNotificationsFromLocal(): AppNotification[] {
     try {
       const stored = localStorage.getItem('app_notifications');
       if (stored) {
@@ -169,8 +194,24 @@ class SmartNotificationService {
     return [];
   }
 
-  private saveNotifications(): void {
+  private async saveNotifications(): Promise<void> {
+    // Save to localStorage for immediate access
     localStorage.setItem('app_notifications', JSON.stringify(this.notifications));
+  }
+
+  private async saveNotificationToStorage(notification: AppNotification): Promise<void> {
+    // Save to localStorage immediately
+    localStorage.setItem('app_notifications', JSON.stringify(this.notifications));
+    
+    // Also save to Firestore
+    try {
+      await storageService.saveNotification({
+        ...notification,
+        createdAt: notification.createdAt.toISOString()
+      });
+    } catch (e) {
+      console.warn('Could not save notification to Firestore:', e);
+    }
   }
 
   getNotifications(includeRead = false): AppNotification[] {
@@ -183,30 +224,58 @@ class SmartNotificationService {
     return this.notifications.filter(n => !n.read && !n.dismissed).length;
   }
 
-  markAsRead(notificationId: string): void {
+  async markAsRead(notificationId: string): Promise<void> {
     const notification = this.notifications.find(n => n.id === notificationId);
     if (notification) {
       notification.read = true;
-      this.saveNotifications();
+      await this.saveNotifications();
+      
+      // Also update in Firestore
+      try {
+        await storageService.markNotificationAsRead(notificationId);
+      } catch (e) {
+        console.warn('Could not mark notification as read in Firestore:', e);
+      }
     }
   }
 
-  markAllAsRead(): void {
+  async markAllAsRead(): Promise<void> {
     this.notifications.forEach(n => { n.read = true; });
-    this.saveNotifications();
+    await this.saveNotifications();
+    
+    // Also update in Firestore
+    try {
+      await storageService.markAllNotificationsAsRead();
+    } catch (e) {
+      console.warn('Could not mark all notifications as read in Firestore:', e);
+    }
   }
 
-  dismissNotification(notificationId: string): void {
+  async dismissNotification(notificationId: string): Promise<void> {
     const notification = this.notifications.find(n => n.id === notificationId);
     if (notification) {
       notification.dismissed = true;
-      this.saveNotifications();
+      await this.saveNotifications();
+      
+      // Delete from Firestore
+      try {
+        await storageService.deleteNotification(notificationId);
+      } catch (e) {
+        console.warn('Could not delete notification from Firestore:', e);
+      }
     }
   }
 
-  clearAllNotifications(): void {
+  async clearAllNotifications(): Promise<void> {
     this.notifications = [];
-    this.saveNotifications();
+    await this.saveNotifications();
+    
+    // Delete all from Firestore
+    try {
+      await storageService.deleteAllNotifications();
+    } catch (e) {
+      console.warn('Could not delete all notifications from Firestore:', e);
+    }
   }
 
   // ========================
@@ -274,12 +343,12 @@ class SmartNotificationService {
       return false;
     }
 
-    // Guardar en el historial local
+    // Guardar en el historial local y Firestore
     this.notifications.unshift(notification);
     if (this.notifications.length > 100) {
       this.notifications = this.notifications.slice(0, 100);
     }
-    this.saveNotifications();
+    await this.saveNotificationToStorage(notification);
     this.dailyNotificationCount++;
 
     // Enviar notificación push si tenemos permisos

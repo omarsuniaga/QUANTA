@@ -1087,5 +1087,210 @@ export const storageService = {
     } catch (e) {
       console.warn("Audit log failed (Permissions?)", e);
     }
+  },
+
+  // --- NOTIFICATIONS (Firestore) ---
+  
+  /**
+   * Get all notifications for the current user
+   */
+  async getNotifications(): Promise<any[]> {
+    try {
+      if (!canUseFirebase()) {
+        return getFromLocal<any[]>(`${LS_PREFIX}notifications`, []);
+      }
+      
+      const uid = getUserId();
+      const snapshot = await getUserRef(uid)
+        .collection('notifications')
+        .orderBy('createdAt', 'desc')
+        .limit(100)
+        .get();
+      
+      const notifications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt)
+      }));
+      
+      // Cache locally
+      saveToLocal(`${LS_PREFIX}notifications`, notifications);
+      
+      return notifications;
+    } catch (e) {
+      console.error('Error getting notifications:', e);
+      return getFromLocal<any[]>(`${LS_PREFIX}notifications`, []);
+    }
+  },
+
+  /**
+   * Save a new notification
+   */
+  async saveNotification(notification: any): Promise<string | null> {
+    try {
+      // Always save locally first
+      const localNotifs = getFromLocal<any[]>(`${LS_PREFIX}notifications`, []);
+      localNotifs.unshift(notification);
+      if (localNotifs.length > 100) localNotifs.splice(100);
+      saveToLocal(`${LS_PREFIX}notifications`, localNotifs);
+      
+      if (!canUseFirebase()) {
+        return notification.id;
+      }
+      
+      const uid = getUserId();
+      const docRef = await getUserRef(uid)
+        .collection('notifications')
+        .doc(notification.id)
+        .set({
+          ...notification,
+          createdAt: firebase.firestore.Timestamp.fromDate(new Date(notification.createdAt))
+        });
+      
+      return notification.id;
+    } catch (e) {
+      console.error('Error saving notification:', e);
+      return notification.id; // Return ID anyway since saved locally
+    }
+  },
+
+  /**
+   * Mark notification as read
+   */
+  async markNotificationAsRead(notificationId: string): Promise<void> {
+    try {
+      // Update local
+      const localNotifs = getFromLocal<any[]>(`${LS_PREFIX}notifications`, []);
+      const idx = localNotifs.findIndex(n => n.id === notificationId);
+      if (idx !== -1) {
+        localNotifs[idx].read = true;
+        saveToLocal(`${LS_PREFIX}notifications`, localNotifs);
+      }
+      
+      if (!canUseFirebase()) return;
+      
+      const uid = getUserId();
+      await getUserRef(uid)
+        .collection('notifications')
+        .doc(notificationId)
+        .update({ read: true });
+    } catch (e) {
+      console.error('Error marking notification as read:', e);
+    }
+  },
+
+  /**
+   * Mark all notifications as read
+   */
+  async markAllNotificationsAsRead(): Promise<void> {
+    try {
+      // Update local
+      const localNotifs = getFromLocal<any[]>(`${LS_PREFIX}notifications`, []);
+      localNotifs.forEach(n => { n.read = true; });
+      saveToLocal(`${LS_PREFIX}notifications`, localNotifs);
+      
+      if (!canUseFirebase()) return;
+      
+      const uid = getUserId();
+      const batch = db!.batch();
+      const snapshot = await getUserRef(uid)
+        .collection('notifications')
+        .where('read', '==', false)
+        .get();
+      
+      snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { read: true });
+      });
+      
+      await batch.commit();
+    } catch (e) {
+      console.error('Error marking all notifications as read:', e);
+    }
+  },
+
+  /**
+   * Delete a notification
+   */
+  async deleteNotification(notificationId: string): Promise<void> {
+    try {
+      // Remove from local
+      let localNotifs = getFromLocal<any[]>(`${LS_PREFIX}notifications`, []);
+      localNotifs = localNotifs.filter(n => n.id !== notificationId);
+      saveToLocal(`${LS_PREFIX}notifications`, localNotifs);
+      
+      if (!canUseFirebase()) return;
+      
+      const uid = getUserId();
+      await getUserRef(uid)
+        .collection('notifications')
+        .doc(notificationId)
+        .delete();
+    } catch (e) {
+      console.error('Error deleting notification:', e);
+    }
+  },
+
+  /**
+   * Delete all notifications
+   */
+  async deleteAllNotifications(): Promise<void> {
+    try {
+      // Clear local
+      saveToLocal(`${LS_PREFIX}notifications`, []);
+      
+      if (!canUseFirebase()) return;
+      
+      const uid = getUserId();
+      const batch = db!.batch();
+      const snapshot = await getUserRef(uid)
+        .collection('notifications')
+        .get();
+      
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+    } catch (e) {
+      console.error('Error deleting all notifications:', e);
+    }
+  },
+
+  /**
+   * Clean up old notifications (older than 30 days)
+   */
+  async cleanupOldNotifications(): Promise<number> {
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      // Clean local
+      let localNotifs = getFromLocal<any[]>(`${LS_PREFIX}notifications`, []);
+      const originalLength = localNotifs.length;
+      localNotifs = localNotifs.filter(n => new Date(n.createdAt) > thirtyDaysAgo);
+      const localDeleted = originalLength - localNotifs.length;
+      saveToLocal(`${LS_PREFIX}notifications`, localNotifs);
+      
+      if (!canUseFirebase()) return localDeleted;
+      
+      const uid = getUserId();
+      const snapshot = await getUserRef(uid)
+        .collection('notifications')
+        .where('createdAt', '<', firebase.firestore.Timestamp.fromDate(thirtyDaysAgo))
+        .get();
+      
+      if (snapshot.empty) return localDeleted;
+      
+      const batch = db!.batch();
+      snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+      });
+      
+      await batch.commit();
+      return snapshot.size + localDeleted;
+    } catch (e) {
+      console.error('Error cleaning up old notifications:', e);
+      return 0;
+    }
   }
 };

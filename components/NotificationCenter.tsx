@@ -91,7 +91,12 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      refreshNotifications();
+      // Initialize and refresh notifications
+      const init = async () => {
+        await smartNotificationService.initialize();
+        refreshNotifications();
+      };
+      init();
     }
   }, [isOpen, filter]);
 
@@ -100,23 +105,23 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
     setNotifications(notifs);
   };
 
-  const handleMarkAsRead = (id: string) => {
-    smartNotificationService.markAsRead(id);
+  const handleMarkAsRead = async (id: string) => {
+    await smartNotificationService.markAsRead(id);
     refreshNotifications();
   };
 
-  const handleDismiss = (id: string) => {
-    smartNotificationService.dismissNotification(id);
+  const handleDismiss = async (id: string) => {
+    await smartNotificationService.dismissNotification(id);
     refreshNotifications();
   };
 
-  const handleMarkAllAsRead = () => {
-    smartNotificationService.markAllAsRead();
+  const handleMarkAllAsRead = async () => {
+    await smartNotificationService.markAllAsRead();
     refreshNotifications();
   };
 
-  const handleClearAll = () => {
-    smartNotificationService.clearAllNotifications();
+  const handleClearAll = async () => {
+    await smartNotificationService.clearAllNotifications();
     refreshNotifications();
   };
 

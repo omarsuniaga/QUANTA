@@ -761,6 +761,7 @@ export default function App() {
         {/* Notification Center Modal */}
         {showNotificationCenter && (
           <NotificationCenter
+            isOpen={showNotificationCenter}
             onClose={() => setShowNotificationCenter(false)}
             onOpenSettings={() => {
               setShowNotificationCenter(false);
