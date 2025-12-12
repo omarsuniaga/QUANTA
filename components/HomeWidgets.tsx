@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Goal, Promo } from '../types';
 import { GOAL_ICONS } from '../constants';
-import { Plane, ShoppingBag, Gift, Star, Coffee, Music, Plus, Edit2, Info, X, Calendar, Clock, AlertTriangle, CheckCircle2, Wallet, TrendingUp, Play } from 'lucide-react';
+import { Plane, ShoppingBag, Gift, Star, Coffee, Music, Plus, Edit2, Info, X, Calendar, Clock, AlertTriangle, CheckCircle2, Wallet, TrendingUp, Play, Trash2 } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 
 // --- INFO CONTENT BY LANGUAGE ---
@@ -123,10 +123,43 @@ interface GoalsWidgetProps {
   onAddContribution: (goalId: string, amount: number) => void;
   onEditGoal: (goal: Goal) => void;
   onAddGoal: () => void;
+  onDeleteContribution?: (goalId: string, contributionIndex: number) => void;
   currencySymbol?: string;
   currencyCode?: string;
   availableBalance?: number;
 }
+
+// Check if contribution was made in current period
+const hasContributionInCurrentPeriod = (goal: Goal): boolean => {
+  if (!goal.contributionHistory || goal.contributionHistory.length === 0) return false;
+  if (!goal.contributionFrequency) return false;
+  
+  const now = new Date();
+  const lastContrib = goal.contributionHistory[goal.contributionHistory.length - 1];
+  const lastDate = new Date(lastContrib.date);
+  
+  // Calculate the start of the current period
+  let periodStart = new Date(now);
+  switch (goal.contributionFrequency) {
+    case 'weekly':
+      // Start of current week (Sunday)
+      periodStart.setDate(now.getDate() - now.getDay());
+      periodStart.setHours(0, 0, 0, 0);
+      break;
+    case 'biweekly':
+      // Approximate: last 14 days
+      periodStart.setDate(now.getDate() - 14);
+      periodStart.setHours(0, 0, 0, 0);
+      break;
+    case 'monthly':
+    default:
+      // Start of current month
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+  }
+  
+  return lastDate >= periodStart;
+};
 
 // Helper to calculate time remaining
 const calculateTimeRemaining = (goal: Goal): { months: number; text: string; textEs: string } => {
@@ -297,12 +330,14 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
   onAddContribution, 
   onEditGoal, 
   onAddGoal, 
+  onDeleteContribution,
   currencySymbol = '$', 
   currencyCode = 'USD',
   availableBalance = 0
 }) => {
   const { language } = useI18n();
   const [showInfo, setShowInfo] = useState(false);
+  const [showContribConfirm, setShowContribConfirm] = useState<string | null>(null);
   const mainGoal = goals[0]; 
 
   const totalSaved = goals.reduce((sum, g) => sum + g.currentAmount, 0);
@@ -329,6 +364,11 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
     configurePlan: language === 'es' ? 'Configurar plan' : 'Configure plan',
     due: language === 'es' ? 'Pendiente' : 'Due',
     availableBalance: language === 'es' ? 'Saldo disponible' : 'Available balance',
+    alreadyContributed: language === 'es' ? 'Ya aportaste en este período' : 'Already contributed this period',
+    confirmAnotherContrib: language === 'es' ? '¿Agregar otro aporte?' : 'Add another contribution?',
+    yes: language === 'es' ? 'Sí, aportar' : 'Yes, contribute',
+    no: language === 'es' ? 'Cancelar' : 'Cancel',
+    deleteContribution: language === 'es' ? 'Eliminar' : 'Delete',
   }), [language]);
 
   const getFrequencyLabel = (freq: string) => {
@@ -340,11 +380,32 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
     return labels[freq]?.[language] || freq;
   };
 
-  // Handle contribution click
+  // Handle contribution click - check if already contributed in period
   const handleContribute = (e: React.MouseEvent, goal: Goal) => {
     e.stopPropagation();
-    if (goal.contributionAmount && availableBalance >= goal.contributionAmount) {
+    if (!goal.contributionAmount || availableBalance < goal.contributionAmount) return;
+    
+    // Check if already contributed in this period
+    if (hasContributionInCurrentPeriod(goal)) {
+      setShowContribConfirm(goal.id);
+    } else {
       onAddContribution(goal.id, goal.contributionAmount);
+    }
+  };
+
+  // Confirm adding another contribution
+  const confirmContribution = (goal: Goal) => {
+    if (goal.contributionAmount) {
+      onAddContribution(goal.id, goal.contributionAmount);
+    }
+    setShowContribConfirm(null);
+  };
+
+  // Handle delete contribution
+  const handleDeleteContribution = (e: React.MouseEvent, goalId: string, index: number) => {
+    e.stopPropagation();
+    if (onDeleteContribution && window.confirm(language === 'es' ? '¿Eliminar este aporte?' : 'Delete this contribution?')) {
+      onDeleteContribution(goalId, index);
     }
   };
 
@@ -537,28 +598,77 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                       </div>
                     )}
 
-                    {/* Contribute button */}
+                    {/* Contribute button - More discrete, not full width */}
                     {canContribute && (
-                      <button
-                        onClick={(e) => handleContribute(e, mainGoal)}
-                        className="mt-2 w-full flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 px-3 rounded-xl transition-colors"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        {l.makeContribution} ({mainGoal.contributionAmount?.toLocaleString()} {currencyCode})
-                      </button>
+                      <div className="mt-2 flex items-center justify-between">
+                        {/* Already contributed warning */}
+                        {hasContributionInCurrentPeriod(mainGoal) && (
+                          <span className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">
+                            ⚠️ {l.alreadyContributed}
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => handleContribute(e, mainGoal)}
+                          className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition-colors ml-auto"
+                        >
+                          <Play className="w-3 h-3" />
+                          {l.makeContribution} ({mainGoal.contributionAmount?.toLocaleString()} {currencyCode})
+                        </button>
+                      </div>
                     )}
 
-                    {/* Recent contributions */}
+                    {/* Confirmation modal for duplicate contribution */}
+                    {showContribConfirm === mainGoal.id && (
+                      <div className="mt-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+                        <p className="text-[10px] font-bold text-amber-800 dark:text-amber-300 mb-2">
+                          {l.confirmAnotherContrib}
+                        </p>
+                        <p className="text-[9px] text-amber-600 dark:text-amber-400 mb-3">
+                          {l.alreadyContributed}
+                        </p>
+                        <div className="flex gap-2 justify-end">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowContribConfirm(null); }}
+                            className="px-3 py-1 text-[10px] font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600"
+                          >
+                            {l.no}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); confirmContribution(mainGoal); }}
+                            className="px-3 py-1 text-[10px] font-bold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                          >
+                            {l.yes}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Recent contributions with delete option */}
                     {mainGoal.contributionHistory && mainGoal.contributionHistory.length > 0 && (
                       <div className="mt-3 border-t border-slate-100 dark:border-slate-700 pt-3">
                         <p className="text-[10px] sm:text-sm font-bold text-slate-600 dark:text-slate-300 mb-2">{l.recentContributions}</p>
-                        <div className="space-y-1">
-                          {mainGoal.contributionHistory.slice(-3).reverse().map((c, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400">
-                              <span>{new Date(c.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-200">{c.amount.toLocaleString()} {currencyCode}</span>
-                            </div>
-                          ))}
+                        <div className="space-y-1.5">
+                          {mainGoal.contributionHistory.slice(-5).reverse().map((c, idx) => {
+                            // Calculate the actual index in the original array
+                            const actualIndex = mainGoal.contributionHistory!.length - 1 - idx;
+                            return (
+                              <div key={idx} className="flex justify-between items-center text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 group">
+                                <span>{new Date(c.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-slate-700 dark:text-slate-200">{c.amount.toLocaleString()} {currencyCode}</span>
+                                  {onDeleteContribution && (
+                                    <button
+                                      onClick={(e) => handleDeleteContribution(e, mainGoal.id, actualIndex)}
+                                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-500 transition-all"
+                                      title={l.deleteContribution}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

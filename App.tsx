@@ -298,6 +298,32 @@ export default function App() {
     toast.success('Aporte realizado', `Se han reservado ${amount.toLocaleString()} ${currencyCode} para "${goal.name}"`);
   };
 
+  // Handle delete contribution from goal
+  const handleDeleteContribution = async (goalId: string, contributionIndex: number) => {
+    const goal = goals.find(g => g.id === goalId);
+    if (!goal || !goal.contributionHistory) return;
+    
+    const contribution = goal.contributionHistory[contributionIndex];
+    if (!contribution) return;
+    
+    // Remove the contribution from history
+    const newHistory = goal.contributionHistory.filter((_, idx) => idx !== contributionIndex);
+    
+    // Update the goal with reduced amount
+    const updatedGoal: Goal = {
+      ...goal,
+      currentAmount: Math.max(0, goal.currentAmount - contribution.amount),
+      contributionHistory: newHistory,
+      lastContributionDate: newHistory.length > 0 ? newHistory[newHistory.length - 1].date : undefined
+    };
+
+    await updateGoal(updatedGoal);
+    toast.success(
+      t.common.delete || 'Eliminado', 
+      `Se ha eliminado el aporte de ${contribution.amount.toLocaleString()} ${currencyCode}`
+    );
+  };
+
   const handleOpenPromoModal = (promo?: Promo) => {
     setEditingPromo(promo || null);
     setShowPromoModal(true);
@@ -502,6 +528,7 @@ export default function App() {
                 onAddContribution={handleAddContribution}
                 onEditGoal={handleOpenGoalModal}
                 onAddGoal={() => handleOpenGoalModal()}
+                onDeleteContribution={handleDeleteContribution}
                 currencySymbol={currencySymbol}
                 currencyCode={currencyCode}
                 availableBalance={stats.balance}
