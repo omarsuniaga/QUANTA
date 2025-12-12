@@ -811,6 +811,12 @@ class SmartNotificationService {
     language: 'es' | 'en' = 'es'
   ): Promise<AppNotification[]> {
     if (!this.preferences.enabled) return [];
+    
+    // Validate stats object
+    if (!stats || typeof stats.balance === 'undefined') {
+      console.warn('smartNotificationService: Invalid stats object received');
+      return [];
+    }
 
     const allNotifications: AppNotification[] = [];
 

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, QuickAction, Account } from '../types';
 import { Button } from './Button';
-import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight } from 'lucide-react';
+import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts';
 import { GeminiApiKeySettings } from './GeminiApiKeySettings';
+import { APIUsageMonitor } from './APIUsageMonitor';
 import { AVAILABLE_CURRENCIES, CurrencyOption } from '../constants';
 
 interface SettingsScreenProps {
@@ -330,11 +331,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
               {/* Gemini API Key Configuration */}
               {settings.aiConfig.enabled && (
-                <div className="pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700">
+                <div className="pt-3 sm:pt-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
                   <GeminiApiKeySettings
                     currentApiKey={settings.aiConfig.userGeminiApiKey || ''}
                     onSave={handleSaveApiKey}
                   />
+                  
+                  {/* API Usage Monitor */}
+                  <APIUsageMonitor />
                 </div>
               )}
 

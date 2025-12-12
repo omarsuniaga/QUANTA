@@ -13,6 +13,7 @@ import {
   ChallengeTemplate
 } from '../types';
 import { hasValidApiKey } from './geminiService';
+import { geminiRateLimiter } from './apiRateLimiter';
 
 // Get API key from geminiService
 const getApiKey = (): string => {
@@ -24,6 +25,12 @@ const getApiKey = (): string => {
     return process.env.API_KEY;
   }
   return '';
+};
+
+// Helper to generate cache keys
+const generateCacheKey = (prefix: string, data: any): string => {
+  const hash = JSON.stringify(data).slice(0, 100);
+  return `aicoach_${prefix}_${hash}`;
 };
 
 // ============================================
@@ -165,61 +172,73 @@ export const aiCoachService = {
 
     const ai = new GoogleGenAI({ apiKey });
 
+    // Prepare comprehensive data
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    const expenses = recentTx.filter(t => t.type === 'expense');
+    const incomes = recentTx.filter(t => t.type === 'income');
+    
+    // Calculate category breakdown
+    const categorySpending: Record<string, number> = {};
+    expenses.forEach(t => {
+      categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount;
+    });
+    
+    const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
+    const totalIncome = incomes.reduce((sum, t) => sum + t.amount, 0);
+    const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
+
+    const topCategories = Object.entries(categorySpending)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([cat, amt]) => ({
+        category: cat,
+        amount: amt,
+        percentage: totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0
+      }));
+
+    // Detect patterns
+    const weekdaySpending: Record<string, number> = {};
+    expenses.forEach(t => {
+      const day = new Date(t.date).toLocaleDateString('es-ES', { weekday: 'long' });
+      weekdaySpending[day] = (weekdaySpending[day] || 0) + t.amount;
+    });
+
+    const contextData = {
+      balance: stats.balance,
+      totalIncome30Days: totalIncome,
+      totalExpenses30Days: totalExpenses,
+      savingsRate: savingsRate.toFixed(1),
+      topCategories,
+      weekdaySpending,
+      goalsProgress: goals.map(g => ({
+        name: g.name,
+        progress: ((g.currentAmount / g.targetAmount) * 100).toFixed(0),
+        remaining: g.targetAmount - g.currentAmount
+      })),
+      transactionCount: recentTx.length,
+      avgDailyExpense: (totalExpenses / 30).toFixed(2),
+      recurringExpenses: transactions.filter(t => t.isRecurring).length
+    };
+
+    // Generate cache key based on summary data
+    const cacheKey = generateCacheKey('analysis', {
+      balance: Math.round(stats.balance / 100) * 100,
+      income: Math.round(totalIncome / 100) * 100,
+      expense: Math.round(totalExpenses / 100) * 100,
+      txCount: recentTx.length,
+      goalsCount: goals.length
+    });
+
     try {
-      // Prepare comprehensive data
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
-      const expenses = recentTx.filter(t => t.type === 'expense');
-      const incomes = recentTx.filter(t => t.type === 'income');
-      
-      // Calculate category breakdown
-      const categorySpending: Record<string, number> = {};
-      expenses.forEach(t => {
-        categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount;
-      });
-      
-      const totalExpenses = expenses.reduce((sum, t) => sum + t.amount, 0);
-      const totalIncome = incomes.reduce((sum, t) => sum + t.amount, 0);
-      const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpenses) / totalIncome) * 100 : 0;
-
-      const topCategories = Object.entries(categorySpending)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5)
-        .map(([cat, amt]) => ({
-          category: cat,
-          amount: amt,
-          percentage: totalExpenses > 0 ? (amt / totalExpenses) * 100 : 0
-        }));
-
-      // Detect patterns
-      const weekdaySpending: Record<string, number> = {};
-      expenses.forEach(t => {
-        const day = new Date(t.date).toLocaleDateString('es-ES', { weekday: 'long' });
-        weekdaySpending[day] = (weekdaySpending[day] || 0) + t.amount;
-      });
-
-      const contextData = {
-        balance: stats.balance,
-        totalIncome30Days: totalIncome,
-        totalExpenses30Days: totalExpenses,
-        savingsRate: savingsRate.toFixed(1),
-        topCategories,
-        weekdaySpending,
-        goalsProgress: goals.map(g => ({
-          name: g.name,
-          progress: ((g.currentAmount / g.targetAmount) * 100).toFixed(0),
-          remaining: g.targetAmount - g.currentAmount
-        })),
-        transactionCount: recentTx.length,
-        avgDailyExpense: (totalExpenses / 30).toFixed(2),
-        recurringExpenses: transactions.filter(t => t.isRecurring).length
-      };
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Eres QUANTA Coach, un experto analista financiero personal. Analiza estos datos financieros de los últimos 30 días y genera un análisis completo.
+      const analysis = await geminiRateLimiter.execute(
+        cacheKey,
+        async () => {
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Eres QUANTA Coach, un experto analista financiero personal. Analiza estos datos financieros de los últimos 30 días y genera un análisis completo.
 
 Datos del usuario:
 ${JSON.stringify(contextData, null, 2)}
@@ -280,11 +299,18 @@ Responde SOLO en español. Sé específico y usa los datos proporcionados.`,
         }
       });
 
-      const text = response.text;
-      if (!text) return null;
-      
-      const analysis = JSON.parse(text) as FinancialAnalysis;
-      analysis.topExpenseCategories = topCategories;
+          const text = response.text;
+          if (!text) return null;
+          
+          const result = JSON.parse(text) as FinancialAnalysis;
+          result.topExpenseCategories = topCategories;
+          return result;
+        },
+        {
+          cacheDurationMs: 15 * 60 * 1000, // 15 minutos - análisis completo
+          priority: 'normal'
+        }
+      );
       
       return analysis;
     } catch (error) {
@@ -306,27 +332,37 @@ Responde SOLO en español. Sé específico y usa los datos proporcionados.`,
 
     const ai = new GoogleGenAI({ apiKey });
 
+    const remaining = goal.targetAmount - goal.currentAmount;
+    
+    // Calculate average monthly savings capacity
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    const monthlyIncome = recentTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const monthlyExpenses = recentTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    const monthlySavingsCapacity = monthlyIncome - monthlyExpenses;
+
+    // Calculate days until deadline or estimate
+    let daysRemaining = 365; // Default 1 year
+    if (goal.deadline) {
+      daysRemaining = Math.max(1, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+    }
+
+    // Cache key for this specific goal plan
+    const cacheKey = generateCacheKey('savingsplan', {
+      goalId: goal.id,
+      target: goal.targetAmount,
+      current: Math.round(goal.currentAmount / 10) * 10,
+      capacity: Math.round(monthlySavingsCapacity / 100) * 100
+    });
+
     try {
-      const remaining = goal.targetAmount - goal.currentAmount;
-      const hasDeadline = !!goal.deadline;
-      
-      // Calculate average monthly savings capacity
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
-      const monthlyIncome = recentTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-      const monthlyExpenses = recentTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-      const monthlySavingsCapacity = monthlyIncome - monthlyExpenses;
-
-      // Calculate days until deadline or estimate
-      let daysRemaining = 365; // Default 1 year
-      if (goal.deadline) {
-        daysRemaining = Math.max(1, Math.ceil((new Date(goal.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-      }
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Genera un plan de ahorro personalizado para esta meta:
+      const planData = await geminiRateLimiter.execute(
+        cacheKey,
+        async () => {
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Genera un plan de ahorro personalizado para esta meta:
 
 Meta: ${goal.name}
 Objetivo: $${goal.targetAmount}
@@ -349,28 +385,35 @@ Genera un plan con:
 7. suggestions: 3-4 sugerencias específicas para alcanzar la meta
 
 Responde en JSON. Sé realista basándote en la capacidad del usuario.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              strategy: { type: Type.STRING, enum: ['aggressive', 'moderate', 'relaxed'] },
-              monthlyTarget: { type: Type.NUMBER },
-              weeklyTarget: { type: Type.NUMBER },
-              dailyTarget: { type: Type.NUMBER },
-              projectedCompletion: { type: Type.STRING },
-              isOnTrack: { type: Type.BOOLEAN },
-              suggestions: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ['strategy', 'monthlyTarget', 'weeklyTarget', 'dailyTarget', 'projectedCompletion', 'isOnTrack', 'suggestions']
-          }
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  strategy: { type: Type.STRING, enum: ['aggressive', 'moderate', 'relaxed'] },
+                  monthlyTarget: { type: Type.NUMBER },
+                  weeklyTarget: { type: Type.NUMBER },
+                  dailyTarget: { type: Type.NUMBER },
+                  projectedCompletion: { type: Type.STRING },
+                  isOnTrack: { type: Type.BOOLEAN },
+                  suggestions: { type: Type.ARRAY, items: { type: Type.STRING } }
+                },
+                required: ['strategy', 'monthlyTarget', 'weeklyTarget', 'dailyTarget', 'projectedCompletion', 'isOnTrack', 'suggestions']
+              }
+            }
+          });
+
+          const text = response.text;
+          if (!text) return null;
+          return JSON.parse(text);
+        },
+        {
+          cacheDurationMs: 30 * 60 * 1000, // 30 minutos para planes de ahorro
+          priority: 'normal'
         }
-      });
+      );
 
-      const text = response.text;
-      if (!text) return null;
-
-      const planData = JSON.parse(text);
+      if (!planData) return null;
 
       // Generate milestones
       const milestones: SavingsMilestone[] = [25, 50, 75, 100].map(pct => {
@@ -658,31 +701,51 @@ Responde en JSON. Sé realista basándote en la capacidad del usuario.`,
 
     const ai = new GoogleGenAI({ apiKey });
 
+    const recentExpenses = transactions
+      .filter(t => t.type === 'expense')
+      .slice(0, 20);
+    
+    // Cache key based on expense categories
+    const categoryTotals: Record<string, number> = {};
+    recentExpenses.forEach(t => {
+      categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+    });
+    
+    const cacheKey = generateCacheKey('quicktips', {
+      balance: Math.round(stats.balance / 100) * 100,
+      topCategories: Object.entries(categoryTotals).slice(0, 3).map(([c]) => c)
+    });
+
     try {
-      const recentExpenses = transactions
-        .filter(t => t.type === 'expense')
-        .slice(0, 20);
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Basándote en estos gastos recientes, genera 3 tips rápidos y accionables para mejorar las finanzas:
+      return await geminiRateLimiter.execute(
+        cacheKey,
+        async () => {
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Basándote en estos gastos recientes, genera 3 tips rápidos y accionables para mejorar las finanzas:
 
 Balance: $${stats.balance}
 Gastos recientes: ${recentExpenses.map(t => `${t.category}: $${t.amount}`).join(', ')}
 
 Responde con un array JSON de 3 strings cortos (máximo 100 caracteres cada uno). Tips prácticos y motivadores.`,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          }
-        }
-      });
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              }
+            }
+          });
 
-      const text = response.text;
-      if (!text) return [];
-      return JSON.parse(text);
+          const text = response.text;
+          if (!text) return [];
+          return JSON.parse(text);
+        },
+        {
+          cacheDurationMs: 10 * 60 * 1000, // 10 minutos
+          priority: 'low'
+        }
+      );
     } catch (error) {
       console.error('Quick Tips Error:', error);
       return [

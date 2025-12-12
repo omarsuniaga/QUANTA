@@ -119,16 +119,19 @@ export default function App() {
 
   // Ejecutar verificaciones de notificaciones inteligentes
   useEffect(() => {
-    if (!user || transactions.length === 0) return;
+    if (!user || transactions.length === 0 || !stats) return;
     
     // Ejecutar verificaciones de notificaciones (pagos, metas, presupuesto, etc.)
     const runNotificationChecks = async () => {
       try {
         await smartNotificationService.runAllChecks(
           transactions,
+          [], // subscriptions - not implemented yet
           goals,
-          stats.balance,
-          {} // budgets - se obtienen internamente del storageService
+          [], // budgets - not implemented yet
+          stats,
+          currencyCode,
+          'es'
         );
       } catch (error) {
         console.error('Error running notification checks:', error);
@@ -136,11 +139,14 @@ export default function App() {
     };
 
     // Ejecutar al cargar y cada 30 minutos
-    runNotificationChecks();
+    const timeoutId = setTimeout(runNotificationChecks, 2000); // Delay initial check
     const interval = setInterval(runNotificationChecks, 30 * 60 * 1000);
     
-    return () => clearInterval(interval);
-  }, [user, transactions, goals, stats.balance]);
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(interval);
+    };
+  }, [user, transactions, goals, stats, currencyCode]);
 
   if (loading) {
     return (
