@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Deployment instructions (manual and CI/CD)
   - Security checklist for production
   - Troubleshooting guide
+- `firestore.rules` - Production-ready security rules (335 lines) with:
+  - User-based access control
+  - Data validation (amounts, dates, types)
+  - Immutable fields protection
+  - Size limits and required fields
+  - Coverage for all 10+ collections
+- `DEPLOY_RULES.md` - Deployment guide for Firestore rules
 
 #### Changed
 - **vite.config.ts**: Optimized for production
@@ -78,8 +85,10 @@ Total gzipped: ~596 kB
 
 **Status:** All security configuration tasks completed successfully!
 
-### 🔄 In Progress
-- Phase 1.2: Implement Firestore Security Rules
+### ✅ Phase 1.2 - Firestore Security Rules (COMPLETED ✓)
+- [x] Prompt 1.2.1: Create Firestore Security Rules
+
+**Status:** Firestore rules created and ready to deploy!
 
 ### 📋 Pending
 - Phase 2: Performance Optimization
