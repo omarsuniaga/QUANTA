@@ -15,6 +15,7 @@ import { AICoachScreen } from './components/AICoachScreen';
 import { SavingsPlanner } from './components/SavingsPlanner';
 import { ChallengesScreen } from './components/ChallengesScreen';
 import { StrategiesScreen } from './components/StrategiesScreen';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain } from 'lucide-react';
 import { useI18n } from './contexts';
 import { useAuth, useTransactions, useSettings, useToast } from './contexts';
@@ -832,6 +833,9 @@ export default function App() {
             availableBalance={stats.income - stats.expenses}
           />
         )}
+
+        {/* PWA Install Prompt */}
+        <PWAInstallPrompt />
         </div>
       </div>
     </div>
