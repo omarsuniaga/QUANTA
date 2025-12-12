@@ -76,8 +76,13 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
       );
     }
     
-    // Sort by date descending
-    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Sort by date descending, then by createdAt (time) descending
+    return filtered.sort((a, b) => {
+      const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateCompare !== 0) return dateCompare;
+      // Same date, sort by createdAt (time)
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
   }, [transactions, dateFilter, customFrom, customTo, searchQuery]);
 
   // Calculate total for filtered period
@@ -85,15 +90,34 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
     return quickExpenses.reduce((sum, tx) => sum + tx.amount, 0);
   }, [quickExpenses]);
 
-  // Group expenses by date
+  // Group expenses by date (sorted by createdAt within each group)
   const groupedExpenses = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
     quickExpenses.forEach(tx => {
       if (!groups[tx.date]) groups[tx.date] = [];
       groups[tx.date].push(tx);
     });
+    // Sort each group by createdAt descending
+    Object.keys(groups).forEach(date => {
+      groups[date].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    });
     return groups;
   }, [quickExpenses]);
+
+  // Helper to get category display name
+  const getCategoryName = (categoryId: string): string => {
+    if (categoryId === 'express') return 'Express';
+    const cat = expenseCategories.find(c => c.id === categoryId);
+    if (cat) {
+      return typeof cat.name === 'object' ? (cat.name[language] || cat.name.es || cat.name.en) : cat.name;
+    }
+    // Fallback: try to find in all categories
+    const allCat = settings?.categories?.find(c => c.id === categoryId);
+    if (allCat) {
+      return typeof allCat.name === 'object' ? (allCat.name[language] || allCat.name.es || allCat.name.en) : allCat.name;
+    }
+    return categoryId.length > 15 ? 'Otros' : categoryId;
+  };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr + 'T12:00:00');
@@ -108,11 +132,11 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
       return language === 'es' ? 'Ayer' : 'Yesterday';
     }
     
-    return date.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short'
-    });
+    // Format as DD/MM/AAAA
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
   const formatCurrency = (value: number) => {
@@ -404,7 +428,9 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
                             >
                               <option value="express">Express</option>
                               {expenseCategories.map(cat => (
-                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                <option key={cat.id} value={cat.id}>
+                                  {typeof cat.name === 'object' ? (cat.name[language] || cat.name.es || cat.name.en) : cat.name}
+                                </option>
                               ))}
                             </select>
                             <input
@@ -441,11 +467,11 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
                             </p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className="text-[10px] px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-slate-500 dark:text-slate-400">
-                                {tx.category === 'express' ? 'Express' : tx.category}
+                                {getCategoryName(tx.category)}
                               </span>
                               <span className="text-[10px] text-slate-400 flex items-center gap-1">
                                 <Clock className="w-2.5 h-2.5" />
-                                {new Date(tx.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                {new Date(tx.createdAt || Date.now()).toLocaleTimeString(language === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
                           </div>
