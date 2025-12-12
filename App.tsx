@@ -378,8 +378,8 @@ export default function App() {
       <div className={`min-h-screen flex flex-col lg:flex-row max-w-7xl mx-auto relative overflow-hidden font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100`}>
 
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex lg:flex-col lg:w-64 xl:w-72 lg:fixed lg:inset-y-0 lg:left-1/2 lg:-translate-x-[calc(50%+28rem)] xl:-translate-x-[calc(50%+32rem)] bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-40">
-          <div className="flex-1 flex flex-col p-6">
+        <aside className="hidden lg:flex lg:flex-col lg:w-64 xl:w-72 lg:fixed lg:inset-y-0 lg:left-1/2 lg:-translate-x-[calc(50%+28rem)] xl:-translate-x-[calc(50%+32rem)] bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-40 overflow-y-auto">
+          <div className="flex-1 flex flex-col p-6 pb-8">
             {/* Logo/Brand */}
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">QUANTA</h1>

@@ -397,9 +397,9 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
             </div>
           </div>
 
-          {/* Ranking List */}
-          <div className="space-y-3 sm:space-y-4 md:flex-1">
-            {categoryData.slice(0, 4).map((cat: any, idx: number) => (
+          {/* Ranking List - Scrollable to show all categories */}
+          <div className="space-y-2 sm:space-y-3 md:flex-1 max-h-[300px] overflow-y-auto pr-1">
+            {categoryData.map((cat: any, idx: number) => (
               <div
                 key={cat.originalName}
                 className="flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 p-2 rounded-xl transition-colors -mx-2"

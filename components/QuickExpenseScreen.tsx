@@ -4,8 +4,9 @@ import {
   ChevronDown, ChevronLeft, ChevronRight, Zap, Receipt,
   Clock, TrendingDown, CheckCircle2
 } from 'lucide-react';
-import { Transaction } from '../types';
+import { Transaction, CustomCategory } from '../types';
 import { useTransactions, useSettings, useI18n } from '../contexts';
+import { storageService } from '../services/storageService';
 
 interface QuickExpenseScreenProps {
   isOpen: boolean;
@@ -38,6 +39,14 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
   const [customTo, setCustomTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Custom categories state
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  
+  // Load custom categories
+  useEffect(() => {
+    storageService.getCategories().then(setCustomCategories).catch(console.error);
+  }, []);
 
   // Get expense categories from settings
   const expenseCategories = useMemo(() => {
@@ -107,15 +116,29 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
   // Helper to get category display name
   const getCategoryName = (categoryId: string): string => {
     if (categoryId === 'express') return 'Express';
+    
+    // First try expense categories from settings
     const cat = expenseCategories.find(c => c.id === categoryId);
     if (cat) {
       return typeof cat.name === 'object' ? (cat.name[language] || cat.name.es || cat.name.en) : cat.name;
     }
-    // Fallback: try to find in all categories
+    
+    // Try custom categories (by id or key)
+    const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
+    if (customCat) {
+      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+    }
+    
+    // Fallback: try to find in all categories from settings
     const allCat = settings?.categories?.find(c => c.id === categoryId);
     if (allCat) {
       return typeof allCat.name === 'object' ? (allCat.name[language] || allCat.name.es || allCat.name.en) : allCat.name;
     }
+    
+    // Try translation system for default categories
+    const translated = (t.categories as Record<string, string>)[categoryId];
+    if (translated) return translated;
+    
     return categoryId.length > 15 ? 'Otros' : categoryId;
   };
 
