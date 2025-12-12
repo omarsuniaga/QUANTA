@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, memo } from 'react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
@@ -44,13 +44,14 @@ interface DashboardProps {
   currencyConfig: AppSettings['currency'];
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals, onAddClick, onFilter, currencyConfig }) => {
+const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goals, onAddClick, onFilter, currencyConfig }) => {
   const { t, language } = useI18n();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showOracleHelp, setShowOracleHelp] = useState(false);
-  
+
   // Load subscriptions and custom categories on mount
+  // Optimized: Only reload when transactions length changes significantly
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -65,16 +66,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
       }
     };
     loadData();
-  }, [transactions]); // Reload when transactions change (in case a new service was added)
+  }, [transactions.length]); // Only reload when transactions count changes
   
-  // Check for notifications
-  const upcomingPayments = notificationService.getUpcomingTransactions(transactions);
+  // Check for notifications (memoized to avoid recalculation on every render)
+  const upcomingPayments = useMemo(() =>
+    notificationService.getUpcomingTransactions(transactions),
+    [transactions]
+  );
+
   const symbol = currencyConfig?.localSymbol || '$';
   const code = currencyConfig?.localCode || 'USD';
-  
-  // Helper to format currency as "1,234.56 USD"
-  const formatCurrency = (amount: number) => `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`;
-  const formatCurrencyShort = (amount: number) => `${amount.toLocaleString()} ${code}`;
+
+  // Helper to format currency as "1,234.56 USD" (memoized with useCallback)
+  const formatCurrency = useCallback((amount: number) =>
+    `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`,
+    [code]
+  );
+
+  const formatCurrencyShort = useCallback((amount: number) =>
+    `${amount.toLocaleString()} ${code}`,
+    [code]
+  );
 
   // --- ORACLE: CASH FLOW PREDICTION ---
   const predictedBalance = useMemo(() => {
@@ -469,3 +481,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, transactions, goals
     </div>
   );
 };
+
+// Custom comparison function for React.memo
+// Only re-render if these props actually change
+const arePropsEqual = (prevProps: DashboardProps, nextProps: DashboardProps) => {
+  return (
+    // Compare stats object (shallow comparison of key values)
+    prevProps.stats.balance === nextProps.stats.balance &&
+    prevProps.stats.income === nextProps.stats.income &&
+    prevProps.stats.expenses === nextProps.stats.expenses &&
+    // Compare transactions array length and reference
+    prevProps.transactions.length === nextProps.transactions.length &&
+    prevProps.transactions === nextProps.transactions &&
+    // Compare goals array length and reference
+    prevProps.goals.length === nextProps.goals.length &&
+    prevProps.goals === nextProps.goals &&
+    // Compare currency config
+    prevProps.currencyConfig?.localSymbol === nextProps.currencyConfig?.localSymbol &&
+    prevProps.currencyConfig?.localCode === nextProps.currencyConfig?.localCode &&
+    // Functions are assumed stable (from parent with useCallback)
+    prevProps.onAddClick === nextProps.onAddClick &&
+    prevProps.onFilter === nextProps.onFilter
+  );
+};
+
+// Export memoized component to prevent unnecessary re-renders
+export const Dashboard = memo(DashboardComponent, arePropsEqual);
