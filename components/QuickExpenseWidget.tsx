@@ -102,8 +102,8 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
       {/* Quick Add Form */}
       <form onSubmit={handleSubmit} className="p-3 border-b border-slate-100 dark:border-slate-700">
         <div className="flex gap-2">
-          <div className="relative w-24 shrink-0">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
+          <div className="relative w-32 shrink-0">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
               {currencySymbol}
             </span>
             <input
@@ -112,8 +112,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0"
-              className="w-full pl-7 pr-2 py-2.5 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
+              className="w-full pl-10 pr-2 py-2.5 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
           </div>
           <input
             type="text"
@@ -158,6 +157,9 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">
                     {tx.description}
+                  </p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                    {new Date(tx.createdAt || Date.now()).toLocaleTimeString(language === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
                 <span className="text-xs font-bold text-rose-600 dark:text-rose-400">
