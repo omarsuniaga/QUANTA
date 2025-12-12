@@ -23,6 +23,7 @@ import { pushNotificationService } from './services/pushNotificationService';
 import { smartNotificationService } from './services/smartNotificationService';
 import { NotificationCenter, NotificationBell } from './components/NotificationCenter';
 import { NotificationPreferences } from './components/NotificationPreferences';
+import { GoalsManagement } from './components/GoalsManagement';
 
 export default function App() {
   // === CONTEXT HOOKS (replacing local state) ===
@@ -84,6 +85,7 @@ export default function App() {
   // Notification system state
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
   const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
+  const [showGoalsManagement, setShowGoalsManagement] = useState(false);
 
   // === LOADING STATE ===
   const loading = authLoading || txLoading || settingsLoading;
@@ -572,6 +574,7 @@ export default function App() {
               onLogout={handleLogout}
               userEmail={user.email}
               onOpenNotificationPrefs={() => setShowNotificationPrefs(true)}
+              onOpenGoalsManagement={() => setShowGoalsManagement(true)}
             />
           )}
         </main>
@@ -770,6 +773,28 @@ export default function App() {
         {showNotificationPrefs && (
           <NotificationPreferences
             onClose={() => setShowNotificationPrefs(false)}
+          />
+        )}
+
+        {/* Goals Management Modal */}
+        {showGoalsManagement && (
+          <GoalsManagement
+            isOpen={showGoalsManagement}
+            onClose={() => setShowGoalsManagement(false)}
+            goals={goals}
+            onAddGoal={() => {
+              setShowGoalsManagement(false);
+              handleOpenGoalModal();
+            }}
+            onEditGoal={(goal) => {
+              setShowGoalsManagement(false);
+              handleOpenGoalModal(goal);
+            }}
+            onDeleteGoal={handleDeleteGoal}
+            onUpdateGoal={updateGoal}
+            currencySymbol={currencySymbol}
+            currencyCode={currencyCode}
+            availableBalance={stats.income - stats.expenses}
           />
         )}
         </div>

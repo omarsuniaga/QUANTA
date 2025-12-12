@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, QuickAction, Account } from '../types';
 import { Button } from './Button';
-import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2 } from 'lucide-react';
+import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts';
 import { GeminiApiKeySettings } from './GeminiApiKeySettings';
@@ -15,10 +15,11 @@ interface SettingsScreenProps {
   onLogout: () => void;
   userEmail: string;
   onOpenNotificationPrefs?: () => void;
+  onOpenGoalsManagement?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
-  settings, onUpdateSettings, quickActions, onUpdateQuickActions, onLogout, userEmail, onOpenNotificationPrefs
+  settings, onUpdateSettings, quickActions, onUpdateQuickActions, onLogout, userEmail, onOpenNotificationPrefs, onOpenGoalsManagement
 }) => {
   const [activeSection, setActiveSection] = useState<'general' | 'actions' | 'accounts' | 'data'>('general');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -365,6 +366,59 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Quick Access - Goals & Notifications Configuration */}
+            <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm space-y-3">
+              <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-1">
+                {language === 'es' ? 'Configuración Rápida' : 'Quick Settings'}
+              </h3>
+              
+              {/* Goals Management Button */}
+              {onOpenGoalsManagement && (
+                <button
+                  onClick={onOpenGoalsManagement}
+                  className="w-full flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl border border-emerald-100 dark:border-emerald-800 hover:border-emerald-300 dark:hover:border-emerald-600 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                      <Target className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">
+                        {language === 'es' ? 'Gestionar Metas' : 'Manage Goals'}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                        {language === 'es' ? 'Editar montos, eliminar y agregar aportes' : 'Edit amounts, delete and add contributions'}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
+                </button>
+              )}
+              
+              {/* Notification Settings Button */}
+              {onOpenNotificationPrefs && (
+                <button
+                  onClick={onOpenNotificationPrefs}
+                  className="w-full flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl border border-amber-100 dark:border-amber-800 hover:border-amber-300 dark:hover:border-amber-600 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+                      <Bell className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">
+                        {language === 'es' ? 'Configurar Notificaciones' : 'Configure Notifications'}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                        {language === 'es' ? 'Alertas de pagos, metas y presupuesto' : 'Payment, goals and budget alerts'}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" />
+                </button>
+              )}
             </div>
           </div>
         )}
