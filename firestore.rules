@@ -1,0 +1,280 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is the owner of the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate positive amount
+    function isValidAmount(amount) {
+      return amount is number && amount > 0;
+    }
+
+    // Validate non-negative amount (for currentAmount in goals)
+    function isValidNonNegativeAmount(amount) {
+      return amount is number && amount >= 0;
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    function isValidDate(date) {
+      return date is string && date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // Validate transaction type
+    function isValidTransactionType(type) {
+      return type in ['income', 'expense'];
+    }
+
+    // Validate frequency
+    function isValidFrequency(frequency) {
+      return frequency in ['weekly', 'biweekly', 'monthly', 'yearly'];
+    }
+
+    // Validate that document size is reasonable (< 1MB)
+    function isValidSize() {
+      return request.resource.size < 1000000; // 1MB
+    }
+
+    // Validate email format (basic)
+    function isValidEmail(email) {
+      return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    // ============================================
+    // USER PROFILE
+    // ============================================
+
+    match /users/{userId} {
+      // Allow read if user is the owner
+      allow read: if isOwner(userId);
+
+      // Allow create only on user creation (self-registration)
+      allow create: if isAuthenticated() &&
+                     request.auth.uid == userId &&
+                     isValidEmail(request.resource.data.email) &&
+                     request.resource.data.status == 'active';
+
+      // Allow limited updates (only safe fields)
+      allow update: if isOwner(userId) &&
+                     // Only allow updating these fields
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['lastLoginAt', 'displayName', 'photoURL', 'name']) &&
+                     // User ID and email cannot be changed
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.email == resource.data.email;
+
+      // Prevent user deletion (soft delete by updating status instead)
+      allow delete: if false;
+
+      // ============================================
+      // TRANSACTIONS SUBCOLLECTION
+      // ============================================
+
+      match /transactions/{transactionId} {
+        // Anyone can read their own transactions
+        allow read: if isOwner(userId);
+
+        // Create transaction with validation
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.amount) &&
+                       isValidDate(request.resource.data.date) &&
+                       isValidTransactionType(request.resource.data.type) &&
+                       request.resource.data.keys().hasAll(['id', 'amount', 'type', 'category', 'description', 'date', 'createdAt']) &&
+                       // If recurring, must have frequency
+                       (!request.resource.data.isRecurring ||
+                        (request.resource.data.keys().hasAll(['frequency']) &&
+                         isValidFrequency(request.resource.data.frequency)));
+
+        // Update transaction with validation
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.amount) &&
+                       // ID cannot be changed
+                       request.resource.data.id == resource.data.id &&
+                       // createdAt cannot be changed
+                       request.resource.data.createdAt == resource.data.createdAt;
+
+        // Allow delete
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // GOALS SUBCOLLECTION
+      // ============================================
+
+      match /goals/{goalId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.targetAmount) &&
+                       isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+                       request.resource.data.currentAmount <= request.resource.data.targetAmount &&
+                       request.resource.data.keys().hasAll(['id', 'name', 'targetAmount', 'currentAmount']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.targetAmount) &&
+                       isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+                       // ID cannot be changed
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // SETTINGS SUBCOLLECTION
+      // ============================================
+
+      match /settings/{settingId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize();
+
+        allow update: if isOwner(userId) &&
+                       isValidSize();
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // ACCOUNTS SUBCOLLECTION
+      // ============================================
+
+      match /accounts/{accountId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidNonNegativeAmount(request.resource.data.balance) &&
+                       request.resource.data.keys().hasAll(['id', 'name', 'balance', 'type']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidNonNegativeAmount(request.resource.data.balance) &&
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // BUDGETS SUBCOLLECTION
+      // ============================================
+
+      match /budgets/{budgetId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.limit) &&
+                       request.resource.data.keys().hasAll(['id', 'category', 'limit']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.limit) &&
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // SUBSCRIPTIONS SUBCOLLECTION
+      // ============================================
+
+      match /subscriptions/{subscriptionId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.amount) &&
+                       request.resource.data.keys().hasAll(['id', 'name', 'amount']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // QUICK ACTIONS SUBCOLLECTION
+      // ============================================
+
+      match /quickActions/{actionId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize();
+      }
+
+      // ============================================
+      // PROMOS SUBCOLLECTION
+      // ============================================
+
+      match /promos/{promoId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize();
+      }
+
+      // ============================================
+      // CUSTOM CATEGORIES SUBCOLLECTION
+      // ============================================
+
+      match /categories/{categoryId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize();
+      }
+
+      // ============================================
+      // NOTIFICATIONS SUBCOLLECTION
+      // ============================================
+
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       request.resource.data.keys().hasAll(['id', 'type', 'message', 'createdAt']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // AUDIT LOGS SUBCOLLECTION (Read-only for user)
+      // ============================================
+
+      match /auditLogs/{logId} {
+        // Users can only read their own audit logs
+        allow read: if isOwner(userId);
+
+        // Only system can write audit logs
+        allow write: if false;
+      }
+    }
+
+    // ============================================
+    // DENY ALL OTHER ACCESS
+    // ============================================
+
+    // Explicitly deny access to any other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
