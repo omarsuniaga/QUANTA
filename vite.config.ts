@@ -13,7 +13,7 @@ export default defineConfig(({ mode }) => {
       },
       build: {
         outDir: 'dist',
-        sourcemap: true,
+        sourcemap: !isProduction, // Only in development for debugging
         minify: isProduction ? 'terser' : false,
         rollupOptions: {
           output: {
@@ -26,8 +26,8 @@ export default defineConfig(({ mode }) => {
         },
         terserOptions: {
           compress: {
-            drop_console: false, // Disable for debugging
-            drop_debugger: false // Disable for debugging
+            drop_console: isProduction, // Remove console.log in production
+            drop_debugger: isProduction // Remove debugger statements in production
           }
         }
       },
