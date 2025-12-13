@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Transaction, Category, CustomCategory } from '../types';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '../constants';
-import { Trash2, Edit2, RefreshCcw, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, DollarSign, CalendarDays, MoreHorizontal } from 'lucide-react';
+import { Trash2, Edit2, RefreshCcw, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, DollarSign, CalendarDays, MoreHorizontal, Repeat } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
@@ -22,6 +22,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   const { t, language } = useI18n();
   const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  const [recurrenceFilter, setRecurrenceFilter] = useState<'all' | 'recurring' | 'non-recurring' | 'weekly' | 'monthly' | 'yearly'>('all');
 
   // Load custom categories
   useEffect(() => {
@@ -92,7 +93,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   
   // Sort transactions based on selected option
   const sorted = useMemo(() => {
-    const copy = [...transactions];
+    let copy = [...transactions];
+    
+    // Apply recurrence filter
+    if (recurrenceFilter === 'recurring') {
+      copy = copy.filter(tx => tx.isRecurring);
+    } else if (recurrenceFilter === 'non-recurring') {
+      copy = copy.filter(tx => !tx.isRecurring);
+    } else if (recurrenceFilter === 'weekly') {
+      copy = copy.filter(tx => tx.isRecurring && tx.frequency === 'weekly');
+    } else if (recurrenceFilter === 'monthly') {
+      copy = copy.filter(tx => tx.isRecurring && tx.frequency === 'monthly');
+    } else if (recurrenceFilter === 'yearly') {
+      copy = copy.filter(tx => tx.isRecurring && tx.frequency === 'yearly');
+    }
+    
     switch (sortBy) {
       case 'date-desc':
         return copy.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -105,7 +120,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
       default:
         return copy;
     }
-  }, [transactions, sortBy]);
+  }, [transactions, sortBy, recurrenceFilter]);
 
   const sortLabels = {
     en: {
@@ -188,6 +203,77 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
         <span className="flex items-center text-[10px] text-slate-400 dark:text-slate-500 font-medium px-2">
           {sortLabels[language][sortBy]}
         </span>
+      </div>
+      
+      {/* Recurrence Filter */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 -mx-1 px-1">
+        <button
+          onClick={() => setRecurrenceFilter('all')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+            recurrenceFilter === 'all'
+              ? 'bg-slate-700 dark:bg-slate-600 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+        >
+          {language === 'es' ? 'Todos' : 'All'}
+        </button>
+        <button
+          onClick={() => setRecurrenceFilter('recurring')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+            recurrenceFilter === 'recurring'
+              ? 'bg-indigo-600 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+        >
+          <Repeat className="w-3 h-3" />
+          {language === 'es' ? 'Recurrentes' : 'Recurring'}
+        </button>
+        <button
+          onClick={() => setRecurrenceFilter('non-recurring')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+            recurrenceFilter === 'non-recurring'
+              ? 'bg-rose-500 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+        >
+          <X className="w-3 h-3" />
+          {language === 'es' ? 'Únicos' : 'One-time'}
+        </button>
+        <button
+          onClick={() => setRecurrenceFilter('weekly')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+            recurrenceFilter === 'weekly'
+              ? 'bg-amber-500 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+        >
+          {language === 'es' ? 'Semanal' : 'Weekly'}
+        </button>
+        <button
+          onClick={() => setRecurrenceFilter('monthly')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+            recurrenceFilter === 'monthly'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+        >
+          {language === 'es' ? 'Mensual' : 'Monthly'}
+        </button>
+        <button
+          onClick={() => setRecurrenceFilter('yearly')}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+            recurrenceFilter === 'yearly'
+              ? 'bg-purple-500 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+          }`}
+        >
+          {language === 'es' ? 'Anual' : 'Yearly'}
+        </button>
+        {recurrenceFilter !== 'all' && (
+          <span className="flex items-center text-[10px] text-indigo-500 dark:text-indigo-400 font-medium px-2">
+            {sorted.length} {language === 'es' ? 'resultados' : 'results'}
+          </span>
+        )}
       </div>
       
       {/* Filter Banner */}
