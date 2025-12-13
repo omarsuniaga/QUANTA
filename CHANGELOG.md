@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### UX/UI - 2025-12-12
+
+#### Added
+- **New 3-Screen Architecture**: Complete UX redesign for better clarity
+  - **💰 IncomeScreen** (components/IncomeScreen.tsx - 280 lines)
+    - Dedicated screen for managing income
+    - Separates fixed incomes (recurring) from variable incomes (extras)
+    - Monthly stats with average calculation
+    - Quick actions: "Ingreso Fijo" and "Ingreso Extra"
+    - Clear visualization of salary vs freelance/bonus income
+
+  - **💸 ExpensesScreen** (components/ExpensesScreen.tsx - 300 lines)
+    - Dedicated screen for managing expenses
+    - Budget tracker with visual progress bar
+    - "Gastos de Hoy" section for quick daily expense review
+    - Recurring expenses with next payment reminders
+    - Budget alert when reaching 90% threshold
+    - Quick actions: "Gasto Rápido", "Recurrente", "Planificado"
+
+  - **📋 TransactionsScreen** (components/TransactionsScreen.tsx - 240 lines)
+    - Historical view for all transactions
+    - Advanced search and filters
+    - Export to CSV functionality
+    - Stats summary for filtered results
+    - Clean, consultation-focused interface
+
+#### Changed
+- **App.tsx Navigation**: Updated to support 4-tab system
+  - Dashboard (🏠 Inicio)
+  - Ingresos (💰)
+  - Gastos (💸)
+  - Historial (📋)
+  - Settings (⚙️)
+
+- **Bottom Navigation**: Redesigned for 4 tabs
+  - Removed central FAB button
+  - Equal-width tabs with icons and labels
+  - Color-coded by section (emerald, rose, indigo)
+
+- **Sidebar Navigation**: Updated with new sections
+  - Added 💰 Ingresos with emerald styling
+  - Added 💸 Gastos with rose styling
+  - Updated 📋 Historial (previously Transacciones)
+
 ### Performance - 2025-12-12
 
 #### Changed

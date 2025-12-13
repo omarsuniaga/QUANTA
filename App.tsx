@@ -9,6 +9,9 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { LandingPage } from './components/LandingPage';
 import { SearchBar } from './components/SearchBar';
 import { FilterModal } from './components/FilterModal';
+import { IncomeScreen } from './components/IncomeScreen';
+import { ExpensesScreen } from './components/ExpensesScreen';
+import { TransactionsScreen } from './components/TransactionsScreen';
 import { NotificationPermissionPrompt } from './components/NotificationPermissionPrompt';
 import { AICoachWidget } from './components/AICoachWidget';
 import { AICoachScreen } from './components/AICoachScreen';
@@ -18,7 +21,7 @@ import { StrategiesScreen } from './components/StrategiesScreen';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { QuickExpenseWidget } from './components/QuickExpenseWidget';
 import { QuickExpenseScreen } from './components/QuickExpenseScreen';
-import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain } from 'lucide-react';
+import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain, List, DollarSign } from 'lucide-react';
 import { useI18n } from './contexts';
 import { useAuth, useTransactions, useSettings, useToast } from './contexts';
 import { Goal, Promo, Transaction } from './types';
@@ -66,7 +69,7 @@ export default function App() {
   const { t } = useI18n();
 
   // === LOCAL UI STATE (not business logic) ===
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'income' | 'expenses' | 'transactions' | 'settings'>('dashboard');
   const [showModal, setShowModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [modalMode, setModalMode] = useState<'income' | 'expense' | 'service'>('income');
@@ -413,11 +416,25 @@ export default function App() {
                 {t.nav.dashboard}
               </button>
               <button
+                onClick={() => setActiveTab('income')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'income' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                <ArrowUpRight className="w-5 h-5" />
+                💰 Ingresos
+              </button>
+              <button
+                onClick={() => setActiveTab('expenses')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'expenses' ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                <ArrowDownRight className="w-5 h-5" />
+                💸 Gastos
+              </button>
+              <button
                 onClick={() => setActiveTab('transactions')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'transactions' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
               >
-                <ListFilter className="w-5 h-5" />
-                {t.nav.transactions}
+                <List className="w-5 h-5" />
+                📋 Historial
               </button>
               <button
                 onClick={() => setActiveTab('settings')}
@@ -564,45 +581,58 @@ export default function App() {
             </div>
           )}
 
+          {activeTab === 'income' && (
+            <IncomeScreen
+              transactions={transactions}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+              onAddFixedIncome={() => {
+                setModalMode('income');
+                setModalInitialValues({ isRecurring: true, frequency: 'monthly' });
+                setShowModal(true);
+              }}
+              onAddExtraIncome={() => {
+                setModalMode('income');
+                setModalInitialValues({ isRecurring: false });
+                setShowModal(true);
+              }}
+              onEditTransaction={handleEditTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
+            />
+          )}
+
+          {activeTab === 'expenses' && (
+            <ExpensesScreen
+              transactions={transactions}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+              monthlyBudget={45000} // TODO: Get from user settings
+              onQuickExpense={() => {
+                setModalMode('expense');
+                setModalInitialValues({ isRecurring: false });
+                setShowModal(true);
+              }}
+              onRecurringExpense={() => {
+                setModalMode('expense');
+                setModalInitialValues({ isRecurring: true, frequency: 'monthly' });
+                setShowModal(true);
+              }}
+              onPlannedExpense={() => {
+                setModalMode('expense');
+                setModalInitialValues({ isRecurring: false });
+                setShowModal(true);
+              }}
+            />
+          )}
+
           {activeTab === 'transactions' && (
-            <div className="p-4 sm:p-6 lg:p-8 space-y-4">
-              {/* Search Bar */}
-              <SearchBar
-                value={filters.search}
-                onChange={(value) => setFilters({ search: value })}
-                placeholder={t.transactions.searchPlaceholder}
-              />
-
-              {/* Filter Button */}
-              <button
-                onClick={() => setShowFilterModal(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-              >
-                <ListFilter className="w-5 h-5" />
-                {t.transactions.advancedFilters}
-                {(filters.category || filters.dateFrom || filters.dateTo || filters.type !== 'all' || filters.paymentMethod) && (
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-600 dark:bg-indigo-500 text-white text-xs font-bold">
-                    {[
-                      filters.category,
-                      filters.dateFrom,
-                      filters.dateTo,
-                      filters.type !== 'all' ? filters.type : null,
-                      filters.paymentMethod
-                    ].filter(Boolean).length}
-                  </span>
-                )}
-              </button>
-
-              <TransactionList
-                transactions={filteredTransactions}
-                onEdit={handleEditTransaction}
-                onDelete={handleDeleteTransaction}
-                activeFilter={filters.category ? { type: 'category' as const, value: filters.category } : null}
-                onClearFilter={handleClearFilter}
-                currencySymbol={currencySymbol}
-                currencyCode={currencyCode}
-              />
-            </div>
+            <TransactionsScreen
+              transactions={transactions}
+              onEdit={handleEditTransaction}
+              onDelete={handleDeleteTransaction}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+            />
           )}
 
           {activeTab === 'settings' && settings && (
@@ -640,30 +670,38 @@ export default function App() {
         <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden">
           <div className="max-w-3xl mx-auto">
             <div className="h-12 pointer-events-none absolute bottom-full w-full bg-gradient-to-t from-slate-50 dark:from-slate-900 to-transparent"></div>
-            <nav className="backdrop-blur-lg border-t px-6 py-3 flex justify-between items-center rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800">
+            <nav className="backdrop-blur-lg border-t px-3 py-3 flex justify-around items-center rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800">
 
             <button
               onClick={() => { setActiveTab('dashboard'); clearFilters(); }}
-              className={`flex flex-col items-center gap-1 transition-all w-16 ${activeTab === 'dashboard' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
+              className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'dashboard' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
             >
-              <LayoutGrid className="w-6 h-6" strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
+              <LayoutGrid className="w-5 h-5" strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
+              <span className="text-[10px] font-medium">Inicio</span>
             </button>
 
-            {/* Central FAB */}
-            <div className="-mt-8">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg shadow-indigo-300 dark:shadow-indigo-900/50 transition-all active:scale-95 ${showMenu ? 'bg-slate-800 dark:bg-slate-700 rotate-45' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-              >
-                <Plus className="w-8 h-8 text-white" />
-              </button>
-            </div>
+            <button
+              onClick={() => setActiveTab('income')}
+              className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}
+            >
+              <ArrowUpRight className="w-5 h-5" strokeWidth={activeTab === 'income' ? 2.5 : 2} />
+              <span className="text-[10px] font-medium">Ingresos</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('expenses')}
+              className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'expenses' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}
+            >
+              <ArrowDownRight className="w-5 h-5" strokeWidth={activeTab === 'expenses' ? 2.5 : 2} />
+              <span className="text-[10px] font-medium">Gastos</span>
+            </button>
 
             <button
               onClick={() => setActiveTab('transactions')}
-              className={`flex flex-col items-center gap-1 transition-all w-16 ${activeTab === 'transactions' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
+              className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'transactions' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
             >
-              <ListFilter className="w-6 h-6" strokeWidth={activeTab === 'transactions' ? 2.5 : 2} />
+              <List className="w-5 h-5" strokeWidth={activeTab === 'transactions' ? 2.5 : 2} />
+              <span className="text-[10px] font-medium">Historial</span>
             </button>
             </nav>
           </div>
