@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { TransactionList } from './components/TransactionList';
 import { ActionModal } from './components/ActionModal';
@@ -96,6 +96,83 @@ export default function App() {
 
   // === LOADING STATE ===
   const loading = authLoading || txLoading || settingsLoading;
+
+  // === TAB NAVIGATION ORDER FOR SWIPE ===
+  const tabOrder: Array<'dashboard' | 'income' | 'expenses' | 'transactions' | 'settings'> = ['dashboard', 'income', 'expenses', 'transactions', 'settings'];
+  
+  // Swipe gesture refs
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
+  const minSwipeDistance = 80; // Minimum swipe distance to trigger navigation
+
+  // Navigation with history management
+  const navigateToTab = useCallback((tab: typeof activeTab, addToHistory = true) => {
+    if (addToHistory && tab !== activeTab) {
+      // Push state to browser history
+      window.history.pushState({ tab }, '', `#${tab}`);
+    }
+    setActiveTab(tab);
+    if (tab === 'dashboard') {
+      clearFilters();
+    }
+  }, [activeTab, clearFilters]);
+
+  // Handle browser back button
+  useEffect(() => {
+    // Set initial state
+    if (!window.location.hash) {
+      window.history.replaceState({ tab: 'dashboard' }, '', '#dashboard');
+    } else {
+      const hash = window.location.hash.replace('#', '') as typeof activeTab;
+      if (tabOrder.includes(hash)) {
+        setActiveTab(hash);
+      }
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.tab) {
+        navigateToTab(event.state.tab, false);
+      } else {
+        navigateToTab('dashboard', false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigateToTab]);
+
+  // Swipe handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = null;
+    touchStartX.current = e.targetTouches[0].clientX;
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    
+    const distance = touchStartX.current - touchEndX.current;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    const currentIndex = tabOrder.indexOf(activeTab);
+    
+    if (isLeftSwipe && currentIndex < tabOrder.length - 1) {
+      // Swipe left -> go to next tab
+      navigateToTab(tabOrder[currentIndex + 1]);
+    } else if (isRightSwipe && currentIndex > 0) {
+      // Swipe right -> go to previous tab
+      navigateToTab(tabOrder[currentIndex - 1]);
+    }
+    
+    // Reset
+    touchStartX.current = null;
+    touchEndX.current = null;
+  }, [activeTab, navigateToTab]);
 
   // === EFFECTS ===
   // Ref to track if notifications have been initialized
@@ -409,35 +486,35 @@ export default function App() {
             {/* Navigation */}
             <nav className="space-y-2">
               <button
-                onClick={() => { setActiveTab('dashboard'); clearFilters(); }}
+                onClick={() => navigateToTab('dashboard')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'dashboard' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
               >
                 <LayoutGrid className="w-5 h-5" />
                 {t.nav.dashboard}
               </button>
               <button
-                onClick={() => setActiveTab('income')}
+                onClick={() => navigateToTab('income')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'income' ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
               >
                 <ArrowUpRight className="w-5 h-5" />
                 💰 Ingresos
               </button>
               <button
-                onClick={() => setActiveTab('expenses')}
+                onClick={() => navigateToTab('expenses')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'expenses' ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
               >
                 <ArrowDownRight className="w-5 h-5" />
                 💸 Gastos
               </button>
               <button
-                onClick={() => setActiveTab('transactions')}
+                onClick={() => navigateToTab('transactions')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'transactions' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
               >
                 <List className="w-5 h-5" />
                 📋 Historial
               </button>
               <button
-                onClick={() => setActiveTab('settings')}
+                onClick={() => navigateToTab('settings')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'settings' ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
               >
                 <SettingsIcon className="w-5 h-5" />
@@ -488,7 +565,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <NotificationBell onClick={() => setShowNotificationCenter(true)} />
             <button
-              onClick={() => setActiveTab('settings')}
+              onClick={() => navigateToTab('settings')}
               className="p-2 rounded-full transition-colors bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-indigo-600 dark:hover:text-white"
             >
               <SettingsIcon className="w-5 h-5" />
@@ -497,7 +574,13 @@ export default function App() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-28 lg:pb-8 lg:pt-8">
+        <main 
+          ref={mainContentRef}
+          className="flex-1 overflow-y-auto no-scrollbar scroll-smooth pb-28 lg:pb-8 lg:pt-8"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
 
           {activeTab === 'dashboard' && (
             <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 animate-in fade-in duration-300">
@@ -673,7 +756,7 @@ export default function App() {
             <nav className="backdrop-blur-lg border-t px-3 py-3 flex justify-around items-center rounded-t-[2.5rem] shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] relative bg-white/90 dark:bg-slate-900/90 border-slate-200 dark:border-slate-800">
 
             <button
-              onClick={() => { setActiveTab('dashboard'); clearFilters(); }}
+              onClick={() => navigateToTab('dashboard')}
               className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'dashboard' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
             >
               <LayoutGrid className="w-5 h-5" strokeWidth={activeTab === 'dashboard' ? 2.5 : 2} />
@@ -681,7 +764,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('income')}
+              onClick={() => navigateToTab('income')}
               className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`}
             >
               <ArrowUpRight className="w-5 h-5" strokeWidth={activeTab === 'income' ? 2.5 : 2} />
@@ -689,7 +772,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('expenses')}
+              onClick={() => navigateToTab('expenses')}
               className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'expenses' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}
             >
               <ArrowDownRight className="w-5 h-5" strokeWidth={activeTab === 'expenses' ? 2.5 : 2} />
@@ -697,7 +780,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveTab('transactions')}
+              onClick={() => navigateToTab('transactions')}
               className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'transactions' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
             >
               <List className="w-5 h-5" strokeWidth={activeTab === 'transactions' ? 2.5 : 2} />
