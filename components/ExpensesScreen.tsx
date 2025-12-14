@@ -196,7 +196,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   }, [filteredHistory]);
 
   const formatCurrency = (amount: number) => {
-    return `${currencySymbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currencySymbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatTime = (dateStr: string) => {

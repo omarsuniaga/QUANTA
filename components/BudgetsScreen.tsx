@@ -126,7 +126,7 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   const activeBudgets = updatedBudgets.filter(b => b.isActive);
 
   const formatCurrency = (amount: number) => {
-    return `${currencySymbol}${Math.abs(amount).toLocaleString(undefined, {
+    return `${currencySymbol} ${Math.abs(amount).toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;

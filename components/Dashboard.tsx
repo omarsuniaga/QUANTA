@@ -77,15 +77,15 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   const symbol = currencyConfig?.localSymbol || '$';
   const code = currencyConfig?.localCode || 'USD';
 
-  // Helper to format currency as "1,234.56 USD" (memoized with useCallback)
+  // Helper to format currency as "RD$ 1,234.56" (memoized with useCallback)
   const formatCurrency = useCallback((amount: number) =>
-    `${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${code}`,
-    [code]
+    `${symbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    [symbol]
   );
 
   const formatCurrencyShort = useCallback((amount: number) =>
-    `${amount.toLocaleString()} ${code}`,
-    [code]
+    `${symbol} ${amount.toLocaleString('en-US')}`,
+    [symbol]
   );
 
   // --- ORACLE: CASH FLOW PREDICTION ---

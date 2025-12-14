@@ -66,7 +66,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   }, [incomeTransactions]);
 
   const formatCurrency = (amount: number) => {
-    return `${currencySymbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currencySymbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (dateStr: string) => {

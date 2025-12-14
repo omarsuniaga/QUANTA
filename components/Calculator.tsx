@@ -190,7 +190,7 @@ export const Calculator: React.FC<CalculatorProps> = ({
           <div className="text-right">
             <span className="text-lg opacity-70">{currencySymbol}</span>
             <span className="text-4xl font-bold ml-1">
-              {parseFloat(display).toLocaleString(undefined, { 
+              {parseFloat(display).toLocaleString('en-US', { 
                 minimumFractionDigits: display.includes('.') ? display.split('.')[1]?.length || 0 : 0,
                 maximumFractionDigits: 2 
               })}
@@ -226,7 +226,7 @@ export const Calculator: React.FC<CalculatorProps> = ({
             className="w-full py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 dark:shadow-none"
           >
             <Check className="w-5 h-5" />
-            Usar {currencySymbol}{parseFloat(display).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            Usar {currencySymbol} {parseFloat(display).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </button>
         </div>
       </div>

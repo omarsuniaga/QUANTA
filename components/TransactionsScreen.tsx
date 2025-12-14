@@ -105,7 +105,7 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
   const hasActiveFilters = filters.type !== 'all' || filters.category || filters.dateFrom || filters.dateTo || filters.paymentMethod || searchTerm;
 
   const formatCurrency = (amount: number) => {
-    return `${currencySymbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currencySymbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const exportToCSV = () => {

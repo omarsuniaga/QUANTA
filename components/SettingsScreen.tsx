@@ -539,7 +539,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 {language === 'es' ? 'Balance Total' : 'Total Balance'}
               </p>
               <p className="text-2xl sm:text-3xl font-bold">
-                {settings.currency.localSymbol} {totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {settings.currency.localSymbol} {totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </p>
               <p className="text-indigo-200 text-[10px] sm:text-xs mt-2">
                 {accounts.length} {language === 'es' ? 'cuentas registradas' : 'accounts registered'}
@@ -604,7 +604,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">{language === 'es' ? 'Balance' : 'Balance'}</span>
                     <span className={`text-lg font-bold ${acc.balance < 0 ? 'text-rose-500' : 'text-slate-800 dark:text-white'}`}>
-                      {settings.currency.localSymbol} {acc.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {settings.currency.localSymbol} {acc.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
 
