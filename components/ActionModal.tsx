@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
-import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil } from 'lucide-react';
+import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil, Calculator as CalcIcon } from 'lucide-react';
 import { Category, TransactionType, Frequency, PaymentMethod, Mood, Account, CustomCategory } from '../types';
 import { Button } from './Button';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts/I18nContext';
 import { DynamicIcon, getColorClasses, IconPicker } from './IconPicker';
+import { Calculator } from './Calculator';
 
 type ModalMode = 'income' | 'expense' | 'service';
 
@@ -31,8 +32,11 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const [paymentMethodId, setPaymentMethodId] = useState<string>(initialValues?.paymentMethod || '');
 
   // Recurring Logic (Shared state, logic differs by mode)
-  const [isRecurring, setIsRecurring] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(true); // Default to true
   const [frequency, setFrequency] = useState<Frequency>('monthly');
+
+  // Calculator state
+  const [showCalculator, setShowCalculator] = useState(false);
 
   // Expense Specific
   const [notes, setNotes] = useState(''); // "Why?"
@@ -246,6 +250,14 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                   step="0.01"
                   className="w-40 sm:w-48 text-center text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-700 outline-none bg-transparent"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowCalculator(true)}
+                  className="p-2 bg-slate-100 dark:bg-slate-700 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-xl transition-colors group"
+                  title="Abrir calculadora"
+                >
+                  <CalcIcon className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
+                </button>
               </div>
             </div>
 
@@ -550,61 +562,25 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                   </div>
                 )}
 
-                {/* Shared With Section - Checkbox Toggle */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                {/* Shared With Section - BETA/Coming Soon */}
+                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 opacity-60">
                   <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
                       id="shared-check"
-                      checked={isShared}
-                      onChange={(e) => {
-                        setIsShared(e.target.checked);
-                        if (!e.target.checked) {
-                          setSharedWith([]);
-                          setSharedInput('');
-                        }
-                      }}
-                      className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                      checked={false}
+                      disabled
+                      className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-not-allowed"
                     />
-                    <label htmlFor="shared-check" className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-pointer select-none">
+                    <label htmlFor="shared-check" className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-not-allowed select-none">
                       <Users className="w-4 h-4 text-slate-400" />
                       Compartido con alguien
+                      <span className="text-[9px] bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold uppercase">Próximamente</span>
                     </label>
                   </div>
-
-                  {isShared && (
-                    <div className="mt-3 pl-8 space-y-2 animate-in slide-in-from-top-2 fade-in">
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={sharedInput}
-                          onChange={(e) => setSharedInput(e.target.value)}
-                          placeholder="Nombre o ID de usuario"
-                          className="flex-1 px-3 py-2 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800 dark:text-slate-100"
-                          onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSharedUser())}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddSharedUser}
-                          className="p-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl hover:bg-indigo-200 dark:hover:bg-indigo-800 transition-colors"
-                        >
-                          <Plus className="w-5 h-5" />
-                        </button>
-                      </div>
-                      {sharedWith.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {sharedWith.map((user, idx) => (
-                            <span key={idx} className="flex items-center gap-1 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 px-2 py-1 rounded-lg text-xs font-semibold animate-in fade-in zoom-in">
-                              {user}
-                              <button type="button" onClick={() => handleRemoveSharedUser(idx)} className="text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-200 ml-1">
-                                <X className="w-3 h-3" />
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <p className="text-[10px] text-slate-400 mt-2 pl-8">
+                    Esta función permitirá compartir gastos con otros usuarios. Disponible próximamente.
+                  </p>
                 </div>
               </>
             )}
@@ -683,6 +659,19 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
           onIconChange={setNewCatIcon}
           onColorChange={setNewCatColor}
           onClose={() => setShowIconPicker(false)}
+        />
+      )}
+
+      {/* Calculator Modal */}
+      {showCalculator && (
+        <Calculator
+          initialValue={parseFloat(amount) || 0}
+          onConfirm={(value) => {
+            setAmount(value.toString());
+            setShowCalculator(false);
+          }}
+          onClose={() => setShowCalculator(false)}
+          currencySymbol={currencySymbol}
         />
       )}
     </div>
