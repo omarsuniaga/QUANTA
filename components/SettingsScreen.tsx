@@ -153,10 +153,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     storageService.saveAccounts(updated);
   };
 
-  const handleDeleteAccount = (id: string) => {
+  const handleDeleteAccount = async (id: string) => {
     const updated = accounts.filter(a => a.id !== id);
     setAccounts(updated);
-    storageService.saveAccounts(updated);
+    await storageService.deleteAccount(id);
   };
 
   // Helper for Tab Labels
@@ -978,12 +978,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       {/* Edit Account Modal */}
       {editingAccount && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setEditingAccount(null)}>
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 overflow-hidden" 
+          onClick={() => setEditingAccount(null)}
+          style={{ touchAction: 'none' }}
+        >
           <div 
-            className="bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-md shadow-2xl border border-slate-200 dark:border-slate-700"
+            className="bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between p-5 sm:p-6 pb-0 flex-shrink-0">
               <h3 className="text-lg font-bold text-slate-800 dark:text-white">
                 {accounts.find(a => a.id === editingAccount.id) 
                   ? (language === 'es' ? 'Editar Cuenta' : 'Edit Account')
@@ -997,7 +1001,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 pt-4 space-y-4">
               {/* Account Name */}
               <div>
                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
@@ -1108,7 +1112,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 mt-6">
+            <div className="flex gap-3 p-5 sm:p-6 pt-4 flex-shrink-0 border-t border-slate-100 dark:border-slate-700">
               <button
                 onClick={() => setEditingAccount(null)}
                 className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"

@@ -1,5 +1,5 @@
-import { 
-  Transaction, User, Goal, Subscription, AppSettings, QuickAction, Account, Promo, AuditLog, MonetaryAmount, CustomCategory 
+import {
+  Transaction, User, Goal, Subscription, AppSettings, QuickAction, Account, Promo, AuditLog, MonetaryAmount, CustomCategory, Budget
 } from '../types';
 import { auth, db } from '../firebaseConfig';
 import firebase from 'firebase/compat/app';
@@ -448,6 +448,24 @@ export const storageService = {
     }
   },
 
+  async deleteAccount(accountId: string): Promise<void> {
+    // 1. Get current accounts from localStorage, filter out the deleted one
+    const currentAccounts = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+    const updatedAccounts = currentAccounts.filter(a => a.id !== accountId);
+    saveToLocal(LS_KEYS.ACCOUNTS, updatedAccounts);
+    
+    // 2. Delete from Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        await getUserRef(uid).collection('accounts').doc(accountId).delete();
+        console.log('[Storage] Account deleted from Firebase:', accountId);
+      } catch(e) { 
+        console.warn("Delete account from Firebase failed", e); 
+      }
+    }
+  },
+
   async _updateAccountBalance(uid: string, accountId: string, amount: number, isIncome: boolean) {
     if (accountId === 'cash') return; 
     const accRef = getUserRef(uid).collection('accounts').doc(accountId);
@@ -786,42 +804,133 @@ export const storageService = {
 
   // --- BUDGETS ---
 
-  async getBudgets(): Promise<any[]> {
+  async getBudgets(): Promise<Budget[]> {
     // 1. Get from localStorage first
-    const localBudgets = getFromLocal<any[]>(LS_KEYS.BUDGETS, []);
-    
+    const localBudgets = getFromLocal<Budget[]>(LS_KEYS.BUDGETS, []);
+
     // 2. If online and authenticated, sync from Firebase
     if (canUseFirebase()) {
       const uid = getUserId();
       try {
         const snapshot = await getUserRef(uid).collection('budgets').get();
-        const firebaseBudgets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const firebaseBudgets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Budget));
         saveToLocal(LS_KEYS.BUDGETS, firebaseBudgets);
         return firebaseBudgets;
-      } catch(e) { 
+      } catch(e) {
         console.warn("Failed to fetch budgets from Firebase (using local)", e);
       }
     }
-    
+
     return localBudgets;
   },
 
-  async saveBudgets(budgets: any[]): Promise<void> {
+  async addBudget(budget: Omit<Budget, 'id' | 'createdAt' | 'updatedAt'>): Promise<Budget> {
+    const localId = `local_budget_${Date.now()}`;
+    const newBudget: Budget = {
+      id: localId,
+      ...budget,
+      isActive: budget.isActive !== undefined ? budget.isActive : true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    // 1. Save to localStorage first
+    const localBudgets = getFromLocal<Budget[]>(LS_KEYS.BUDGETS, []);
+    localBudgets.push(newBudget);
+    saveToLocal(LS_KEYS.BUDGETS, localBudgets);
+
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const budgetPayload = {
+        userId: uid,
+        category: budget.category,
+        name: budget.name,
+        limit: budget.limit,
+        spent: budget.spent || 0,
+        period: budget.period,
+        color: budget.color || '',
+        icon: budget.icon || '',
+        isActive: newBudget.isActive,
+        resetDay: budget.resetDay || 1,
+        createdAt: newBudget.createdAt,
+        updatedAt: newBudget.updatedAt,
+      };
+
+      try {
+        const docRef = await getUserRef(uid).collection('budgets').add(budgetPayload);
+        // Update local with Firebase ID
+        const updatedBudgets = localBudgets.map(b => b.id === localId ? { ...b, id: docRef.id } : b);
+        saveToLocal(LS_KEYS.BUDGETS, updatedBudgets);
+        return { ...newBudget, id: docRef.id };
+      } catch(e) {
+        console.warn("Add budget to Firebase failed (saved locally)", e);
+      }
+    }
+
+    return newBudget;
+  },
+
+  async updateBudget(id: string, updates: Partial<Budget>): Promise<void> {
+    // 1. Update in localStorage first
+    const localBudgets = getFromLocal<Budget[]>(LS_KEYS.BUDGETS, []);
+    const updatedLocalBudgets = localBudgets.map(b => {
+      if (b.id === id) {
+        return { ...b, ...updates, updatedAt: Date.now() };
+      }
+      return b;
+    });
+    saveToLocal(LS_KEYS.BUDGETS, updatedLocalBudgets);
+
+    // 2. Try to sync to Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      const updatePayload: any = {
+        ...updates,
+        updatedAt: Date.now(),
+      };
+
+      try {
+        await getUserRef(uid).collection('budgets').doc(id).update(updatePayload);
+      } catch(e) {
+        console.warn("Update budget in Firebase failed (updated locally)", e);
+      }
+    }
+  },
+
+  async deleteBudget(id: string): Promise<void> {
+    // 1. Delete from localStorage first
+    const localBudgets = getFromLocal<Budget[]>(LS_KEYS.BUDGETS, []);
+    const filteredBudgets = localBudgets.filter(b => b.id !== id);
+    saveToLocal(LS_KEYS.BUDGETS, filteredBudgets);
+
+    // 2. Try to delete from Firebase if available
+    if (canUseFirebase()) {
+      const uid = getUserId();
+      try {
+        await getUserRef(uid).collection('budgets').doc(id).delete();
+      } catch(e) {
+        console.warn("Delete budget from Firebase failed (deleted locally)", e);
+      }
+    }
+  },
+
+  async saveBudgets(budgets: Budget[]): Promise<void> {
     // 1. Always save to localStorage first
     saveToLocal(LS_KEYS.BUDGETS, budgets);
-    
+
     // 2. Try to sync to Firebase if available
     if (canUseFirebase()) {
       const uid = getUserId();
       const batch = db!.batch();
       budgets.forEach(b => {
-        const ref = getUserRef(uid).collection('budgets').doc(b.category);
-        batch.set(ref, b);
+        const ref = getUserRef(uid).collection('budgets').doc(b.id);
+        batch.set(ref, { ...b, userId: uid, updatedAt: Date.now() });
       });
       try {
         await batch.commit();
-      } catch(e) { 
-        console.warn("Save budgets to Firebase failed (saved locally)", e); 
+      } catch(e) {
+        console.warn("Save budgets to Firebase failed (saved locally)", e);
       }
     }
   },
@@ -1032,7 +1141,7 @@ export const storageService = {
       }
 
       // Sync budgets
-      const budgets = getFromLocal<any[]>(LS_KEYS.BUDGETS, []);
+      const budgets = getFromLocal<Budget[]>(LS_KEYS.BUDGETS, []);
       if (budgets.length > 0) {
         await this.saveBudgets(budgets);
         synced.push('budgets');
