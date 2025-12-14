@@ -90,11 +90,20 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Calculate stats with real balance from accounts
   const stats: DashboardStats = useMemo(() => {
-    let income = 0;
+    let totalIncome = 0; // Suma total de todos los ingresos registrados
+    let newIncome = 0; // Ingresos que NO están ya reflejados en el balance de cuentas
     let expense = 0;
+    
     transactions.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else expense += t.amount;
+      if (t.type === 'income') {
+        totalIncome += t.amount;
+        // Solo sumar al newIncome si NO está ya incluido en el balance de las cuentas
+        if (!t.isIncludedInAccountBalance) {
+          newIncome += t.amount;
+        }
+      } else {
+        expense += t.amount;
+      }
     });
 
     // Patrimonio real = suma de todas las cuentas
@@ -103,15 +112,20 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     // Total comprometido en metas
     const committedSavings = goals.reduce((sum, goal) => sum + (goal.currentAmount || 0), 0);
 
-    // Disponible = patrimonio real - ahorros comprometidos
-    const availableBalance = realBalance - committedSavings;
+    // Balance disponible:
+    // Opción 1 (si hay cuentas): realBalance + newIncome - expense - committedSavings
+    // Opción 2 (si no hay cuentas): totalIncome - expense - committedSavings
+    const hasAccounts = accounts.length > 0;
+    const availableBalance = hasAccounts 
+      ? realBalance + newIncome - expense - committedSavings
+      : totalIncome - expense - committedSavings;
 
     return {
-      totalIncome: income,
+      totalIncome,
       totalExpense: expense,
-      balance: income - expense, // Balance histórico (ingresos - gastos)
+      balance: totalIncome - expense, // Balance histórico (todos los ingresos - gastos)
       realBalance, // Patrimonio real de las cuentas
-      availableBalance, // Disponible para gastar
+      availableBalance, // Disponible para gastar (sin duplicar)
       committedSavings // Total en metas
     };
   }, [transactions, accounts, goals]);

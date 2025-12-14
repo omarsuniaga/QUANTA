@@ -115,6 +115,7 @@ export interface Transaction {
   
   // Income specific
   incomeType?: 'salary' | 'extra'; // Salary = regular monthly/biweekly, Extra = additional income
+  isIncludedInAccountBalance?: boolean; // If true, this income is already reflected in account balances (don't add to available)
   
   // Sharing
   sharedWith?: string[]; 

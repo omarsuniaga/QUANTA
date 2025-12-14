@@ -54,6 +54,8 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
 
   // Income Type
   const [incomeType, setIncomeType] = useState<'salary' | 'extra'>('salary');
+  // Income already in account balance (to avoid double counting)
+  const [isAlreadyInBalance, setIsAlreadyInBalance] = useState(false);
 
   // Service Specific
   const [chargeDay, setChargeDay] = useState(1);
@@ -164,13 +166,14 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
         mood,
         gigType: mode === 'income' ? gigType : undefined,
         incomeType: mode === 'income' ? incomeType : undefined,
+        isIncludedInAccountBalance: mode === 'income' ? isAlreadyInBalance : undefined,
         sharedWith: sharedWith.length > 0 ? sharedWith : undefined,
         isRecurring: isRecurring,
         frequency: isRecurring ? frequency : null
       });
     }
     onClose();
-  }, [mode, amount, concept, category, paymentMethodId, date, time, notes, mood, gigType, incomeType, sharedWith, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
+  }, [mode, amount, concept, category, paymentMethodId, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, sharedWith, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
 
   // UI Config
   const config = {
@@ -579,6 +582,31 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                           })}
                       </div>
                     </div>
+
+                    {/* Already in Account Balance Toggle */}
+                    {accounts.length > 0 && (
+                      <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl border border-amber-200 dark:border-amber-800">
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            id="already-in-balance"
+                            checked={isAlreadyInBalance}
+                            onChange={(e) => setIsAlreadyInBalance(e.target.checked)}
+                            className="w-5 h-5 mt-0.5 rounded-md text-amber-600 focus:ring-amber-500 border-amber-300 dark:border-amber-600 bg-white dark:bg-slate-700"
+                          />
+                          <div className="flex-1">
+                            <label htmlFor="already-in-balance" className="text-sm font-bold text-amber-800 dark:text-amber-300 cursor-pointer select-none block">
+                              Este monto ya está en mis cuentas
+                            </label>
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 leading-relaxed">
+                              {isAlreadyInBalance 
+                                ? '✓ El ingreso NO se sumará al balance disponible (ya está reflejado en tus cuentas)' 
+                                : '⚠️ Marca esta opción si el dinero ya forma parte del saldo de alguna de tus cuentas registradas'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
