@@ -358,6 +358,12 @@ export interface DashboardStats {
   totalIncome: number;
   totalExpense: number;
   balance: number;
+  // Patrimonio real = suma de todas las cuentas
+  realBalance: number;
+  // Disponible = patrimonio - ahorros comprometidos
+  availableBalance: number;
+  // Total comprometido en metas
+  committedSavings: number;
 }
 
 // --- CUSTOM CATEGORIES ---

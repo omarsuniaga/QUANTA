@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
-import { Transaction, DashboardStats } from '../types';
+import { Transaction, DashboardStats, Account, Goal } from '../types';
 import { storageService } from '../services/storageService';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
@@ -49,36 +49,46 @@ const TransactionsContext = createContext<TransactionsContextType | undefined>(u
 export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const toast = useToast();
-  
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFiltersState] = useState<TransactionFilters>(defaultFilters);
   const [lastDeleted, setLastDeleted] = useState<Transaction | null>(null);
 
-  // Load transactions when user changes
+  // Load transactions, accounts, and goals when user changes
   useEffect(() => {
     if (user) {
-      loadTransactions();
+      loadAllData();
     } else {
       setTransactions([]);
+      setAccounts([]);
+      setGoals([]);
       setLoading(false);
     }
   }, [user?.id]);
 
-  const loadTransactions = async () => {
+  const loadAllData = async () => {
     setLoading(true);
     try {
-      const txs = await storageService.getTransactions();
+      const [txs, accs, gls] = await Promise.all([
+        storageService.getTransactions(),
+        storageService.getAccounts(),
+        storageService.getGoals()
+      ]);
       setTransactions(txs);
+      setAccounts(accs);
+      setGoals(gls);
     } catch (error) {
-      console.error('Error loading transactions:', error);
-      toast.error('Error al cargar transacciones');
+      console.error('Error loading data:', error);
+      toast.error('Error al cargar datos');
     } finally {
       setLoading(false);
     }
   };
 
-  // Calculate stats
+  // Calculate stats with real balance from accounts
   const stats: DashboardStats = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -86,12 +96,25 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       if (t.type === 'income') income += t.amount;
       else expense += t.amount;
     });
+
+    // Patrimonio real = suma de todas las cuentas
+    const realBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
+
+    // Total comprometido en metas
+    const committedSavings = goals.reduce((sum, goal) => sum + (goal.currentAmount || 0), 0);
+
+    // Disponible = patrimonio real - ahorros comprometidos
+    const availableBalance = realBalance - committedSavings;
+
     return {
       totalIncome: income,
       totalExpense: expense,
-      balance: income - expense
+      balance: income - expense, // Balance histórico (ingresos - gastos)
+      realBalance, // Patrimonio real de las cuentas
+      availableBalance, // Disponible para gastar
+      committedSavings // Total en metas
     };
-  }, [transactions]);
+  }, [transactions, accounts, goals]);
 
   // Ghost Money Detector
   const ghostMoneyAlerts = useMemo(() => {
@@ -226,7 +249,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   }, []);
 
   const refreshTransactions = useCallback(async () => {
-    await loadTransactions();
+    await loadAllData();
   }, []);
 
   return (
