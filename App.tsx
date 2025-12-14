@@ -534,7 +534,7 @@ export default function App() {
                 <NotificationBell onClick={() => setShowNotificationCenter(true)} />
               </div>
               <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                {currencySymbol} {stats.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                {currencySymbol} {(stats.realBalance > 0 ? stats.realBalance : stats.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1">{t.dashboard.availableToday}</p>
               {!isOnline && (
@@ -626,7 +626,7 @@ export default function App() {
               )}
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold mt-1 tracking-tight text-slate-900 dark:text-white">
-              {currencySymbol} {stats.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              {currencySymbol} {(stats.realBalance > 0 ? stats.realBalance : stats.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}
             </h2>
             <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1 bg-indigo-50 dark:bg-indigo-900/30 inline-block px-2 py-0.5 rounded-md">{t.dashboard.availableToday}</p>
           </div>

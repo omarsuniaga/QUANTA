@@ -9,33 +9,13 @@ import {
   Trash2,
   CheckCircle,
   Lightbulb,
-  Target,
   Sparkles,
-  DollarSign,
-  ShoppingCart,
-  Fuel,
-  Home,
-  Car,
-  Utensils,
-  CreditCard,
-  Smartphone,
-  Gamepad2,
-  Shirt,
-  GraduationCap,
-  Heart,
-  Plane,
-  Gift,
-  Music,
-  Coffee,
-  Briefcase,
-  Stethoscope,
-  Dumbbell,
 } from 'lucide-react';
 import { Budget, Transaction, CustomCategory } from '../types';
 import { BudgetService } from '../services/budgetService';
 import { useI18n } from '../contexts/I18nContext';
-import { useSettings } from '../contexts/SettingsContext';
 import { storageService } from '../services/storageService';
+import { DynamicIcon, getColorClasses } from './IconPicker';
 
 interface BudgetsScreenProps {
   budgets: Budget[];
@@ -46,13 +26,6 @@ interface BudgetsScreenProps {
   onDeleteBudget: (budgetId: string) => void;
 }
 
-// Icon mapping
-const ICON_MAP: Record<string, React.FC<{ className?: string }>> = {
-  DollarSign, ShoppingCart, Fuel, Lightbulb: () => <Lightbulb className="w-6 h-6" />,
-  Home, Car, Utensils, CreditCard, Smartphone, Gamepad2, Shirt, GraduationCap,
-  Heart, Plane, Gift, Music, Coffee, Briefcase, Stethoscope, Dumbbell,
-};
-
 export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   budgets,
   transactions,
@@ -61,8 +34,7 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   onEditBudget,
   onDeleteBudget,
 }) => {
-  const { t, language } = useI18n();
-  const { isDarkMode, settings } = useSettings();
+  const { language } = useI18n();
   const [showAlerts, setShowAlerts] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
@@ -154,12 +126,6 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
     }
   };
 
-  // Get budget icon component
-  const getBudgetIcon = (iconName?: string) => {
-    if (!iconName) return DollarSign;
-    return ICON_MAP[iconName] || DollarSign;
-  };
-
   // Get category name in current language
   const getCategoryName = (categoryId: string): string => {
     // First check the categoryNamesMap
@@ -174,90 +140,71 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+    <div className="flex-1 overflow-y-auto pb-20">
       {/* Header */}
-      <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-4 sm:p-6 md:p-8 shadow-lg">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center gap-3 mb-2">
-            <PiggyBank className="w-8 h-8 sm:w-10 sm:h-10" />
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">
-              {language === 'es' ? 'Presupuestos' : 'Budgets'}
-            </h1>
+      <div className="bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700 p-4 sm:p-6 pb-6 sm:pb-8">
+        <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2 flex items-center gap-2">
+          <PiggyBank className="w-6 h-6 sm:w-7 sm:h-7" />
+          {language === 'es' ? 'Presupuestos' : 'Budgets'}
+        </h1>
+        <p className="text-purple-100 text-xs sm:text-sm">
+          {language === 'es' ? 'Controla tus gastos por categoría' : 'Control your spending by category'}
+        </p>
+      </div>
+
+      {/* Stats Card */}
+      <div className="px-3 sm:px-4 -mt-5 sm:-mt-6 mb-4 sm:mb-6">
+        <div className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-5 space-y-3 sm:space-y-4">
+          {/* Total Budgeted */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                {language === 'es' ? 'Total Presupuestado' : 'Total Budgeted'}
+              </span>
+              <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-500" />
+            </div>
+            <div className="text-2xl sm:text-3xl font-bold text-purple-600 dark:text-purple-400">
+              {formatCurrency(summaryStats.totalBudgeted)}
+            </div>
           </div>
-          <p className="text-purple-100 text-sm sm:text-base">
-            {language === 'es' ? 'Controla tus gastos por categoría' : 'Control your spending by category'}
-          </p>
+
+          {/* Progress Bar */}
+          <div className="pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-700">
+            <div className="flex items-center justify-between text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2">
+              <span className="font-medium">{language === 'es' ? 'Gastado' : 'Spent'}: <span className="text-slate-800 dark:text-white font-bold">{formatCurrency(summaryStats.totalSpent)}</span></span>
+              <span className="font-bold">{summaryStats.percentage.toFixed(0)}%</span>
+            </div>
+            <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  summaryStats.percentage < 70
+                    ? 'bg-emerald-500'
+                    : summaryStats.percentage < 90
+                    ? 'bg-amber-500'
+                    : 'bg-rose-500'
+                }`}
+                style={{ width: `${Math.min(summaryStats.percentage, 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-2">
+              <span>{language === 'es' ? 'Restante' : 'Remaining'}: <span className={`font-bold ${summaryStats.totalRemaining >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(summaryStats.totalRemaining)}</span></span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-4 sm:p-6 md:p-8 space-y-6">
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Total Budgeted */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-6 shadow-lg border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-                {language === 'es' ? 'Total Presupuestado' : 'Total Budgeted'}
-              </span>
-              <TrendingUp className="w-5 h-5 text-indigo-500" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white">
-              {formatCurrency(summaryStats.totalBudgeted)}
-            </p>
-          </div>
+      {/* Create Budget Button */}
+      <div className="px-3 sm:px-4 mb-4 sm:mb-6">
+        <button
+          onClick={onCreateBudget}
+          className="w-full flex items-center justify-center gap-1.5 sm:gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl transition-colors shadow-lg shadow-purple-200 dark:shadow-none"
+        >
+          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-xs sm:text-sm">{language === 'es' ? 'Crear Presupuesto' : 'Create Budget'}</span>
+        </button>
+      </div>
 
-          {/* Total Spent */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-6 shadow-lg border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-                {language === 'es' ? 'Total Gastado' : 'Total Spent'}
-              </span>
-              <TrendingDown className="w-5 h-5 text-rose-500" />
-            </div>
-            <p className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-white">
-              {formatCurrency(summaryStats.totalSpent)}
-            </p>
-          </div>
-
-          {/* Remaining */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-6 shadow-lg border border-slate-200 dark:border-slate-700 sm:col-span-2 lg:col-span-1">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-                {language === 'es' ? 'Restante' : 'Remaining'}
-              </span>
-              <PiggyBank className="w-5 h-5 text-emerald-500" />
-            </div>
-            <p
-              className={`text-2xl sm:text-3xl font-bold ${
-                summaryStats.totalRemaining >= 0
-                  ? 'text-emerald-600'
-                  : 'text-rose-600'
-              }`}
-            >
-              {formatCurrency(summaryStats.totalRemaining)}
-            </p>
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-1">
-                <span>{language === 'es' ? 'Progreso' : 'Progress'}</span>
-                <span>{summaryStats.percentage.toFixed(0)}%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${
-                    summaryStats.percentage < 70
-                      ? 'bg-emerald-500'
-                      : summaryStats.percentage < 90
-                      ? 'bg-amber-500'
-                      : 'bg-rose-500'
-                  }`}
-                  style={{
-                    width: `${Math.min(summaryStats.percentage, 100)}%`,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="px-3 sm:px-4 space-y-4 sm:space-y-6">
 
         {/* Smart Suggestions Section */}
         {suggestions.length > 0 && showSuggestions && (
@@ -346,49 +293,35 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
           </div>
         )}
 
-        {/* Create Budget Button */}
-        <button
-          onClick={onCreateBudget}
-          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white py-4 px-6 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-[1.02] flex items-center justify-center gap-2 text-base sm:text-lg"
-        >
-          <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
-          {language === 'es' ? 'Crear Presupuesto' : 'Create Budget'}
-        </button>
-
         {/* Budget List */}
-        <div className="space-y-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
-            {language === 'es' ? 'Mis Presupuestos' : 'My Budgets'}
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              {language === 'es' ? 'Mis Presupuestos' : 'My Budgets'}
+            </h2>
             {activeBudgets.length > 0 && (
-              <span className="ml-3 text-sm sm:text-base font-normal text-slate-600 dark:text-slate-400">
-                ({activeBudgets.length})
+              <span className="text-[10px] sm:text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 sm:py-1 rounded-full">
+                {activeBudgets.length}
               </span>
             )}
-          </h2>
+          </div>
 
           {activeBudgets.length === 0 ? (
             // Empty State
-            <div className="bg-white dark:bg-slate-800 rounded-xl p-8 sm:p-12 shadow-lg border border-slate-200 dark:border-slate-700 text-center">
-              <PiggyBank className="w-16 h-16 sm:w-20 sm:h-20 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-              <h3 className="text-lg sm:text-xl font-semibold text-slate-800 dark:text-white mb-2">
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl p-4 sm:p-6 text-center">
+              <PiggyBank className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 text-slate-300 dark:text-slate-600" />
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-1 sm:mb-2">
                 {language === 'es' ? 'No tienes presupuestos configurados' : 'No budgets configured'}
-              </h3>
-              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 mb-6">
-                {language === 'es' 
-                  ? 'Crea tu primer presupuesto para empezar a controlar tus gastos por categoría'
-                  : 'Create your first budget to start tracking spending by category'}
               </p>
-              <button
-                onClick={onCreateBudget}
-                className="inline-flex items-center gap-2 bg-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-purple-700 transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                {language === 'es' ? 'Crear mi primer presupuesto' : 'Create my first budget'}
-              </button>
+              <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">
+                {language === 'es' 
+                  ? 'Crea tu primer presupuesto para controlar tus gastos'
+                  : 'Create your first budget to track your spending'}
+              </p>
             </div>
           ) : (
             // Budget Cards
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-2 sm:space-y-3">
               {activeBudgets.map(budget => {
                 const spent = budget.spent || 0;
                 const remaining = budget.limit - spent;
@@ -396,137 +329,106 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                   spent,
                   budget.limit
                 );
-                const color = BudgetService.getProgressColor(percentage);
-                const BudgetIcon = getBudgetIcon(budget.icon);
+                const progressColor = BudgetService.getProgressColor(percentage);
+                const budgetColorClasses = getColorClasses(budget.color || 'purple');
 
-                const colorClasses = {
+                const progressColorClasses = {
                   emerald: 'bg-emerald-500',
                   amber: 'bg-amber-500',
                   rose: 'bg-rose-500',
                 };
 
-                const iconBgClasses: Record<string, string> = {
-                  purple: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400',
-                  blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400',
-                  emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
-                  amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-                  rose: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400',
-                  indigo: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
-                };
-
                 return (
                   <div
                     key={budget.id}
-                    className="bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-6 shadow-lg border border-slate-200 dark:border-slate-700 hover:shadow-xl transition-shadow"
+                    className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-700 shadow-sm"
                   >
                     {/* Budget Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2.5 sm:gap-3">
                         <div
-                          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center ${
-                            iconBgClasses[budget.color || 'purple'] || iconBgClasses.purple
-                          }`}
+                          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center ${budgetColorClasses.bg} ${budgetColorClasses.text}`}
                         >
-                          <BudgetIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                          <DynamicIcon name={budget.icon || 'PiggyBank'} className="w-4 h-4 sm:w-5 sm:h-5" />
                         </div>
-                        <div>
-                          <h3 className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">
-                            {budget.name}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
-                            {getCategoryName(budget.category)}
-                          </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5">
+                            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">
+                              {budget.name}
+                            </h3>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                            <span className="truncate">{getCategoryName(budget.category)}</span>
+                            <span>•</span>
+                            <span>{budget.period === 'monthly' 
+                              ? (language === 'es' ? 'Mensual' : 'Monthly') 
+                              : (language === 'es' ? 'Anual' : 'Yearly')}</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => onEditBudget(budget)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
-                          aria-label="Editar presupuesto"
-                        >
-                          <Edit2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                        <button
-                          onClick={() => onDeleteBudget(budget.id)}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
-                          aria-label="Eliminar presupuesto"
-                        >
-                          <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Budget Amounts */}
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-1">
-                          {language === 'es' ? 'Gastado' : 'Spent'}
-                        </p>
-                        <p className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">
-                          {formatCurrency(spent)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-1">
-                          {language === 'es' ? 'Presupuesto' : 'Budget'}
-                        </p>
-                        <p className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">
+                      <div className="text-right">
+                        <div className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">
                           {formatCurrency(budget.limit)}
-                        </p>
+                        </div>
+                        <div className={`text-[10px] sm:text-xs font-medium ${
+                          remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                        }`}>
+                          {remaining >= 0 
+                            ? (language === 'es' ? `Quedan ${formatCurrency(remaining)}` : `${formatCurrency(remaining)} left`)
+                            : (language === 'es' ? `Excedido ${formatCurrency(Math.abs(remaining))}` : `${formatCurrency(Math.abs(remaining))} over`)}
+                        </div>
                       </div>
                     </div>
 
                     {/* Progress Bar */}
                     <div className="mb-3">
-                      <div className="flex items-center justify-between text-xs sm:text-sm mb-2">
-                        <span
-                          className={`font-semibold ${
-                            remaining >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                          }`}
-                        >
-                          {remaining >= 0 
-                            ? (language === 'es' ? 'Restante:' : 'Remaining:') 
-                            : (language === 'es' ? 'Excedido:' : 'Exceeded:')}{' '}
-                          {formatCurrency(remaining)}
+                      <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1.5">
+                        <span className="text-slate-500 dark:text-slate-400">
+                          {language === 'es' ? 'Gastado' : 'Spent'}: <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(spent)}</span>
                         </span>
-                        <span className="text-slate-600 dark:text-slate-400 font-semibold">
+                        <span className={`font-semibold ${
+                          percentage < 70 ? 'text-emerald-600' : percentage < 90 ? 'text-amber-600' : 'text-rose-600'
+                        }`}>
                           {percentage.toFixed(0)}%
                         </span>
                       </div>
-                      <div className="w-full h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div
-                          className={`h-full ${colorClasses[color]} rounded-full transition-all duration-300`}
+                          className={`h-full ${progressColorClasses[progressColor]} rounded-full transition-all duration-300`}
                           style={{ width: `${Math.min(percentage, 100)}%` }}
                         />
                       </div>
                     </div>
 
-                    {/* Period Badge and Savings Management */}
-                    <div className="flex items-center justify-between">
-                      <span className="inline-block px-3 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-xs sm:text-sm font-medium">
-                        {budget.period === 'monthly' 
-                          ? (language === 'es' ? 'Mensual' : 'Monthly') 
-                          : (language === 'es' ? 'Anual' : 'Yearly')}
-                      </span>
-                      {remaining > 0 && spent > 0 && (
-                        <button
-                          className="inline-flex items-center gap-1 text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 font-medium hover:bg-emerald-50 dark:hover:bg-emerald-900/30 px-2 py-1 rounded-lg transition-colors"
-                          title={language === 'es' ? 'Gestionar ahorro' : 'Manage savings'}
-                        >
-                          <Target className="w-4 h-4" />
-                          {language === 'es' ? 'Ahorro disponible' : 'Savings available'}
-                        </button>
-                      )}
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                      <button
+                        onClick={() => onEditBudget(budget)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        {language === 'es' ? 'Editar' : 'Edit'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(language === 'es' ? '¿Eliminar este presupuesto?' : 'Delete this budget?')) {
+                            onDeleteBudget(budget.id);
+                          }
+                        }}
+                        className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                       {percentage >= 80 && percentage < 100 && (
-                        <span className="inline-flex items-center gap-1 text-xs sm:text-sm text-amber-600 font-medium">
-                          <AlertTriangle className="w-4 h-4" />
-                          {language === 'es' ? 'Cerca del límite' : 'Near limit'}
+                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs text-amber-600 font-medium ml-auto">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          {language === 'es' ? 'Cerca' : 'Near'}
                         </span>
                       )}
                       {percentage >= 100 && (
-                        <span className="inline-flex items-center gap-1 text-xs sm:text-sm text-rose-600 font-medium">
-                          <TrendingDown className="w-4 h-4" />
-                          {language === 'es' ? 'Presupuesto excedido' : 'Budget exceeded'}
+                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs text-rose-600 font-medium ml-auto">
+                          <TrendingDown className="w-3.5 h-3.5" />
+                          {language === 'es' ? 'Excedido' : 'Exceeded'}
                         </span>
                       )}
                     </div>

@@ -241,29 +241,50 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
             </p>
           </div>
         ) : (
-          <div className="space-y-1.5 sm:space-y-2">
+          <div className="space-y-2 sm:space-y-3">
             {extraIncomes.slice(0, 10).map(income => (
               <div
                 key={income.id}
-                className="bg-white dark:bg-slate-800 rounded-lg p-2.5 sm:p-3 border border-slate-100 dark:border-slate-700"
+                className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-700 shadow-sm"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500" />
-                      <h3 className="font-semibold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                    <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
+                      <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
+                      <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
                         {income.description}
                       </h3>
                     </div>
-                    <div className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {formatDate(income.date)}
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                      <Calendar className="w-3 h-3" />
+                      <span>{formatDate(income.date)}</span>
                     </div>
                   </div>
-                  <div className="text-right ml-2">
-                    <div className="text-sm sm:text-base font-bold text-amber-600 dark:text-amber-400">
+                  <div className="text-right">
+                    <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">
                       {formatCurrency(income.amount)}
                     </div>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                  <button
+                    onClick={() => onEditTransaction(income)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('¿Eliminar este ingreso extra?')) {
+                        onDeleteTransaction(income.id);
+                      }
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
