@@ -77,10 +77,22 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
     [budgets, transactions]
   );
 
+  // Build category names map for displaying names instead of IDs
+  const categoryNamesMap = useMemo(() => {
+    const map = new Map<string, string>();
+    settings?.categories?.forEach(cat => {
+      const name = typeof cat.name === 'object'
+        ? (cat.name[language as keyof typeof cat.name] || cat.name.es || cat.name.en)
+        : cat.name;
+      map.set(cat.id, name);
+    });
+    return map;
+  }, [settings?.categories, language]);
+
   // Generate smart suggestions based on spending patterns
   const suggestions = useMemo(
-    () => BudgetService.generateBudgetSuggestions(budgets, transactions),
-    [budgets, transactions]
+    () => BudgetService.generateBudgetSuggestions(budgets, transactions, categoryNamesMap),
+    [budgets, transactions, categoryNamesMap]
   );
 
   // Calculate summary stats

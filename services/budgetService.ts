@@ -371,11 +371,24 @@ export class BudgetService {
   /**
    * Generates smart budget suggestions based on spending patterns
    * Caso #3: Sugerencias inteligentes de ajuste de presupuesto
+   * @param categoryNames - Map of category ID to display name for proper localization
    */
   static generateBudgetSuggestions(
     budgets: Budget[],
-    transactions: Transaction[]
+    transactions: Transaction[],
+    categoryNames?: Map<string, string>
   ): BudgetSuggestion[] {
+    // Helper to get category display name
+    const getCategoryDisplayName = (categoryId: string): string => {
+      if (categoryNames?.has(categoryId)) {
+        return categoryNames.get(categoryId)!;
+      }
+      // Fallback: capitalize and clean the ID if it looks like a readable name
+      if (categoryId.length < 20 && !categoryId.match(/[A-Z0-9]{10,}/)) {
+        return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
+      }
+      return categoryId; // Return as-is if we can't translate
+    };
     const suggestions: BudgetSuggestion[] = [];
     const now = new Date();
     
@@ -459,11 +472,12 @@ export class BudgetService {
       
       if (!hasBudget && totalSpent > 1000) { // Only suggest for significant spending
         const monthlyAverage = totalSpent / 3;
+        const displayName = getCategoryDisplayName(category);
         suggestions.push({
           budgetId: '',
-          budgetName: category,
+          budgetName: displayName,
           type: 'create',
-          message: `Gastas en promedio ${this.formatCurrency(monthlyAverage)}/mes en "${category}" pero no tienes un presupuesto. ¿Te gustaría crear uno?`,
+          message: `Gastas en promedio ${this.formatCurrency(monthlyAverage)}/mes en "${displayName}" pero no tienes un presupuesto. ¿Te gustaría crear uno?`,
           suggestedAmount: Math.ceil(monthlyAverage * 1.1 / 100) * 100,
           averageSpent: monthlyAverage,
         });
