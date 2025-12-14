@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ArrowDownRight, Zap, Calendar, AlertCircle, Plus, Coffee, ShoppingBag, Car, Home, Bell, TrendingDown, Clock, Edit3, Trash2 } from 'lucide-react';
-import { Transaction } from '../types';
+import { Transaction, CustomCategory } from '../types';
 import { Button } from './Button';
+import { useSettings, useI18n } from '../contexts';
+import { storageService } from '../services/storageService';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
@@ -26,6 +28,41 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   onEditTransaction,
   onDeleteTransaction
 }) => {
+  const { settings } = useSettings();
+  const { t, language } = useI18n();
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+
+  // Load custom categories
+  useEffect(() => {
+    storageService.getCategories().then(setCustomCategories).catch(console.error);
+  }, []);
+
+  // Helper to get category display name
+  const getCategoryName = (categoryId: string): string => {
+    if (categoryId === 'express') return 'Express';
+    
+    // Try settings categories
+    const settingsCat = settings?.categories?.find(c => c.id === categoryId);
+    if (settingsCat) {
+      return typeof settingsCat.name === 'object' 
+        ? (settingsCat.name[language] || settingsCat.name.es || settingsCat.name.en) 
+        : settingsCat.name;
+    }
+    
+    // Try custom categories
+    const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
+    if (customCat) {
+      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+    }
+    
+    // Try translation system
+    const translated = (t.categories as Record<string, string>)[categoryId];
+    if (translated) return translated;
+    
+    // Fallback: if ID is too long, show 'Otros'
+    return categoryId.length > 15 ? 'Otros' : categoryId;
+  };
+
   // Filtrar solo gastos
   const expenses = useMemo(() =>
     transactions.filter(t => t.type === 'expense'),
@@ -251,7 +288,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                           {expense.description}
                         </h3>
                         <div className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-                          {formatTime(expense.date)} • {expense.category}
+                          {formatTime(expense.date)} • {getCategoryName(expense.category)}
                         </div>
                       </div>
                     </div>
