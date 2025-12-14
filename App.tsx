@@ -705,6 +705,8 @@ export default function App() {
                 setModalInitialValues({ isRecurring: false });
                 setShowModal(true);
               }}
+              onEditTransaction={handleEditTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
             />
           )}
 

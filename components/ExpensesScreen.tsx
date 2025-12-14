@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowDownRight, Zap, Calendar, AlertCircle, Plus, Coffee, ShoppingBag, Car, Home, Bell, TrendingDown, Clock } from 'lucide-react';
+import { ArrowDownRight, Zap, Calendar, AlertCircle, Plus, Coffee, ShoppingBag, Car, Home, Bell, TrendingDown, Clock, Edit3, Trash2 } from 'lucide-react';
 import { Transaction } from '../types';
 import { Button } from './Button';
 
@@ -11,6 +11,8 @@ interface ExpensesScreenProps {
   onQuickExpense: () => void;
   onRecurringExpense: () => void;
   onPlannedExpense: () => void;
+  onEditTransaction?: (transaction: Transaction) => void;
+  onDeleteTransaction?: (id: string) => void;
 }
 
 export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
@@ -20,7 +22,9 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   monthlyBudget = 0,
   onQuickExpense,
   onRecurringExpense,
-  onPlannedExpense
+  onPlannedExpense,
+  onEditTransaction,
+  onDeleteTransaction
 }) => {
   // Filtrar solo gastos
   const expenses = useMemo(() =>
@@ -327,7 +331,18 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                     <Bell className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                     <span className="truncate">Próximo: {getNextChargeDate(new Date(expense.date).getDate())}</span>
                   </div>
-                  <button className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400">
+                  <button 
+                    onClick={() => onDeleteTransaction?.(expense.id)}
+                    className="p-1.5 text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => onEditTransaction?.(expense)}
+                    className="text-[10px] sm:text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-1"
+                  >
+                    <Edit3 className="w-3 h-3" />
                     Editar
                   </button>
                 </div>
