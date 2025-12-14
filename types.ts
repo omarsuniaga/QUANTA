@@ -98,7 +98,7 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   description: string; // Maps to "description" in Firestore (concept)
-  date: string; // ISO Date string YYYY-MM-DD
+  date: string; // ISO Date/DateTime string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
   
   // Context
   isRecurring: boolean;

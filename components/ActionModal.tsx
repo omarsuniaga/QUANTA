@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, memo } from 'react';
-import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil, Calculator as CalcIcon } from 'lucide-react';
+import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil, Calculator as CalcIcon, Clock } from 'lucide-react';
 import { Category, TransactionType, Frequency, PaymentMethod, Mood, Account, CustomCategory } from '../types';
 import { Button } from './Button';
 import { storageService } from '../services/storageService';
@@ -29,6 +29,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
   const [category, setCategory] = useState<string>(initialValues?.category || '');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [time, setTime] = useState(new Date().toTimeString().slice(0, 5)); // HH:MM format
   const [paymentMethodId, setPaymentMethodId] = useState<string>(initialValues?.paymentMethod || '');
 
   // Recurring Logic (Shared state, logic differs by mode)
@@ -135,6 +136,9 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
+    // Combine date and time into full ISO string
+    const fullDateTime = `${date}T${time}:00`;
+
     const baseData = {
       amount: parseFloat(amount),
       description: concept,
@@ -155,7 +159,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       onSave({
         ...baseData,
         type: mode as TransactionType,
-        date,
+        date: fullDateTime, // Now includes time
         notes,
         mood,
         gigType: mode === 'income' ? gigType : undefined,
@@ -166,7 +170,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       });
     }
     onClose();
-  }, [mode, amount, concept, category, paymentMethodId, date, notes, mood, gigType, incomeType, sharedWith, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
+  }, [mode, amount, concept, category, paymentMethodId, date, time, notes, mood, gigType, incomeType, sharedWith, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
 
   // UI Config
   const config = {
@@ -428,8 +432,8 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
 
             {mode !== 'service' && (
               <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-1">
                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Fecha</label>
                     <div className="relative">
                       <Calendar className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
@@ -437,26 +441,36 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                         type="date"
                         value={date}
                         onChange={(e) => setDate(e.target.value)}
-                        className="w-full pl-9 pr-2 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none"
+                        className="w-full pl-9 pr-1 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none"
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">
-                      Método de Pago <span className="text-slate-400 font-normal text-[10px]">(Opcional)</span>
-                    </label>
+                  <div className="col-span-1">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Hora</label>
+                    <div className="relative">
+                      <Clock className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
+                      <input
+                        type="time"
+                        value={time}
+                        onChange={(e) => setTime(e.target.value)}
+                        className="w-full pl-9 pr-1 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="col-span-1">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Método</label>
                     <div className="relative">
                       <CreditCard className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
                       <select
                         value={paymentMethodId}
                         onChange={(e) => setPaymentMethodId(e.target.value)}
-                        className="w-full pl-9 pr-3 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none appearance-none truncate"
+                        className="w-full pl-9 pr-1 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none appearance-none truncate"
                       >
-                        <option value="">Sin especificar</option>
-                        <option value="cash">💵 Efectivo</option>
+                        <option value="">-</option>
+                        <option value="cash">💵</option>
                         {accounts.map(acc => (
                           <option key={acc.id} value={acc.id}>
-                            {acc.type === 'bank' ? '🏦' : acc.type === 'card' ? '💳' : acc.type === 'wallet' ? '👛' : '💰'} {acc.name}
+                            {acc.type === 'bank' ? '🏦' : acc.type === 'card' ? '💳' : acc.type === 'wallet' ? '👛' : '💰'}
                           </option>
                         ))}
                       </select>

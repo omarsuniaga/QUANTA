@@ -273,12 +273,21 @@ export const storageService = {
       baseCurrency: settings.currency?.baseCode || 'USD'
     };
 
+    // Ensure date includes time - if only date provided, add current time
+    let fullDate = transaction.date;
+    if (fullDate && !fullDate.includes('T')) {
+      // Date without time - add current time
+      const now = new Date();
+      const timeStr = now.toTimeString().slice(0, 8); // HH:MM:SS
+      fullDate = `${fullDate}T${timeStr}`;
+    }
+
     const newTransaction: Transaction = {
       id: localId,
       type: transaction.type,
       category: transaction.category,
       description: transaction.description || '',
-      date: transaction.date,
+      date: fullDate,
       amount: transaction.amount,
       notes: transaction.notes || '',
       paymentMethod: transaction.paymentMethod,
@@ -305,7 +314,7 @@ export const storageService = {
           type: transaction.type,
           category: transaction.category,
           description: transaction.description,
-          date: transaction.date,
+          date: fullDate,
           notes: transaction.notes || '',
           amount: monetaryAmount,
           paymentMethodId: transaction.paymentMethod,
