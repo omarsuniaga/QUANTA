@@ -8,6 +8,7 @@ import { Transaction, CustomCategory } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
+import { smartNotificationService } from '../services/smartNotificationService';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
@@ -19,6 +20,7 @@ interface ExpensesScreenProps {
   onPlannedExpense: () => void;
   onEditTransaction?: (transaction: Transaction) => void;
   onDeleteTransaction?: (id: string) => void;
+  onPaymentConfirmed?: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => Promise<void>;
 }
 
 type FilterType = 'all' | 'quick' | 'recurring' | 'planned';
@@ -41,7 +43,8 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   onRecurringExpense,
   onPlannedExpense,
   onEditTransaction,
-  onDeleteTransaction
+  onDeleteTransaction,
+  onPaymentConfirmed
 }) => {
   const { settings } = useSettings();
   const { t, language } = useI18n();
@@ -201,12 +204,45 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handlePayment = (paymentId: string, action: 'paid' | 'postponed' | 'rejected') => {
-    setPendingPayments(prev => new Map(prev).set(paymentId, action));
+  const handlePayment = async (payment: PendingPayment, action: 'paid' | 'postponed' | 'rejected') => {
+    // Update local UI state
+    setPendingPayments(prev => new Map(prev).set(payment.id, action));
     
-    // TODO: If paid, create a new expense transaction for this month
-    // TODO: If postponed, update the due date
-    // TODO: If rejected, mark as skipped for this period
+    // Handle notification service action
+    const pendingNotification = smartNotificationService.hasPendingNotification(payment.id);
+    if (pendingNotification) {
+      await smartNotificationService.handleScheduledPaymentAction(
+        pendingNotification.id,
+        action === 'rejected' ? 'cancel' : action === 'paid' ? 'pay' : 'postpone',
+        async (transactionId, amount, dueDate) => {
+          // When user confirms payment, create a new expense transaction
+          if (onPaymentConfirmed) {
+            const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
+              type: 'expense',
+              amount: payment.transaction.amount,
+              category: payment.transaction.category,
+              description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
+              date: new Date().toISOString().split('T')[0],
+              isRecurring: false, // This is the actual payment, not the recurring definition
+              notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
+            };
+            await onPaymentConfirmed(newTransaction);
+          }
+        }
+      );
+    } else if (action === 'paid' && onPaymentConfirmed) {
+      // No notification exists, but user still wants to pay - create transaction directly
+      const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
+        type: 'expense',
+        amount: payment.transaction.amount,
+        category: payment.transaction.category,
+        description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
+        date: new Date().toISOString().split('T')[0],
+        isRecurring: false,
+        notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
+      };
+      await onPaymentConfirmed(newTransaction);
+    }
   };
 
   const getDueDateLabel = (daysUntilDue: number): { text: string; color: string } => {
@@ -354,21 +390,21 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2 pt-2 sm:pt-3 border-t border-slate-100 dark:border-slate-700">
                       <button
-                        onClick={() => handlePayment(payment.id, 'paid')}
+                        onClick={() => handlePayment(payment, 'paid')}
                         className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors text-xs sm:text-sm"
                       >
                         <Check className="w-4 h-4" />
                         <span>{language === 'es' ? 'Pagar' : 'Pay'}</span>
                       </button>
                       <button
-                        onClick={() => handlePayment(payment.id, 'postponed')}
+                        onClick={() => handlePayment(payment, 'postponed')}
                         className="flex-1 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors text-xs sm:text-sm"
                       >
                         <Clock className="w-4 h-4" />
                         <span>{language === 'es' ? 'Posponer' : 'Postpone'}</span>
                       </button>
                       <button
-                        onClick={() => handlePayment(payment.id, 'rejected')}
+                        onClick={() => handlePayment(payment, 'rejected')}
                         className="flex-1 flex items-center justify-center gap-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-semibold py-2 px-3 rounded-lg transition-colors text-xs sm:text-sm"
                       >
                         <X className="w-4 h-4" />

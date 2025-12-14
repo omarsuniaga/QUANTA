@@ -224,7 +224,8 @@ export default function App() {
           [], // budgets - not implemented yet
           stats,
           currencyCode,
-          'es'
+          'es',
+          currencySymbol
         );
       } catch (error) {
         console.error('Error running notification checks:', error);
@@ -239,7 +240,7 @@ export default function App() {
       clearTimeout(timeoutId);
       clearInterval(interval);
     };
-  }, [user, transactions, goals, stats, currencyCode]);
+  }, [user, transactions, goals, stats, currencyCode, currencySymbol]);
 
   if (loading) {
     return (
@@ -774,6 +775,14 @@ export default function App() {
               }}
               onEditTransaction={handleEditTransaction}
               onDeleteTransaction={handleDeleteTransaction}
+              onPaymentConfirmed={async (transaction) => {
+                // Create a new expense when user confirms a scheduled payment
+                await handleAddTransaction({
+                  ...transaction,
+                  id: `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                  createdAt: Date.now()
+                });
+              }}
             />
           )}
 

@@ -19,6 +19,7 @@ const messaging = firebase.messaging();
 // Iconos por tipo de notificación
 const NOTIFICATION_ICONS = {
     service_payment: '💳',
+    scheduled_payment: '📅',
     insufficient_funds: '⚠️',
     goal_contribution: '🎯',
     goal_milestone: '🏆',
@@ -75,6 +76,12 @@ function getActionsForType(type, language) {
     const isSpanish = language === 'es';
     
     switch (type) {
+        case 'scheduled_payment':
+            return [
+                { action: 'pay', title: isSpanish ? '✓ Pagar' : '✓ Pay' },
+                { action: 'postpone', title: isSpanish ? '⏱ Posponer' : '⏱ Postpone' },
+                { action: 'cancel', title: isSpanish ? '✗ Cancelar' : '✗ Cancel' }
+            ];
         case 'service_payment':
             return [
                 { action: 'pay', title: isSpanish ? '💰 Pagar' : '💰 Pay' },
@@ -116,12 +123,23 @@ self.addEventListener('notificationclick', (event) => {
     // Determinar URL según la acción
     switch (event.action) {
         case 'pay':
+            // For scheduled payments, navigate to expenses and signal to pay
+            urlToOpen = '/?view=expenses&action=pay&transactionId=' + (data.transactionId || '');
+            break;
+        case 'postpone':
+            // For scheduled payments, navigate to expenses and signal to postpone
+            urlToOpen = '/?view=expenses&action=postpone&transactionId=' + (data.transactionId || '');
+            break;
+        case 'cancel':
+            // For scheduled payments, mark as cancelled
+            urlToOpen = '/?view=expenses&action=cancel&transactionId=' + (data.transactionId || '');
+            break;
         case 'contribute':
         case 'review':
             urlToOpen = '/?view=transactions';
             break;
         case 'view_budget':
-            urlToOpen = '/?view=settings';
+            urlToOpen = '/?view=budgets';
             break;
         case 'snooze':
             // Programar recordatorio para más tarde (30 minutos)

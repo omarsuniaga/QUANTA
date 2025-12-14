@@ -23,6 +23,7 @@ import { storageService } from './storageService';
 
 export type NotificationType = 
   | 'service_payment'      // Pago de servicio próximo
+  | 'scheduled_payment'    // Pago programado próximo a vencer
   | 'insufficient_funds'   // Fondos insuficientes
   | 'goal_contribution'    // Cuota de meta programada
   | 'goal_milestone'       // Hito de meta alcanzado
@@ -34,6 +35,8 @@ export type NotificationType =
   | 'achievement'          // Logro desbloqueado
   | 'streak_reminder'      // Recordatorio de racha
   | 'unusual_expense';     // Gasto inusual detectado
+
+export type NotificationAction = 'pay' | 'postpone' | 'cancel' | 'view';
 
 export interface AppNotification {
   id: string;
@@ -48,6 +51,12 @@ export interface AppNotification {
   createdAt: Date;
   read: boolean;
   dismissed: boolean;
+  // New fields for actionable notifications
+  actionTaken?: NotificationAction;
+  actionTakenAt?: Date;
+  requiresAction?: boolean; // If true, user must pay/postpone/cancel
+  transactionId?: string; // Related recurring transaction ID
+  dueDate?: string; // ISO date of when payment is due
 }
 
 export interface NotificationPreferences {
@@ -94,6 +103,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
 
 const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   service_payment: '💳',
+  scheduled_payment: '📅',
   insufficient_funds: '⚠️',
   goal_contribution: '🎯',
   goal_milestone: '🏆',
@@ -106,6 +116,9 @@ const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   streak_reminder: '🔥',
   unusual_expense: '👀'
 };
+
+// Days before payment to send reminders
+const SCHEDULED_PAYMENT_REMINDER_DAYS = [3, 2, 1, 0]; // 3 days, 2 days, 1 day, same day
 
 // ========================
 // SERVICIO PRINCIPAL
@@ -808,7 +821,8 @@ class SmartNotificationService {
     budgets: Budget[],
     stats: DashboardStats,
     currency: string,
-    language: 'es' | 'en' = 'es'
+    language: 'es' | 'en' = 'es',
+    currencySymbol: string = '$'
   ): Promise<AppNotification[]> {
     if (!this.preferences.enabled) return [];
     
@@ -824,6 +838,10 @@ class SmartNotificationService {
       // 1. Pagos de servicios
       const serviceNotifs = await this.checkServicePayments(transactions, subscriptions, language);
       allNotifications.push(...serviceNotifs);
+
+      // 1.5 Pagos programados con acciones (3, 2, 1, 0 días antes)
+      const scheduledNotifs = await this.checkScheduledPayments(transactions, currency, currencySymbol, language);
+      allNotifications.push(...scheduledNotifs);
 
       // 2. Fondos insuficientes
       const endOfMonth = new Date();
@@ -891,6 +909,244 @@ class SmartNotificationService {
   cancelAllScheduledNotifications(): void {
     this.scheduledNotifications.forEach(timeout => clearTimeout(timeout));
     this.scheduledNotifications.clear();
+  }
+
+  // ========================
+  // 8. PAGOS PROGRAMADOS (CON ACCIONES)
+  // ========================
+
+  /**
+   * Check for scheduled/recurring payments and send reminders at 3, 2, 1 days before and on due date
+   * These notifications require user action: Pay, Postpone, or Cancel
+   */
+  async checkScheduledPayments(
+    transactions: Transaction[],
+    currency: string,
+    currencySymbol: string,
+    language: 'es' | 'en' = 'es'
+  ): Promise<AppNotification[]> {
+    if (!this.preferences.servicePayments) return [];
+
+    const notifications: AppNotification[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Get all recurring expenses
+    const recurringExpenses = transactions.filter(t => t.type === 'expense' && t.isRecurring);
+
+    for (const expense of recurringExpenses) {
+      // Calculate next due date based on the original date
+      const chargeDay = new Date(expense.date).getDate();
+      const nextDueDate = new Date(today.getFullYear(), today.getMonth(), chargeDay);
+      nextDueDate.setHours(0, 0, 0, 0);
+
+      // If charge day has passed this month, look at next month
+      if (nextDueDate < today) {
+        nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+      }
+
+      const daysUntilDue = Math.ceil((nextDueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const dueDateStr = nextDueDate.toISOString().split('T')[0];
+
+      // Check if we should send a notification today (3, 2, 1, 0 days before)
+      if (!SCHEDULED_PAYMENT_REMINDER_DAYS.includes(daysUntilDue)) continue;
+
+      // Unique ID for this specific reminder (includes days until due to avoid duplicates)
+      const notificationId = `sched_${expense.id}_${dueDateStr}_d${daysUntilDue}`;
+
+      // Check if we already sent this reminder
+      const existingNotification = this.notifications.find(n => n.id === notificationId);
+      if (existingNotification) continue;
+
+      // Build message based on days until due
+      let timeText: string;
+      let priority: 'high' | 'medium' | 'low';
+      
+      if (daysUntilDue === 0) {
+        timeText = language === 'es' ? '¡Hoy vence!' : 'Due today!';
+        priority = 'high';
+      } else if (daysUntilDue === 1) {
+        timeText = language === 'es' ? 'Vence mañana' : 'Due tomorrow';
+        priority = 'high';
+      } else if (daysUntilDue === 2) {
+        timeText = language === 'es' ? 'Vence en 2 días' : 'Due in 2 days';
+        priority = 'medium';
+      } else {
+        timeText = language === 'es' ? 'Vence en 3 días' : 'Due in 3 days';
+        priority = 'medium';
+      }
+
+      const title = language === 'es'
+        ? `${expense.description || expense.category}`
+        : `${expense.description || expense.category}`;
+
+      const body = language === 'es'
+        ? `${timeText} - ${currencySymbol}${expense.amount.toLocaleString()}`
+        : `${timeText} - ${currencySymbol}${expense.amount.toLocaleString()}`;
+
+      const notification: AppNotification = {
+        id: notificationId,
+        type: 'scheduled_payment',
+        title: `📅 ${title}`,
+        body,
+        icon: NOTIFICATION_ICONS.scheduled_payment,
+        priority,
+        data: {
+          transactionId: expense.id,
+          amount: expense.amount,
+          dueDate: dueDateStr,
+          daysUntilDue,
+          description: expense.description,
+          category: expense.category
+        },
+        createdAt: new Date(),
+        read: false,
+        dismissed: false,
+        requiresAction: true,
+        transactionId: expense.id,
+        dueDate: dueDateStr
+      };
+
+      notifications.push(notification);
+      await this.sendScheduledPaymentNotification(notification, language);
+    }
+
+    return notifications;
+  }
+
+  /**
+   * Send a scheduled payment notification with action buttons
+   */
+  private async sendScheduledPaymentNotification(
+    notification: AppNotification,
+    language: 'es' | 'en'
+  ): Promise<boolean> {
+    if (!this.canSendNotification()) {
+      console.log('Notification blocked: limit reached or quiet hours');
+      return false;
+    }
+
+    // Save to history
+    this.notifications.unshift(notification);
+    if (this.notifications.length > 100) {
+      this.notifications = this.notifications.slice(0, 100);
+    }
+    await this.saveNotificationToStorage(notification);
+    this.dailyNotificationCount++;
+
+    // Send push notification with actions
+    if (Notification.permission === 'granted') {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        await registration.showNotification(notification.title, {
+          body: notification.body,
+          icon: '/icon-192.png',
+          badge: '/badge-72.png',
+          tag: `scheduled_${notification.transactionId}`,
+          data: {
+            ...notification.data,
+            notificationId: notification.id,
+            type: 'scheduled_payment'
+          },
+          requireInteraction: true, // Keep notification visible until user acts
+          actions: [
+            { action: 'pay', title: language === 'es' ? '✓ Pagar' : '✓ Pay' },
+            { action: 'postpone', title: language === 'es' ? '⏱ Posponer' : '⏱ Postpone' },
+            { action: 'cancel', title: language === 'es' ? '✗ Cancelar' : '✗ Cancel' }
+          ]
+        } as NotificationOptions);
+        return true;
+      } catch (error) {
+        console.error('Error sending scheduled payment notification:', error);
+        // Fallback to basic notification
+        new Notification(notification.title, {
+          body: notification.body,
+          icon: '/icon-192.png'
+        });
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Handle user action on a scheduled payment notification
+   */
+  async handleScheduledPaymentAction(
+    notificationId: string,
+    action: NotificationAction,
+    onPaymentConfirmed?: (transactionId: string, amount: number, dueDate: string) => Promise<void>
+  ): Promise<boolean> {
+    const notification = this.notifications.find(n => n.id === notificationId);
+    if (!notification) {
+      console.warn('Notification not found:', notificationId);
+      return false;
+    }
+
+    // Update notification with action taken
+    notification.actionTaken = action;
+    notification.actionTakenAt = new Date();
+    notification.dismissed = true;
+    notification.read = true;
+    await this.saveNotifications();
+
+    // Handle the action
+    switch (action) {
+      case 'pay':
+        // Call the callback to create the expense transaction
+        if (onPaymentConfirmed && notification.transactionId && notification.data) {
+          await onPaymentConfirmed(
+            notification.transactionId,
+            notification.data.amount,
+            notification.dueDate || notification.data.dueDate
+          );
+        }
+        console.log('Payment confirmed for:', notification.transactionId);
+        break;
+
+      case 'postpone':
+        // Mark as postponed - the notification will appear again on the due date
+        console.log('Payment postponed for:', notification.transactionId);
+        // We don't create another notification now; it will appear on due date
+        break;
+
+      case 'cancel':
+        // User chose to skip this payment cycle
+        console.log('Payment cancelled for this cycle:', notification.transactionId);
+        break;
+    }
+
+    return true;
+  }
+
+  /**
+   * Get pending scheduled payments that require action
+   */
+  getPendingScheduledPayments(): AppNotification[] {
+    return this.notifications.filter(n => 
+      n.type === 'scheduled_payment' && 
+      n.requiresAction && 
+      !n.actionTaken && 
+      !n.dismissed
+    ).sort((a, b) => {
+      // Sort by due date (earliest first)
+      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      return dateA - dateB;
+    });
+  }
+
+  /**
+   * Check if a specific transaction has a pending notification
+   */
+  hasPendingNotification(transactionId: string): AppNotification | undefined {
+    return this.notifications.find(n => 
+      n.transactionId === transactionId && 
+      n.type === 'scheduled_payment' && 
+      !n.actionTaken && 
+      !n.dismissed
+    );
   }
 }
 
