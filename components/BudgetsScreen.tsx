@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   PiggyBank,
   Plus,
@@ -35,6 +35,7 @@ import { Budget, Transaction, CustomCategory } from '../types';
 import { BudgetService } from '../services/budgetService';
 import { useI18n } from '../contexts/I18nContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { storageService } from '../services/storageService';
 
 interface BudgetsScreenProps {
   budgets: Budget[];
@@ -64,6 +65,12 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   const { isDarkMode, settings } = useSettings();
   const [showAlerts, setShowAlerts] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+
+  // Load custom categories from storage
+  useEffect(() => {
+    storageService.getCategories().then(setCustomCategories).catch(console.error);
+  }, []);
 
   // Calculate updated budgets with current spending
   const updatedBudgets = useMemo(
@@ -80,14 +87,15 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   // Build category names map for displaying names instead of IDs
   const categoryNamesMap = useMemo(() => {
     const map = new Map<string, string>();
-    settings?.categories?.forEach(cat => {
-      const name = typeof cat.name === 'object'
-        ? (cat.name[language as keyof typeof cat.name] || cat.name.es || cat.name.en)
-        : cat.name;
+    
+    // Add custom categories from storageService
+    customCategories.forEach(cat => {
+      const name = cat.name[language as 'es' | 'en'] || cat.name.es || cat.name.en;
       map.set(cat.id, name);
     });
+    
     return map;
-  }, [settings?.categories, language]);
+  }, [customCategories, language]);
 
   // Generate smart suggestions based on spending patterns
   const suggestions = useMemo(
@@ -154,11 +162,13 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
 
   // Get category name in current language
   const getCategoryName = (categoryId: string): string => {
-    const cat = settings?.categories?.find(c => c.id === categoryId);
-    if (cat) {
-      return typeof cat.name === 'object'
-        ? (cat.name[language as keyof typeof cat.name] || cat.name.es || cat.name.en)
-        : cat.name;
+    // First check the categoryNamesMap
+    if (categoryNamesMap.has(categoryId)) {
+      return categoryNamesMap.get(categoryId)!;
+    }
+    // Fallback: return the ID as-is (or formatted if it's short enough)
+    if (categoryId.length < 20 && !categoryId.match(/[A-Z0-9]{10,}/)) {
+      return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
     }
     return categoryId;
   };
