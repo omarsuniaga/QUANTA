@@ -432,7 +432,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
 
             {mode !== 'service' && (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div className="col-span-1">
                     <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Fecha</label>
                     <div className="relative">
@@ -457,23 +457,29 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                       />
                     </div>
                   </div>
-                  <div className="col-span-1">
-                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Método</label>
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Método de Pago</label>
                     <div className="relative">
-                      <CreditCard className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
+                      <CreditCard className="w-4 h-4 absolute left-3 top-3.5 text-slate-400 z-10" />
                       <select
                         value={paymentMethodId}
                         onChange={(e) => setPaymentMethodId(e.target.value)}
-                        className="w-full pl-9 pr-1 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none appearance-none truncate"
+                        className="w-full pl-9 pr-3 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm font-medium outline-none appearance-none cursor-pointer"
+                        style={{ colorScheme: 'light dark' }}
                       >
-                        <option value="">-</option>
-                        <option value="cash">💵</option>
+                        <option value="" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">Sin especificar</option>
+                        <option value="cash" className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">💵 Efectivo</option>
                         {accounts.map(acc => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.type === 'bank' ? '🏦' : acc.type === 'card' ? '💳' : acc.type === 'wallet' ? '👛' : '💰'}
+                          <option key={acc.id} value={acc.id} className="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100">
+                            {acc.type === 'bank' ? '🏦' : acc.type === 'card' ? '💳' : acc.type === 'wallet' ? '👛' : '💰'} {acc.name}
                           </option>
                         ))}
                       </select>
+                      <div className="absolute right-3 top-3.5 pointer-events-none">
+                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
                     </div>
                   </div>
                 </div>
