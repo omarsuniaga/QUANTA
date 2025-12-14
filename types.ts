@@ -155,11 +155,30 @@ export interface Promo {
 }
 
 export interface Budget {
+  id: string;
+  userId?: string;
   category: string;
-  limit: number;
-  spent?: number;
-  period?: 'monthly' | 'yearly';
+  name: string; // "Supermercado", "Combustible", etc.
+  limit: number; // Presupuesto límite
+  spent?: number; // Gastado hasta ahora (calculado)
+  period: 'monthly' | 'yearly';
+  color?: string; // Color para visualización
+  icon?: string; // Icono de la categoría
+  isActive?: boolean; // Si está activo o no
   createdAt?: number;
+  updatedAt?: number;
+  resetDay?: number; // Día del mes para resetear (1-31)
+}
+
+export interface BudgetAlert {
+  id: string;
+  budgetId: string;
+  type: 'saving' | 'overspending' | 'warning';
+  amount: number; // Diferencia (positivo = ahorro, negativo = sobregasto)
+  percentage: number; // Porcentaje usado del presupuesto
+  message: string;
+  timestamp: number;
+  isRead?: boolean;
 }
 
 export interface Subscription {

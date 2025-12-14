@@ -12,6 +12,8 @@ import { FilterModal } from './components/FilterModal';
 import { IncomeScreen } from './components/IncomeScreen';
 import { ExpensesScreen } from './components/ExpensesScreen';
 import { TransactionsScreen } from './components/TransactionsScreen';
+import { BudgetsScreen } from './components/BudgetsScreen';
+import { BudgetModal } from './components/BudgetModal';
 import { NotificationPermissionPrompt } from './components/NotificationPermissionPrompt';
 import { AICoachWidget } from './components/AICoachWidget';
 import { AICoachScreen } from './components/AICoachScreen';
@@ -21,10 +23,10 @@ import { StrategiesScreen } from './components/StrategiesScreen';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { QuickExpenseWidget } from './components/QuickExpenseWidget';
 import { QuickExpenseScreen } from './components/QuickExpenseScreen';
-import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain, List, DollarSign } from 'lucide-react';
+import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain, List, DollarSign, PiggyBank } from 'lucide-react';
 import { useI18n } from './contexts';
 import { useAuth, useTransactions, useSettings, useToast } from './contexts';
-import { Goal, Promo, Transaction } from './types';
+import { Goal, Promo, Transaction, Budget } from './types';
 import { pushNotificationService } from './services/pushNotificationService';
 import { smartNotificationService } from './services/smartNotificationService';
 import { NotificationCenter, NotificationBell } from './components/NotificationCenter';
@@ -52,6 +54,7 @@ export default function App() {
     goals,
     promos,
     quickActions,
+    budgets,
     isDarkMode,
     currencySymbol,
     currencyCode,
@@ -63,13 +66,15 @@ export default function App() {
     addPromo,
     updatePromo,
     deletePromo,
+    updateBudget,
+    deleteBudget,
     loading: settingsLoading
   } = useSettings();
   const toast = useToast();
   const { t } = useI18n();
 
   // === LOCAL UI STATE (not business logic) ===
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'income' | 'expenses' | 'transactions' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'income' | 'expenses' | 'budgets' | 'transactions' | 'settings'>('dashboard');
   const [showModal, setShowModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [modalMode, setModalMode] = useState<'income' | 'expense' | 'service'>('income');
@@ -94,11 +99,15 @@ export default function App() {
   const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
   const [showGoalsManagement, setShowGoalsManagement] = useState(false);
 
+  // Budget management state
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+
   // === LOADING STATE ===
   const loading = authLoading || txLoading || settingsLoading;
 
   // === TAB NAVIGATION ORDER FOR SWIPE ===
-  const tabOrder: Array<'dashboard' | 'income' | 'expenses' | 'transactions' | 'settings'> = ['dashboard', 'income', 'expenses', 'transactions', 'settings'];
+  const tabOrder: Array<'dashboard' | 'income' | 'expenses' | 'budgets' | 'transactions' | 'settings'> = ['dashboard', 'income', 'expenses', 'budgets', 'transactions', 'settings'];
   
   // Swipe gesture refs
   const touchStartX = useRef<number | null>(null);
@@ -434,6 +443,57 @@ export default function App() {
     setShowPromoModal(false);
   };
 
+  // Budget handlers
+  const handleCreateBudget = () => {
+    setEditingBudget(null);
+    setShowBudgetModal(true);
+  };
+
+  const handleEditBudget = (budget: Budget) => {
+    setEditingBudget(budget);
+    setShowBudgetModal(true);
+  };
+
+  const handleSaveBudget = async (budgetData: Partial<Budget>) => {
+    try {
+      if (budgetData.id) {
+        // Update existing budget
+        const fullBudget: Budget = {
+          ...budgets.find(b => b.id === budgetData.id)!,
+          ...budgetData,
+        } as Budget;
+        await updateBudget(fullBudget);
+        toast.success('Presupuesto actualizado', 'Los cambios se guardaron correctamente');
+      } else {
+        // Create new budget
+        const newBudget: Budget = {
+          id: `budget_${Date.now()}`,
+          ...budgetData,
+          userId: user?.uid,
+          spent: 0,
+          isActive: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as Budget;
+        await updateBudget(newBudget);
+        toast.success('Presupuesto creado', `Presupuesto "${budgetData.name}" creado exitosamente`);
+      }
+      setShowBudgetModal(false);
+      setEditingBudget(null);
+    } catch (error: any) {
+      toast.error('Error al guardar presupuesto', error.message);
+    }
+  };
+
+  const handleDeleteBudget = async (budgetId: string) => {
+    try {
+      await deleteBudget(budgetId);
+      toast.success('Presupuesto eliminado', 'El presupuesto se eliminó correctamente');
+    } catch (error: any) {
+      toast.error('Error al eliminar', error.message);
+    }
+  };
+
   const handleFilter = (type: 'category' | 'date', value: string) => {
     if (type === 'category') {
       setFilters({ category: value });
@@ -505,6 +565,13 @@ export default function App() {
               >
                 <ArrowDownRight className="w-5 h-5" />
                 💸 Gastos
+              </button>
+              <button
+                onClick={() => navigateToTab('budgets')}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'budgets' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+              >
+                <PiggyBank className="w-5 h-5" />
+                💰 Presupuestos
               </button>
               <button
                 onClick={() => navigateToTab('transactions')}
@@ -710,6 +777,17 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'budgets' && (
+            <BudgetsScreen
+              budgets={budgets}
+              transactions={transactions}
+              currencySymbol={currencySymbol}
+              onCreateBudget={handleCreateBudget}
+              onEditBudget={handleEditBudget}
+              onDeleteBudget={handleDeleteBudget}
+            />
+          )}
+
           {activeTab === 'transactions' && (
             <TransactionsScreen
               transactions={transactions}
@@ -782,6 +860,14 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => navigateToTab('budgets')}
+              className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'budgets' ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'}`}
+            >
+              <PiggyBank className="w-5 h-5" strokeWidth={activeTab === 'budgets' ? 2.5 : 2} />
+              <span className="text-[10px] font-medium">Presupuesto</span>
+            </button>
+
+            <button
               onClick={() => navigateToTab('transactions')}
               className={`flex flex-col items-center gap-0.5 transition-all flex-1 ${activeTab === 'transactions' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}
             >
@@ -824,6 +910,20 @@ export default function App() {
             onClose={() => setShowPromoModal(false)}
             onSave={handleSavePromo}
             onDelete={handleDeletePromo}
+          />
+        )}
+
+        {showBudgetModal && (
+          <BudgetModal
+            isOpen={showBudgetModal}
+            budget={editingBudget}
+            categories={['Food', 'Transport', 'Utilities', 'Subscriptions', 'Shopping', 'Health', 'Housing', 'Education', 'Entertainment', 'Other']}
+            currencySymbol={currencySymbol}
+            onClose={() => {
+              setShowBudgetModal(false);
+              setEditingBudget(null);
+            }}
+            onSave={handleSaveBudget}
           />
         )}
 

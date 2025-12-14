@@ -237,19 +237,24 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   // Budgets
   const updateBudget = useCallback(async (budget: Budget) => {
-    const exists = budgets.some(b => b.category === budget.category);
-    const updated = exists 
-      ? budgets.map(b => b.category === budget.category ? budget : b)
-      : [...budgets, budget];
-    setBudgets(updated);
-    await storageService.saveBudgets(updated);
-    toast.success('Presupuesto guardado', `${budget.category}: $${budget.limit}`);
+    const exists = budgets.some(b => b.id === budget.id);
+    if (exists) {
+      // Update existing budget
+      await storageService.updateBudget(budget.id, budget);
+      const updated = budgets.map(b => b.id === budget.id ? budget : b);
+      setBudgets(updated);
+    } else {
+      // Add new budget
+      const newBudget = await storageService.addBudget(budget);
+      setBudgets([...budgets, newBudget]);
+    }
+    toast.success('Presupuesto guardado', `${budget.name}: ${budget.limit}`);
   }, [budgets, toast]);
 
-  const deleteBudget = useCallback(async (category: string) => {
-    const updated = budgets.filter(b => b.category !== category);
+  const deleteBudget = useCallback(async (budgetId: string) => {
+    await storageService.deleteBudget(budgetId);
+    const updated = budgets.filter(b => b.id !== budgetId);
     setBudgets(updated);
-    await storageService.saveBudgets(updated);
   }, [budgets]);
 
   const refreshAll = useCallback(async () => {
