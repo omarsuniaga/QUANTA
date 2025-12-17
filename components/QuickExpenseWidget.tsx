@@ -41,7 +41,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   const todayExpenses = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return transactions
-      .filter(tx => tx.type === 'expense' && tx.date === today)
+      .filter(tx => tx.type === 'expense' && tx.date && tx.date.startsWith(today))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
       .slice(0, 3);
   }, [transactions]);
@@ -49,7 +49,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   const todayTotal = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
     return transactions
-      .filter(tx => tx.type === 'expense' && tx.date === today)
+      .filter(tx => tx.type === 'expense' && tx.date && tx.date.startsWith(today))
       .reduce((sum, tx) => sum + tx.amount, 0);
   }, [transactions]);
 
