@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Zap, Plus, ChevronRight, TrendingDown, Receipt, CheckCircle2
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { useTransactions, useSettings, useI18n } from '../contexts';
+import { storageService } from '../services/storageService';
 
 interface QuickExpenseWidgetProps {
   onOpenFullScreen: () => void;
@@ -16,8 +17,25 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('express');
+  const [categories, setCategories] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // Load categories (custom + default)
+  useEffect(() => {
+    const loadCategories = async () => {
+      let custom = [];
+      try {
+        custom = await storageService.getCategories();
+      } catch {}
+      // Only expense categories
+      const defaults = storageService.getDefaultCategories().filter(c => c.type === 'expense');
+      // Merge, avoiding duplicates by id
+      const merged = [...defaults, ...custom.filter(cat => !defaults.some(def => def.id === cat.id))];
+      setCategories(merged);
+    };
+    loadCategories();
+  }, []);
 
   // Get today's expenses
   const todayExpenses = useMemo(() => {
@@ -47,21 +65,20 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0 || isSubmitting) return;
-    
     setIsSubmitting(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       await addTransaction({
         amount: parseFloat(amount),
         type: 'expense',
-        category: 'express',
+        category: category || 'express',
         description: description.trim() || 'Gasto rápido',
         date: today,
         paymentMethod: 'cash'
       });
-      
       setAmount('');
       setDescription('');
+      setCategory('express');
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 2000);
     } catch (error) {
@@ -101,8 +118,8 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
 
       {/* Quick Add Form */}
       <form onSubmit={handleSubmit} className="p-3 border-b border-slate-100 dark:border-slate-700">
-        <div className="flex gap-2">
-          <div className="relative w-32 shrink-0">
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative w-28 shrink-0">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
               {currencySymbol}
             </span>
@@ -122,6 +139,17 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
             placeholder={language === 'es' ? 'Descripción...' : 'Description...'}
             className="flex-1 min-w-0 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
+          <select
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            className="w-32 px-2 py-2 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            {categories.map(cat => (
+              <option key={cat.id} value={cat.id}>
+                {cat.name?.[language] || cat.name?.es || cat.name?.en || cat.key}
+              </option>
+            ))}
+          </select>
           <button
             type="submit"
             disabled={!amount || parseFloat(amount) <= 0 || isSubmitting}

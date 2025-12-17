@@ -96,6 +96,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     storageService.getAccounts().then(setAccounts);
   }, []);
 
+  // Sincronizar API key de settings a localStorage al cargar
+  useEffect(() => {
+    const apiKey = settings.aiConfig.userGeminiApiKey;
+    if (apiKey && apiKey.trim() !== '') {
+      localStorage.setItem('gemini_api_key', apiKey);
+    }
+  }, [settings.aiConfig.userGeminiApiKey]);
+
   const toggleNotifications = () => {
     onUpdateSettings({
       ...settings,
@@ -111,10 +119,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   const handleSaveApiKey = (apiKey: string) => {
+    // Guardar en settings
     onUpdateSettings({
       ...settings,
       aiConfig: { ...settings.aiConfig, userGeminiApiKey: apiKey }
     });
+    
+    // También guardar en localStorage para que aiCoachService pueda acceder
+    if (apiKey && apiKey.trim() !== '') {
+      localStorage.setItem('gemini_api_key', apiKey);
+    } else {
+      localStorage.removeItem('gemini_api_key');
+    }
   };
 
   const handleDeleteAction = (id: string) => {

@@ -412,7 +412,15 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
               No hay análisis disponible
             </h3>
             <p className="text-slate-500 dark:text-slate-500 text-sm mb-4">
-              Agrega algunas transacciones para obtener insights personalizados
+              {(() => {
+                if (!localStorage.getItem('gemini_api_key')) {
+                  return 'Configura tu API key de Gemini en Ajustes para habilitar el análisis de IA.';
+                }
+                if (!transactions || transactions.length === 0) {
+                  return 'Agrega algunas transacciones para obtener insights personalizados.';
+                }
+                return 'No se pudo generar el análisis. Intenta nuevamente o revisa tu configuración de IA.';
+              })()}
             </p>
             <Button onClick={loadAnalysis} isLoading={loading}>
               Generar Análisis

@@ -23,6 +23,7 @@ import { StrategiesScreen } from './components/StrategiesScreen';
 import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 import { QuickExpenseWidget } from './components/QuickExpenseWidget';
 import { QuickExpenseScreen } from './components/QuickExpenseScreen';
+import { CategoryProfileScreen } from './components/CategoryProfileScreen';
 import { LayoutGrid, ListFilter, Plus, ArrowUpRight, ArrowDownRight, Zap, WifiOff, AlertTriangle, Settings as SettingsIcon, Brain, List, DollarSign, PiggyBank } from 'lucide-react';
 import { useI18n } from './contexts';
 import { useAuth, useTransactions, useSettings, useToast } from './contexts';
@@ -32,6 +33,8 @@ import { smartNotificationService } from './services/smartNotificationService';
 import { NotificationCenter, NotificationBell } from './components/NotificationCenter';
 import { NotificationPreferences } from './components/NotificationPreferences';
 import { GoalsManagement } from './components/GoalsManagement';
+import { storageService } from './services/storageService';
+import { CustomCategory } from './types';
 
 export default function App() {
   // === CONTEXT HOOKS (replacing local state) ===
@@ -99,12 +102,31 @@ export default function App() {
   const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
   const [showGoalsManagement, setShowGoalsManagement] = useState(false);
 
+  // Category profile state
+  const [showCategoryProfile, setShowCategoryProfile] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+
   // Budget management state
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
   // === LOADING STATE ===
   const loading = authLoading || txLoading || settingsLoading;
+
+  // Load custom categories
+  useEffect(() => {
+    if (user) {
+      storageService.getCategories().then(setCustomCategories).catch(console.error);
+    }
+  }, [user]);
+
+  // Sincronizar API key de settings a localStorage para aiCoachService
+  useEffect(() => {
+    if (settings?.aiConfig?.userGeminiApiKey) {
+      localStorage.setItem('gemini_api_key', settings.aiConfig.userGeminiApiKey);
+    }
+  }, [settings?.aiConfig?.userGeminiApiKey]);
 
   // === TAB NAVIGATION ORDER FOR SWIPE ===
   const tabOrder: Array<'dashboard' | 'income' | 'expenses' | 'budgets' | 'transactions' | 'settings'> = ['dashboard', 'income', 'expenses', 'budgets', 'transactions', 'settings'];
@@ -392,7 +414,8 @@ export default function App() {
       amount: amount,
       description: `Aporte a meta: ${goal.name}`,
       date: new Date().toISOString().split('T')[0],
-      paymentMethod: 'Transferencia'
+      paymentMethod: 'Transferencia',
+      isRecurring: false
     });
 
     toast.success('Aporte realizado', `Se han reservado ${amount.toLocaleString()} ${currencyCode} para "${goal.name}"`);
@@ -497,11 +520,13 @@ export default function App() {
 
   const handleFilter = (type: 'category' | 'date', value: string) => {
     if (type === 'category') {
-      setFilters({ category: value });
+      // Open category profile instead of just filtering
+      setSelectedCategory(value);
+      setShowCategoryProfile(true);
     } else if (type === 'date') {
       setFilters({ dateFrom: value, dateTo: value });
+      setActiveTab('transactions');
     }
-    setActiveTab('transactions');
   };
 
   const handleClearFilter = () => {
@@ -777,10 +802,16 @@ export default function App() {
               onDeleteTransaction={handleDeleteTransaction}
               onPaymentConfirmed={async (transaction) => {
                 // Create a new expense when user confirms a scheduled payment
-                await handleAddTransaction({
-                  ...transaction,
-                  id: `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                  createdAt: Date.now()
+                await addTransaction({
+                  type: transaction.type,
+                  amount: transaction.amount,
+                  category: transaction.category,
+                  description: transaction.description,
+                  date: transaction.date,
+                  isRecurring: transaction.isRecurring,
+                  frequency: transaction.frequency,
+                  paymentMethod: transaction.paymentMethod,
+                  notes: transaction.notes
                 });
               }}
             />
@@ -1076,6 +1107,28 @@ export default function App() {
             currencyCode={currencyCode}
             availableBalance={stats.totalIncome - stats.totalExpense}
           />
+        )}
+
+        {/* Category Profile Full Screen */}
+        {showCategoryProfile && selectedCategory && (
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+            <CategoryProfileScreen
+              category={selectedCategory}
+              transactions={transactions}
+              customCategories={customCategories}
+              currencySymbol={currencySymbol}
+              currencyCode={currencyCode}
+              onBack={() => {
+                setShowCategoryProfile(false);
+                setSelectedCategory(null);
+              }}
+              onEditTransaction={(tx) => {
+                setShowCategoryProfile(false);
+                handleEditTransaction(tx);
+              }}
+              onDeleteTransaction={handleDeleteTransaction}
+            />
+          </div>
         )}
 
         {/* PWA Install Prompt */}

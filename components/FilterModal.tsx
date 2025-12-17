@@ -1,7 +1,10 @@
-import React, { useState, useCallback, useMemo, memo } from 'react';
+import React, { useState, useCallback, useMemo, memo, useEffect } from 'react';
 import { X, Filter, Calendar, Tag, CreditCard, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from './Button';
-import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, PAYMENT_METHODS } from '../constants';
+import { PAYMENT_METHODS } from '../constants';
+import { storageService } from '../services/storageService';
+import { CustomCategory } from '../types';
+import { useI18n } from '../contexts/I18nContext';
 
 interface FilterModalProps {
     filters: {
@@ -17,7 +20,14 @@ interface FilterModalProps {
 }
 
 const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, onClose }) => {
+    const { t, language } = useI18n();
     const [localFilters, setLocalFilters] = useState(filters);
+    const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+
+    // Load custom categories on mount
+    useEffect(() => {
+        storageService.getCategories().then(setCustomCategories).catch(console.error);
+    }, []);
 
     const handleApply = useCallback(() => {
         onApply(localFilters);
@@ -37,7 +47,23 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
         onApply(resetFilters);
     }, [onApply]);
 
-    const allCategories = useMemo(() => [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES], []);
+    // Get categories with translated names based on filter type
+    const displayCategories = useMemo(() => {
+        let filtered = customCategories;
+        
+        // Filter by type if not "all"
+        if (localFilters.type === 'income') {
+            filtered = customCategories.filter(cat => cat.type === 'income' || cat.type === 'both');
+        } else if (localFilters.type === 'expense') {
+            filtered = customCategories.filter(cat => cat.type === 'expense' || cat.type === 'both');
+        }
+        
+        // Map to display format with translated names
+        return filtered.map(cat => ({
+            key: cat.key || cat.id,
+            name: cat.name[language as 'es' | 'en'] || cat.name.es || cat.name.en
+        })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [customCategories, localFilters.type, language]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -56,7 +82,7 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                         <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
                             <Filter className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 dark:text-indigo-400" />
                         </div>
-                        <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Filtros Avanzados</h2>
+                        <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{t.filterModal.title}</h2>
                     </div>
                     <button
                         onClick={onClose}
@@ -72,7 +98,7 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                     {/* Type Filter */}
                     <div>
                         <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 sm:mb-3">
-                            Tipo de Transacción
+                            {t.filterModal.transactionType}
                         </label>
                         <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                             <button
@@ -82,7 +108,7 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                                         : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                                     }`}
                             >
-                                Todos
+                                {t.filterModal.all}
                             </button>
                             <button
                                 onClick={() => setLocalFilters({ ...localFilters, type: 'income' })}
@@ -92,7 +118,7 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                                     }`}
                             >
                                 <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                <span className="hidden sm:inline">Ingresos</span>
+                                <span className="hidden sm:inline">{t.filterModal.income}</span>
                             </button>
                             <button
                                 onClick={() => setLocalFilters({ ...localFilters, type: 'expense' })}
@@ -102,7 +128,7 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                                     }`}
                             >
                                 <TrendingDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                                <span className="hidden sm:inline">Gastos</span>
+                                <span className="hidden sm:inline">{t.filterModal.expenses}</span>
                             </button>
                         </div>
                     </div>
@@ -111,16 +137,16 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                     <div>
                         <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                             <Tag className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1" />
-                            Categoría
+                            {t.filterModal.category}
                         </label>
                         <select
                             value={localFilters.category || ''}
                             onChange={(e) => setLocalFilters({ ...localFilters, category: e.target.value || null })}
                             className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl border transition-all bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 text-slate-900 dark:text-slate-100 text-xs sm:text-sm"
                         >
-                            <option value="">Todas las categorías</option>
-                            {allCategories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
+                            <option value="">{t.filterModal.allCategories}</option>
+                            {displayCategories.map(cat => (
+                                <option key={cat.key} value={cat.key}>{cat.name}</option>
                             ))}
                         </select>
                     </div>
@@ -129,11 +155,11 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                     <div>
                         <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1" />
-                            Rango de Fechas
+                            {t.filterModal.dateRange}
                         </label>
                         <div className="grid grid-cols-2 gap-2 sm:gap-3">
                             <div>
-                                <label className="block text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">Desde</label>
+                                <label className="block text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">{t.filterModal.from}</label>
                                 <input
                                     type="date"
                                     value={localFilters.dateFrom || ''}
@@ -142,7 +168,7 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                                 />
                             </div>
                             <div>
-                                <label className="block text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">Hasta</label>
+                                <label className="block text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">{t.filterModal.to}</label>
                                 <input
                                     type="date"
                                     value={localFilters.dateTo || ''}
@@ -157,14 +183,14 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                     <div>
                         <label className="block text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5 sm:mb-2">
                             <CreditCard className="w-3.5 h-3.5 sm:w-4 sm:h-4 inline mr-1" />
-                            Método de Pago
+                            {t.filterModal.paymentMethod}
                         </label>
                         <select
                             value={localFilters.paymentMethod || ''}
                             onChange={(e) => setLocalFilters({ ...localFilters, paymentMethod: e.target.value || null })}
                             className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl border transition-all bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:focus:ring-indigo-900/30 text-slate-900 dark:text-slate-100 text-xs sm:text-sm"
                         >
-                            <option value="">Todos los métodos</option>
+                            <option value="">{t.filterModal.allMethods}</option>
                             {PAYMENT_METHODS.map(method => (
                                 <option key={method} value={method}>{method}</option>
                             ))}
@@ -179,13 +205,13 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                         onClick={handleReset}
                         className="flex-1 py-2 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                     >
-                        Limpiar
+                        {t.filterModal.clear}
                     </button>
                     <button
                         onClick={handleApply}
                         className="flex-1 py-2 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-semibold text-xs sm:text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200 dark:shadow-indigo-900/30 transition-all hover:scale-[1.02]"
                     >
-                        Aplicar Filtros
+                        {t.filterModal.apply}
                     </button>
                 </div>
 
