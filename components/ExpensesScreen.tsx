@@ -10,12 +10,13 @@ import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
 import { smartNotificationService } from '../services/smartNotificationService';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
+import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
   currencySymbol?: string;
   currencyCode?: string;
-  monthlyBudget?: number;
+  budgetPeriodData: BudgetPeriodData;
   onQuickExpense: () => void;
   onRecurringExpense: () => void;
   onPlannedExpense: () => void;
@@ -39,7 +40,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   transactions,
   currencySymbol = '$',
   currencyCode = 'MXN',
-  monthlyBudget = 0,
+  budgetPeriodData,
   onQuickExpense,
   onRecurringExpense,
   onPlannedExpense,
@@ -127,9 +128,21 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     return breakdown.sort((a, b) => b.amount - a.amount);
   }, [expenses, currentMonth, currentYear]);
 
-  // Budget calculations
-  const budgetUsedPercent = monthlyBudget > 0 ? (thisMonthExpenses / monthlyBudget) * 100 : 0;
-  const budgetRemaining = monthlyBudget - thisMonthExpenses;
+  // Budget calculations from centralized hook (Single Source of Truth)
+  const { 
+    budgetTotal, 
+    spentBudgeted, 
+    spentUnbudgeted, 
+    totalSpent, 
+    remaining, 
+    remainingPercentage,
+    incomeTotal,
+    incomeSurplus,
+    hasIncomeBudgetGap 
+  } = budgetPeriodData;
+
+  const budgetUsedPercent = remainingPercentage;
+  const budgetRemaining = remaining;
 
   // Month expense breakdown for info modal
   const monthExpenseBreakdown = useMemo((): AmountBreakdownItem[] => {
@@ -178,24 +191,36 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     const breakdown: AmountBreakdownItem[] = [];
     
     breakdown.push({
-      label: language === 'es' ? 'Presupuesto Mensual' : 'Monthly Budget',
-      amount: monthlyBudget,
+      label: language === 'es' ? 'Presupuesto Total' : 'Total Budget',
+      amount: budgetTotal,
       type: 'neutral',
       icon: 'info',
       description: language === 'es'
-        ? 'Límite de gasto establecido para este mes'
-        : 'Spending limit set for this month'
+        ? 'Suma de todos los presupuestos activos definidos en Presupuestos'
+        : 'Sum of all active budgets defined in Budgets'
     });
 
     breakdown.push({
-      label: language === 'es' ? 'Gastado Este Mes' : 'Spent This Month',
-      amount: thisMonthExpenses,
+      label: language === 'es' ? 'Gastado Dentro de Presupuesto' : 'Spent Within Budget',
+      amount: spentBudgeted,
       type: 'subtraction',
       icon: 'expense',
       description: language === 'es'
-        ? `Has usado el ${budgetUsedPercent.toFixed(1)}% de tu presupuesto`
-        : `You've used ${budgetUsedPercent.toFixed(1)}% of your budget`
+        ? `Gastos vinculados a categorías presupuestadas - ${budgetUsedPercent.toFixed(1)}% del presupuesto`
+        : `Expenses linked to budgeted categories - ${budgetUsedPercent.toFixed(1)}% of budget`
     });
+
+    if (spentUnbudgeted > 0) {
+      breakdown.push({
+        label: language === 'es' ? 'Gastado Fuera de Presupuesto' : 'Spent Outside Budget',
+        amount: spentUnbudgeted,
+        type: 'subtraction',
+        icon: 'info',
+        description: language === 'es'
+          ? 'Gastos sin categoría presupuestada asociada'
+          : 'Expenses without associated budget category'
+      });
+    }
 
     breakdown.push({
       label: language === 'es' ? 'Restante' : 'Remaining',
@@ -203,12 +228,12 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
       type: budgetRemaining >= 0 ? 'addition' : 'subtraction',
       icon: budgetRemaining >= 0 ? 'savings' : 'info',
       description: budgetRemaining >= 0
-        ? (language === 'es' ? 'Disponible para gastar este mes' : 'Available to spend this month')
+        ? (language === 'es' ? 'Disponible para gastar dentro del presupuesto' : 'Available to spend within budget')
         : (language === 'es' ? '¡Has excedido tu presupuesto!' : 'You have exceeded your budget!')
     });
 
     return breakdown;
-  }, [monthlyBudget, thisMonthExpenses, budgetRemaining, budgetUsedPercent, language]);
+  }, [budgetTotal, spentBudgeted, spentUnbudgeted, budgetRemaining, budgetUsedPercent, language]);
 
   // Get pending recurring payments (upcoming payments that need confirmation)
   const pendingRecurringPayments = useMemo((): PendingPayment[] => {
@@ -433,7 +458,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                 </button>
               </div>
               <div className="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200">
-                {formatCurrency(monthlyBudget)}
+                {formatCurrency(budgetTotal)}
               </div>
             </div>
           </div>
@@ -566,7 +591,26 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         </div>
       )}
 
-      {/* Budget Alert */}
+      {/* Income vs Budget Gap Warning */}
+      {hasIncomeBudgetGap && budgetTotal > 0 && (
+        <div className="px-3 sm:px-4 mb-4 sm:mb-6">
+          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
+            <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-bold text-amber-900 dark:text-amber-100 text-xs sm:text-sm mb-0.5">
+                {language === 'es' ? '⚠️ Presupuesto Mayor a Ingresos' : '⚠️ Budget Exceeds Income'}
+              </h3>
+              <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-300">
+                {language === 'es' 
+                  ? `Tu presupuesto (${formatCurrency(budgetTotal)}) supera tus ingresos del mes (${formatCurrency(incomeTotal)}). Déficit: ${formatCurrency(Math.abs(incomeSurplus))}`
+                  : `Your budget (${formatCurrency(budgetTotal)}) exceeds your monthly income (${formatCurrency(incomeTotal)}). Deficit: ${formatCurrency(Math.abs(incomeSurplus))}`}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Budget Usage Alert */}
       {budgetUsedPercent >= 90 && (
         <div className="px-3 sm:px-4 mb-4 sm:mb-6">
           <div className="bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded-xl p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
@@ -942,7 +986,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         onClose={() => setShowBudgetInfo(false)}
         title={language === 'es' ? 'Información del Presupuesto' : 'Budget Information'}
         subtitle={language === 'es' ? 'Desglose de tu presupuesto mensual' : 'Breakdown of your monthly budget'}
-        totalAmount={monthlyBudget}
+        totalAmount={budgetTotal}
         breakdown={budgetBreakdown}
         currencySymbol={currencySymbol}
         language={language as 'es' | 'en'}

@@ -269,6 +269,73 @@ service cloud.firestore {
     }
 
     // ============================================
+    // GOALS COLLECTION (Root-level - Phase 2.1)
+    // ============================================
+    // Goals created from surplus distribution plans are stored at root level
+    // Each goal belongs to a specific user (userId field)
+
+    match /goals/{goalId} {
+      // Helper function: Check if goal belongs to authenticated user
+      function isGoalOwner() {
+        return isAuthenticated() && 
+               request.auth.uid == resource.data.userId;
+      }
+
+      // Helper function: Validate new goal creation
+      function isValidGoalCreate() {
+        return isAuthenticated() &&
+               // userId MUST match authenticated user
+               request.resource.data.userId == request.auth.uid &&
+               // Required fields
+               request.resource.data.keys().hasAll([
+                 'userId', 'name', 'targetAmount', 'currentAmount', 
+                 'status', 'source', 'createdAt'
+               ]) &&
+               // Amounts validation
+               isValidAmount(request.resource.data.targetAmount) &&
+               isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+               request.resource.data.currentAmount <= request.resource.data.targetAmount &&
+               // Status must be 'active' on creation
+               request.resource.data.status in ['active', 'completed'] &&
+               // Size check
+               isValidSize();
+      }
+
+      // Helper function: Validate goal update
+      function isValidGoalUpdate() {
+        return isAuthenticated() &&
+               // Cannot change userId
+               request.resource.data.userId == resource.data.userId &&
+               // Must be owner
+               request.auth.uid == resource.data.userId &&
+               // Cannot change createdAt
+               request.resource.data.createdAt == resource.data.createdAt &&
+               // Amounts validation
+               isValidAmount(request.resource.data.targetAmount) &&
+               isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+               // Valid status transitions
+               request.resource.data.status in ['active', 'deleted', 'completed'] &&
+               // Size check
+               isValidSize();
+      }
+
+      // READ: User can only read their own goals
+      allow read: if isAuthenticated() && 
+                    resource.data.userId == request.auth.uid;
+
+      // CREATE: User can only create goals for themselves
+      allow create: if isValidGoalCreate();
+
+      // UPDATE: User can only update their own goals
+      // Allows updating status to 'deleted' (soft-delete)
+      allow update: if isValidGoalUpdate();
+
+      // DELETE: Physical deletion not allowed (use soft-delete instead)
+      // Set status='deleted' via update
+      allow delete: if false;
+    }
+
+    // ============================================
     // DENY ALL OTHER ACCESS
     // ============================================
 

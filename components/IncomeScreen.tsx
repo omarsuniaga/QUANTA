@@ -16,6 +16,7 @@ interface IncomeScreenProps {
   onAddExtraIncome: () => void;
   onEditTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
+  onGoalsCreated?: () => void;
 }
 
 export const IncomeScreen: React.FC<IncomeScreenProps> = ({
@@ -26,7 +27,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   onAddFixedIncome,
   onAddExtraIncome,
   onEditTransaction,
-  onDeleteTransaction
+  onDeleteTransaction,
+  onGoalsCreated
 }) => {
   const { language } = useI18n();
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'all'>('current');
@@ -385,6 +387,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
         budgetPeriodData={budgetPeriodData}
         currencySymbol={currencySymbol}
         language={language}
+        onGoalsCreated={onGoalsCreated}
       />
 
       {/* Delete Confirmation Modal */}

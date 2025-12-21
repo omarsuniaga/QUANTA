@@ -29,6 +29,7 @@ import { useNotificationSystem } from './hooks/useNotificationSystem';
 import { useTransactionHandlers } from './hooks/useTransactionHandlers';
 import { useGoalHandlers } from './hooks/useGoalHandlers';
 import { useBudgetHandlers } from './hooks/useBudgetHandlers';
+import { useBudgetPeriod } from './hooks/useBudgetPeriod';
 
 // Services
 import { storageService } from './services/storageService';
@@ -115,6 +116,9 @@ export default function App() {
     toast,
     closeBudgetModal: modalManager.closeBudgetModal,
   });
+
+  // Budget period calculations (Single Source of Truth)
+  const currentBudgetPeriod = useBudgetPeriod(budgets, transactions);
 
   // Notification system
   useNotificationSystem({
@@ -265,10 +269,12 @@ export default function App() {
           transactions={transactions}
           currencySymbol={currencySymbol}
           currencyCode={currencyCode}
+          budgetPeriodData={currentBudgetPeriod}
           onAddFixedIncome={() => modalManager.openActionModal('income', { isRecurring: true, frequency: 'monthly' })}
           onAddExtraIncome={() => modalManager.openActionModal('income', { isRecurring: false })}
           onEditTransaction={(tx) => transactionHandlers.handleEditTransaction(tx, modalManager.openActionModal)}
           onDeleteTransaction={transactionHandlers.handleDeleteTransaction}
+          onGoalsCreated={refreshGoals}
         />
       )}
 
@@ -278,7 +284,7 @@ export default function App() {
           transactions={transactions}
           currencySymbol={currencySymbol}
           currencyCode={currencyCode}
-          monthlyBudget={45000}
+          budgetPeriodData={currentBudgetPeriod}
           onQuickExpense={() => modalManager.openActionModal('expense', { isRecurring: false })}
           onRecurringExpense={() => modalManager.openActionModal('expense', { isRecurring: true, frequency: 'monthly' })}
           onPlannedExpense={() => modalManager.openActionModal('expense', { isRecurring: false })}

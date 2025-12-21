@@ -1,6 +1,8 @@
-import React from 'react';
-import { X, PiggyBank, Target, TrendingUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, PiggyBank, Target, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
+import { calculatePlanAllocations, PlanId } from '../utils/surplusPlan';
+import { createGoalsFromPlan, getCurrentPeriodKey, hasGoalsForPeriod, deleteGoalsForPeriod } from '../services/goalsService';
 
 interface AllocationPlan {
   id: string;
@@ -72,6 +74,7 @@ interface SurplusDistributionModalProps {
   budgetPeriodData: BudgetPeriodData;
   currencySymbol?: string;
   language?: 'es' | 'en';
+  onGoalsCreated?: () => void; // Callback para refrescar goals UI
 }
 
 export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> = ({
@@ -79,9 +82,14 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
   onClose,
   budgetPeriodData,
   currencySymbol = 'RD$',
-  language = 'es'
+  language = 'es',
+  onGoalsCreated
 }) => {
   const available = Math.max(0, budgetPeriodData.incomeSurplus);
+  const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   
   const formatCurrency = (amount: number) => {
     const locale = language === 'es' ? 'es-DO' : 'en-US';
@@ -204,14 +212,22 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
                     {language === 'es' ? plan.description : plan.descriptionEn}
                   </p>
                   
-                  {/* Action Button - Placeholder for Phase 2 */}
+                  {/* Action Button - Phase 2.1: Real implementation with duplicate check */}
                   <button
-                    onClick={() => {
-                      // Placeholder: Will be implemented in Phase 2
-                      console.log(`Plan selected: ${plan.id}`);
-                      onClose();
+                    onClick={async () => {
+                      const periodKey = getCurrentPeriodKey();
+                      const hasDuplicates = await hasGoalsForPeriod(periodKey);
+                      
+                      if (hasDuplicates) {
+                        setConfirmPlan(plan.id as PlanId);
+                        setShowDuplicateWarning(true);
+                      } else {
+                        setConfirmPlan(plan.id as PlanId);
+                        setShowDuplicateWarning(false);
+                      }
                     }}
-                    className={`w-full py-2 px-4 rounded-lg font-semibold text-sm transition-all ${
+                    disabled={available <= 0 || isCreating}
+                    className={`w-full py-2 px-4 rounded-lg font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       plan.id === 'balanced'
                         ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-sm hover:shadow-md'
                         : plan.id === 'conservative'
@@ -236,6 +252,138 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
           </div>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      {confirmPlan && (
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-10">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-center mb-4">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center ${
+                showDuplicateWarning 
+                  ? 'bg-amber-100 dark:bg-amber-900/30' 
+                  : 'bg-indigo-100 dark:bg-indigo-900/30'
+              }`}>
+                {showDuplicateWarning ? (
+                  <AlertCircle className="w-7 h-7 text-amber-600 dark:text-amber-400" />
+                ) : (
+                  <Target className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
+                )}
+              </div>
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">
+              {showDuplicateWarning
+                ? (language === 'es' ? '⚠️ Metas Existentes' : '⚠️ Existing Goals')
+                : (language === 'es' ? '¿Crear Metas Automáticas?' : 'Create Automatic Goals?')}
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 text-center mb-4">
+              {showDuplicateWarning
+                ? (language === 'es'
+                  ? `Ya tienes metas de planes de superávit para este mes. Al continuar, se reemplazarán las metas anteriores con ${formatCurrency(available)} en 3 nuevas metas. Tus metas manuales no se verán afectadas.`
+                  : `You already have surplus plan goals for this month. Continuing will replace previous goals with ${formatCurrency(available)} in 3 new goals. Your manual goals won't be affected.`)
+                : (language === 'es'
+                  ? `Se crearán 3 metas automáticas por un total de ${formatCurrency(available)}`
+                  : `3 automatic goals will be created for a total of ${formatCurrency(available)}`)}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmPlan(null)}
+                disabled={isCreating}
+                className="flex-1 py-2.5 px-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+              >
+                {language === 'es' ? 'Cancelar' : 'Cancel'}
+              </button>
+              <button
+                onClick={async () => {
+                  setIsCreating(true);
+                  const periodKey = getCurrentPeriodKey();
+                  
+                  // Si hay duplicados, eliminarlos primero
+                  if (showDuplicateWarning) {
+                    const deleted = await deleteGoalsForPeriod(periodKey);
+                    if (!deleted) {
+                      setToast({
+                        type: 'error',
+                        message: language === 'es'
+                          ? 'Error al eliminar metas anteriores'
+                          : 'Error deleting previous goals'
+                      });
+                      setIsCreating(false);
+                      setTimeout(() => setToast(null), 3000);
+                      return;
+                    }
+                  }
+                  
+                  const allocations = calculatePlanAllocations(available, confirmPlan);
+                  const result = await createGoalsFromPlan({
+                    periodKey,
+                    planId: confirmPlan,
+                    allocations,
+                    language
+                  });
+
+                  setIsCreating(false);
+                  setConfirmPlan(null);
+                  setShowDuplicateWarning(false);
+
+                  if (result.success) {
+                    // Refrescar goals UI inmediatamente
+                    if (onGoalsCreated) {
+                      onGoalsCreated();
+                    }
+                    
+                    setToast({
+                      type: 'success',
+                      message: language === 'es'
+                        ? `✅ ${result.goalsCreated?.length || 3} metas creadas exitosamente`
+                        : `✅ ${result.goalsCreated?.length || 3} goals created successfully`
+                    });
+                    setTimeout(() => {
+                      setToast(null);
+                      onClose();
+                    }, 2000);
+                  } else {
+                    setToast({
+                      type: 'error',
+                      message: result.error || (language === 'es' ? 'Error al crear metas' : 'Error creating goals')
+                    });
+                    setTimeout(() => setToast(null), 3000);
+                  }
+                }}
+                disabled={isCreating}
+                className={`flex-1 py-2.5 px-4 font-semibold rounded-lg transition-colors disabled:opacity-50 ${
+                  showDuplicateWarning
+                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                }`}
+              >
+                {isCreating
+                  ? (language === 'es' ? 'Creando...' : 'Creating...')
+                  : showDuplicateWarning
+                    ? (language === 'es' ? 'Reemplazar' : 'Replace')
+                    : (language === 'es' ? 'Confirmar' : 'Confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+          <div className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg ${
+            toast.type === 'success'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-rose-500 text-white'
+          }`}>
+            {toast.type === 'success' ? (
+              <CheckCircle className="w-5 h-5" />
+            ) : (
+              <AlertCircle className="w-5 h-5" />
+            )}
+            <span className="text-sm font-medium">{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

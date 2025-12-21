@@ -48,6 +48,7 @@ interface SettingsContextType {
   
   // Refresh
   refreshAll: () => Promise<void>;
+  refreshGoals: () => Promise<void>;
 }
 
 // Default Settings
@@ -261,6 +262,15 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
     await loadAllData();
   }, []);
 
+  const refreshGoals = useCallback(async () => {
+    try {
+      const gs = await storageService.getGoals();
+      setGoals(gs);
+    } catch (error) {
+      console.error('Error refreshing goals:', error);
+    }
+  }, []);
+
   return (
     <SettingsContext.Provider value={{
       settings,
@@ -290,7 +300,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       deleteAccount,
       updateBudget,
       deleteBudget,
-      refreshAll
+      refreshAll,
+      refreshGoals
     }}>
       {children}
     </SettingsContext.Provider>
