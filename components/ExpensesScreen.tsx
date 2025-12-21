@@ -72,13 +72,14 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat) {
-      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
     
     const translated = (t.categories as Record<string, string>)?.[categoryId];
-    if (translated) return translated;
+    if (translated && translated !== categoryId) return translated;
     
-    return categoryId.length > 15 ? 'Otros' : categoryId;
+    // If no translation or it's an ID (long string), return generic name
+    return language === 'es' ? 'Otra categoría' : 'Other category';
   };
 
   // Filter only expenses

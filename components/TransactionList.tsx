@@ -42,10 +42,15 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
     // First try custom categories
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat) {
-      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
     // Fallback to translations
-    return (t.categories as Record<string, string>)[categoryId] || categoryId;
+    const translation = (t.categories as Record<string, string>)[categoryId];
+    if (!translation || translation === categoryId) {
+      // If no translation found, it's likely an ID - use generic name
+      return language === 'es' ? 'Otra categoría' : 'Other category';
+    }
+    return translation;
   };
 
   // Helper to get category icon

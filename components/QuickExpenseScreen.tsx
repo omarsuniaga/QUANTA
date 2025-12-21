@@ -126,7 +126,7 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
     // Try custom categories (by id or key)
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat) {
-      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
     
     // Fallback: try to find in all categories from settings
@@ -137,9 +137,10 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
     
     // Try translation system for default categories
     const translated = (t.categories as Record<string, string>)[categoryId];
-    if (translated) return translated;
+    if (translated && translated !== categoryId) return translated;
     
-    return categoryId.length > 15 ? 'Otros' : categoryId;
+    // If no translation found, it's likely an ID - use generic name
+    return language === 'es' ? 'Otra categoría' : 'Other category';
   };
 
   const formatDate = (dateStr: string) => {

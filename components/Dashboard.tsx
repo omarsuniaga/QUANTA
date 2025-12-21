@@ -138,12 +138,20 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
           
           if (customCat) {
             // Use custom category name based on language
-            translatedName = customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+            translatedName = customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || 'Sin categoría';
             // Convert Tailwind color name to hex
             categoryColor = TAILWIND_COLORS[customCat.color] || CATEGORY_COLORS[curr.category] || '#94a3b8';
           } else {
             // Fallback to translation system for default categories
-            translatedName = (t.categories as Record<string, string>)[curr.category] || curr.category;
+            const categoryTranslation = (t.categories as Record<string, string>)[curr.category];
+            
+            // If no translation found, it might be an ID - use a generic name
+            if (!categoryTranslation || categoryTranslation === curr.category) {
+              translatedName = language === 'es' ? 'Otra categoría' : 'Other category';
+            } else {
+              translatedName = categoryTranslation;
+            }
+            
             categoryColor = CATEGORY_COLORS[curr.category] || '#94a3b8';
           }
           
