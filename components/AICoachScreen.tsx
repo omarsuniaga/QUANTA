@@ -87,6 +87,26 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
     return language === 'es' ? 'Otra categoría' : 'Other category';
   };
 
+  // Process recommendation text to replace category IDs with names
+  const processRecommendationText = (text: string): string => {
+    let processedText = text;
+    
+    // Find all potential category IDs in the text (alphanumeric strings 15+ chars)
+    const potentialIds = text.match(/[A-Za-z0-9]{15,}/g);
+    
+    if (potentialIds) {
+      potentialIds.forEach(id => {
+        const categoryName = getCategoryName(id);
+        // Only replace if we found a valid category name (not generic fallback)
+        if (categoryName !== 'Otra categoría' && categoryName !== 'Other category') {
+          processedText = processedText.replace(new RegExp(id, 'g'), categoryName);
+        }
+      });
+    }
+    
+    return processedText;
+  };
+
   const getHealthColor = (status: string) => {
     switch (status) {
       case 'excellent': return 'emerald';
@@ -363,6 +383,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                       recommendation={rec}
                       currencySymbol={currencySymbol}
                       currencyCode={currencyCode}
+                      processText={processRecommendationText}
                     />
                   ))}
               </div>
@@ -456,7 +477,8 @@ const RecommendationCard: React.FC<{
   recommendation: AIRecommendation;
   currencySymbol: string;
   currencyCode: string;
-}> = ({ recommendation, currencySymbol, currencyCode }) => {
+  processText: (text: string) => string;
+}> = ({ recommendation, currencySymbol, currencyCode, processText }) => {
   const TypeIcon = getTypeIconForRec(recommendation.type);
   const priorityColor = recommendation.priority === 'high' ? 'rose' : recommendation.priority === 'medium' ? 'amber' : 'blue';
 
@@ -473,10 +495,10 @@ const RecommendationCard: React.FC<{
             </span>
           </div>
           <h4 className="font-bold text-slate-800 dark:text-white">
-            {recommendation.title}
+            {processText(recommendation.title)}
           </h4>
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
-            {recommendation.description}
+            {processText(recommendation.description)}
           </p>
           
           {recommendation.potentialSavings && (
