@@ -1,13 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowUpRight, Briefcase, Zap, Plus, Edit2, Pause, Play, Trash2, TrendingUp, Calendar, MoreVertical } from 'lucide-react';
+import { ArrowUpRight, Briefcase, Zap, Edit2, Trash2, TrendingUp, Calendar, MoreVertical } from 'lucide-react';
 import { Transaction } from '../types';
-import { Button } from './Button';
 import { useI18n } from '../contexts/I18nContext';
+import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
+import { FinancialHealthCard } from './FinancialHealthCard';
+import { SurplusDistributionModal } from './SurplusDistributionModal';
+import { getFinancialHealth } from '../utils/financialHealth';
 
 interface IncomeScreenProps {
   transactions: Transaction[];
   currencySymbol?: string;
   currencyCode?: string;
+  budgetPeriodData: BudgetPeriodData;
   onAddFixedIncome: () => void;
   onAddExtraIncome: () => void;
   onEditTransaction: (transaction: Transaction) => void;
@@ -16,8 +20,9 @@ interface IncomeScreenProps {
 
 export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   transactions,
-  currencySymbol = '$',
-  currencyCode = 'MXN',
+  currencySymbol = 'RD$',
+  currencyCode = 'DOP',
+  budgetPeriodData,
   onAddFixedIncome,
   onAddExtraIncome,
   onEditTransaction,
@@ -27,6 +32,11 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'all'>('current');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; type: 'fixed' | 'extra' } | null>(null);
+  const [isSurplusModalOpen, setIsSurplusModalOpen] = useState(false);
+
+  // Extract financial health status from SSOT
+  const { status } = getFinancialHealth(budgetPeriodData);
+  const hasSurplus = status === 'healthy_surplus' || status === 'strong_surplus';
 
   // Filtrar solo ingresos
   const incomeTransactions = useMemo(() =>
@@ -70,12 +80,14 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   }, [incomeTransactions]);
 
   const formatCurrency = (amount: number) => {
-    return `${currencySymbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const locale = language === 'es' ? 'es-DO' : 'en-US';
+    return `${currencySymbol} ${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+    const locale = language === 'es' ? 'es-ES' : 'en-US';
+    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const getFrequencyLabel = (frequency?: string) => {
@@ -149,6 +161,14 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
           <span className="text-xs sm:text-sm">Ingreso Extra</span>
         </button>
       </div>
+
+      {/* Financial Health Card - Compact by default */}
+      <FinancialHealthCard
+        budgetPeriodData={budgetPeriodData}
+        currencySymbol={currencySymbol}
+        language={language}
+        onManageSurplus={hasSurplus ? () => setIsSurplusModalOpen(true) : undefined}
+      />
 
       {/* Fixed Incomes Section */}
       <div className="px-3 sm:px-4 mb-4 sm:mb-6">
@@ -357,6 +377,15 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
           </div>
         )}
       </div>
+
+      {/* Surplus Distribution Modal */}
+      <SurplusDistributionModal
+        isOpen={isSurplusModalOpen}
+        onClose={() => setIsSurplusModalOpen(false)}
+        budgetPeriodData={budgetPeriodData}
+        currencySymbol={currencySymbol}
+        language={language}
+      />
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
