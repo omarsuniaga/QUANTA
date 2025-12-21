@@ -2,13 +2,14 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ArrowDownRight, Zap, Calendar, AlertCircle, Coffee, ShoppingBag, Car, Home, 
   Bell, Clock, Edit3, Trash2, Filter, Check, X, ChevronDown, ChevronUp,
-  CreditCard, AlertTriangle, CalendarClock, History, Banknote, MoreVertical
+  CreditCard, AlertTriangle, CalendarClock, History, Banknote, MoreVertical, Info
 } from 'lucide-react';
 import { Transaction, CustomCategory } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
 import { smartNotificationService } from '../services/smartNotificationService';
+import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
@@ -56,6 +57,9 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   const [expandedSection, setExpandedSection] = useState<'pending' | 'history' | null>('pending');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
+  const [showMonthExpenseInfo, setShowMonthExpenseInfo] = useState(false);
+  const [showBudgetInfo, setShowBudgetInfo] = useState(false);
 
   // Load custom categories
   useEffect(() => {
@@ -96,9 +100,114 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
       .reduce((sum, t) => sum + t.amount, 0);
   }, [expenses, currentMonth, currentYear]);
 
+  // Category breakdown for current month
+  const categoryBreakdown = useMemo(() => {
+    const currentMonthExpenses = expenses.filter(t => {
+      const date = new Date(t.date);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+
+    const breakdown: { category: string; amount: number; count: number }[] = [];
+    const categoryMap = new Map<string, { amount: number; count: number }>();
+
+    currentMonthExpenses.forEach(expense => {
+      const existing = categoryMap.get(expense.category) || { amount: 0, count: 0 };
+      categoryMap.set(expense.category, {
+        amount: existing.amount + expense.amount,
+        count: existing.count + 1
+      });
+    });
+
+    categoryMap.forEach((data, category) => {
+      breakdown.push({ category, amount: data.amount, count: data.count });
+    });
+
+    // Sort by amount descending
+    return breakdown.sort((a, b) => b.amount - a.amount);
+  }, [expenses, currentMonth, currentYear]);
+
   // Budget calculations
   const budgetUsedPercent = monthlyBudget > 0 ? (thisMonthExpenses / monthlyBudget) * 100 : 0;
   const budgetRemaining = monthlyBudget - thisMonthExpenses;
+
+  // Month expense breakdown for info modal
+  const monthExpenseBreakdown = useMemo((): AmountBreakdownItem[] => {
+    const breakdown: AmountBreakdownItem[] = [];
+    
+    // Group by category for top 5
+    categoryBreakdown.slice(0, 5).forEach(item => {
+      const categoryName = getCategoryName(item.category);
+      const percentage = thisMonthExpenses > 0 ? (item.amount / thisMonthExpenses) * 100 : 0;
+      
+      breakdown.push({
+        label: categoryName,
+        amount: item.amount,
+        type: 'subtraction',
+        icon: 'expense',
+        description: language === 'es'
+          ? `${item.count} gasto(s) - ${percentage.toFixed(1)}% del total`
+          : `${item.count} expense(s) - ${percentage.toFixed(1)}% of total`
+      });
+    });
+
+    // Add recurring expenses info
+    const recurringExpenses = expenses.filter(t => {
+      const date = new Date(t.date);
+      return t.isRecurring && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+    
+    if (recurringExpenses.length > 0) {
+      const recurringTotal = recurringExpenses.reduce((sum, t) => sum + t.amount, 0);
+      breakdown.push({
+        label: language === 'es' ? 'Gastos Recurrentes' : 'Recurring Expenses',
+        amount: recurringTotal,
+        type: 'neutral',
+        icon: 'recurring',
+        description: language === 'es'
+          ? `${recurringExpenses.length} gasto(s) recurrente(s) este mes`
+          : `${recurringExpenses.length} recurring expense(s) this month`
+      });
+    }
+
+    return breakdown;
+  }, [categoryBreakdown, thisMonthExpenses, expenses, currentMonth, currentYear, language, getCategoryName]);
+
+  // Budget breakdown for info modal
+  const budgetBreakdown = useMemo((): AmountBreakdownItem[] => {
+    const breakdown: AmountBreakdownItem[] = [];
+    
+    breakdown.push({
+      label: language === 'es' ? 'Presupuesto Mensual' : 'Monthly Budget',
+      amount: monthlyBudget,
+      type: 'neutral',
+      icon: 'info',
+      description: language === 'es'
+        ? 'Límite de gasto establecido para este mes'
+        : 'Spending limit set for this month'
+    });
+
+    breakdown.push({
+      label: language === 'es' ? 'Gastado Este Mes' : 'Spent This Month',
+      amount: thisMonthExpenses,
+      type: 'subtraction',
+      icon: 'expense',
+      description: language === 'es'
+        ? `Has usado el ${budgetUsedPercent.toFixed(1)}% de tu presupuesto`
+        : `You've used ${budgetUsedPercent.toFixed(1)}% of your budget`
+    });
+
+    breakdown.push({
+      label: language === 'es' ? 'Restante' : 'Remaining',
+      amount: budgetRemaining,
+      type: budgetRemaining >= 0 ? 'addition' : 'subtraction',
+      icon: budgetRemaining >= 0 ? 'savings' : 'info',
+      description: budgetRemaining >= 0
+        ? (language === 'es' ? 'Disponible para gastar este mes' : 'Available to spend this month')
+        : (language === 'es' ? '¡Has excedido tu presupuesto!' : 'You have exceeded your budget!')
+    });
+
+    return breakdown;
+  }, [monthlyBudget, thisMonthExpenses, budgetRemaining, budgetUsedPercent, language]);
 
   // Get pending recurring payments (upcoming payments that need confirmation)
   const pendingRecurringPayments = useMemo((): PendingPayment[] => {
@@ -279,21 +388,48 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         </p>
       </div>
 
-      {/* Budget Card */}
+      {/* Budget Card - Clickable */}
       <div className="px-3 sm:px-4 -mt-5 sm:-mt-6 mb-4 sm:mb-6">
-        <div className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-5">
+        <div 
+          onClick={() => setShowCategoryBreakdown(true)}
+          className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-5 cursor-pointer hover:shadow-xl transition-shadow"
+        >
           <div className="flex items-center justify-between mb-2 sm:mb-3">
             <div>
-              <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-0.5 sm:mb-1">
-                {language === 'es' ? 'Gastado Este Mes' : 'Spent This Month'}
+              <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
+                <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  {language === 'es' ? 'Gastado Este Mes' : 'Spent This Month'}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMonthExpenseInfo(true);
+                  }}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  aria-label="Info"
+                >
+                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                </button>
               </div>
               <div className="text-2xl sm:text-3xl font-bold text-rose-600 dark:text-rose-400">
                 {formatCurrency(thisMonthExpenses)}
               </div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5 sm:mb-1">
-                {language === 'es' ? 'Presupuesto' : 'Budget'}
+              <div className="flex items-center justify-end gap-2 mb-0.5 sm:mb-1">
+                <div className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {language === 'es' ? 'Presupuesto' : 'Budget'}
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowBudgetInfo(true);
+                  }}
+                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                  aria-label="Info"
+                >
+                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                </button>
               </div>
               <div className="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200">
                 {formatCurrency(monthlyBudget)}
@@ -321,6 +457,14 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
             <span className="font-bold text-slate-500 dark:text-slate-400">
               {budgetUsedPercent.toFixed(0)}%
             </span>
+          </div>
+          
+          {/* Hint to tap */}
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center flex items-center justify-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {language === 'es' ? 'Toca para ver desglose por categoría' : 'Tap to view category breakdown'}
+            </p>
           </div>
         </div>
       </div>
@@ -641,6 +785,101 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         )}
       </div>
 
+      {/* Category Breakdown Modal */}
+      {showCategoryBreakdown && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowCategoryBreakdown(false)}>
+          <div 
+            className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[80vh] overflow-hidden flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+                  {language === 'es' ? 'Gastos por Categoría' : 'Expenses by Category'}
+                </h3>
+                <button
+                  onClick={() => setShowCategoryBreakdown(false)}
+                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-slate-400" />
+                </button>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+                {language === 'es' 
+                  ? `Total del mes: ${formatCurrency(thisMonthExpenses)}`
+                  : `Month total: ${formatCurrency(thisMonthExpenses)}`}
+              </p>
+            </div>
+
+            {/* Category List */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+              {categoryBreakdown.length === 0 ? (
+                <div className="text-center py-8">
+                  <Banknote className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    {language === 'es' ? 'No hay gastos este mes' : 'No expenses this month'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {categoryBreakdown.map((item, index) => {
+                    const percentage = thisMonthExpenses > 0 ? (item.amount / thisMonthExpenses) * 100 : 0;
+                    const categoryName = getCategoryName(item.category);
+                    
+                    return (
+                      <div
+                        key={item.category}
+                        className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 sm:p-4"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                                {categoryName}
+                              </span>
+                              <span className="text-xs text-slate-500 dark:text-slate-400">
+                                ({item.count} {item.count === 1 ? (language === 'es' ? 'gasto' : 'expense') : (language === 'es' ? 'gastos' : 'expenses')})
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="text-base sm:text-lg font-bold text-rose-600 dark:text-rose-400">
+                                {formatCurrency(item.amount)}
+                              </div>
+                              <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                                {percentage.toFixed(1)}%
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Progress bar */}
+                        <div className="h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-rose-500 to-rose-600 transition-all duration-300"
+                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+              <button
+                onClick={() => setShowCategoryBreakdown(false)}
+                className="w-full py-2.5 px-4 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors"
+              >
+                {language === 'es' ? 'Cerrar' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteConfirm(null)}>
@@ -684,6 +923,29 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           </div>
         </div>
       )}
+
+      {/* Amount Info Modals */}
+      <AmountInfoModal
+        isOpen={showMonthExpenseInfo}
+        onClose={() => setShowMonthExpenseInfo(false)}
+        title={language === 'es' ? 'Gastos del Mes' : 'Month Expenses'}
+        subtitle={language === 'es' ? '¿De dónde vienen tus gastos?' : 'Where do your expenses come from?'}
+        totalAmount={thisMonthExpenses}
+        breakdown={monthExpenseBreakdown}
+        currencySymbol={currencySymbol}
+        language={language as 'es' | 'en'}
+      />
+
+      <AmountInfoModal
+        isOpen={showBudgetInfo}
+        onClose={() => setShowBudgetInfo(false)}
+        title={language === 'es' ? 'Información del Presupuesto' : 'Budget Information'}
+        subtitle={language === 'es' ? 'Desglose de tu presupuesto mensual' : 'Breakdown of your monthly budget'}
+        totalAmount={monthlyBudget}
+        breakdown={budgetBreakdown}
+        currencySymbol={currencySymbol}
+        language={language as 'es' | 'en'}
+      />
     </div>
   );
 };

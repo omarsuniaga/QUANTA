@@ -18,7 +18,8 @@ interface ActionModalProps {
     amount?: number;
     description?: string;
     paymentMethod?: string;
-    sharedWith?: string[];
+    date?: string;
+    time?: string;
   };
   currencySymbol?: string;
 }
@@ -28,12 +29,28 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const [amount, setAmount] = useState(initialValues?.amount?.toString() || '');
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
   const [category, setCategory] = useState<string>(initialValues?.category || '');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [time, setTime] = useState(new Date().toTimeString().slice(0, 5)); // HH:MM format
+  
+  // Extract date and time from initialValues if editing, otherwise use current
+  const extractDateTime = () => {
+    if (initialValues?.date) {
+      const dateTimeParts = initialValues.date.split('T');
+      const datePart = dateTimeParts[0]; // yyyy-MM-dd
+      const timePart = dateTimeParts[1] ? dateTimeParts[1].substring(0, 5) : new Date().toTimeString().slice(0, 5); // HH:MM
+      return { date: datePart, time: timePart };
+    }
+    return {
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toTimeString().slice(0, 5)
+    };
+  };
+  
+  const dateTime = extractDateTime();
+  const [date, setDate] = useState(dateTime.date);
+  const [time, setTime] = useState(dateTime.time);
   const [paymentMethodId, setPaymentMethodId] = useState<string>(initialValues?.paymentMethod || '');
 
   // Recurring Logic (Shared state, logic differs by mode)
-  const [isRecurring, setIsRecurring] = useState(true); // Default to true
+  const [isRecurring, setIsRecurring] = useState(false); // Default to false
   const [frequency, setFrequency] = useState<Frequency>('monthly');
 
   // Calculator state
@@ -46,11 +63,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
 
   // Income Specific
   const [gigType, setGigType] = useState<string>('');
-
-  // Shared Transactions
-  const [isShared, setIsShared] = useState(false);
-  const [sharedWith, setSharedWith] = useState<string[]>(initialValues?.sharedWith || []);
-  const [sharedInput, setSharedInput] = useState('');
 
   // Income Type
   const [incomeType, setIncomeType] = useState<'salary' | 'extra'>('salary');
@@ -112,29 +124,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
     setShowSuggestions(false);
   }, []);
 
-  const handleScanReceipt = useCallback(() => {
-    setIsScanning(true);
-    // Simulate OCR delay
-    setTimeout(() => {
-      setAmount('45.50');
-      setConcept('Supermarket Checkout');
-      setCategory('food');
-      setDate(new Date().toISOString().split('T')[0]);
-      setIsScanning(false);
-    }, 1500);
-  }, []);
-
-  const handleAddSharedUser = useCallback(() => {
-    if (sharedInput.trim()) {
-      setSharedWith([...sharedWith, sharedInput.trim()]);
-      setSharedInput('');
-    }
-  }, [sharedInput, sharedWith]);
-
-  const handleRemoveSharedUser = useCallback((index: number) => {
-    setSharedWith(sharedWith.filter((_, i) => i !== index));
-  }, [sharedWith]);
-
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
@@ -167,13 +156,12 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
         gigType: mode === 'income' ? gigType : undefined,
         incomeType: mode === 'income' ? incomeType : undefined,
         isIncludedInAccountBalance: mode === 'income' ? isAlreadyInBalance : undefined,
-        sharedWith: sharedWith.length > 0 ? sharedWith : undefined,
         isRecurring: isRecurring,
         frequency: isRecurring ? frequency : null
       });
     }
     onClose();
-  }, [mode, amount, concept, category, paymentMethodId, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, sharedWith, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
+  }, [mode, amount, concept, category, paymentMethodId, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
 
   // UI Config
   const config = {
@@ -227,20 +215,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2">
 
-          {/* Receipt Scanner Button (Expense Only) */}
-          {mode === 'expense' && (
-            <div className="mb-6 flex justify-center">
-              <button
-                type="button"
-                onClick={handleScanReceipt}
-                className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 px-4 py-2 rounded-xl transition-colors border border-indigo-100 dark:border-indigo-800"
-              >
-                <Camera className="w-4 h-4" />
-                {isScanning ? 'Escaneando...' : 'Escanear Recibo'}
-              </button>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
 
             {/* Amount Field */}
@@ -268,28 +242,56 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
               </div>
             </div>
 
-            {/* EXPENSE: Mood Selector */}
+            {/* EXPENSE: Mood Selector and Recurring Checkbox */}
             {mode === 'expense' && (
-              <div className="flex flex-col items-center space-y-2 pb-2">
-                <span className="text-xs font-bold text-slate-400 uppercase">¿Cómo te sientes?</span>
-                <div className="flex gap-4">
-                  {[
-                    { val: 'happy', icon: Smile, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' },
-                    { val: 'neutral', icon: Meh, color: 'text-slate-500 bg-slate-50 dark:bg-slate-800' },
-                    { val: 'tired', icon: Zap, color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/30' },
-                    { val: 'stressed', icon: Frown, color: 'text-rose-500 bg-rose-50 dark:bg-rose-900/30' }
-                  ].map((m) => (
-                    <button
-                      key={m.val}
-                      type="button"
-                      onClick={() => setMood(m.val as Mood)}
-                      className={`p-2 rounded-full transition-all ${mood === m.val ? `ring-2 ring-offset-2 ring-${m.color.split('-')[1]}-400 scale-110 shadow-sm` : 'opacity-60 hover:opacity-100'}`}
+              <div className="space-y-3">
+                <div className="flex flex-col items-center space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase">¿Cómo te sientes?</span>
+                  <div className="flex gap-4">
+                    {[
+                      { val: 'happy', icon: Smile, color: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' },
+                      { val: 'neutral', icon: Meh, color: 'text-slate-500 bg-slate-50 dark:bg-slate-800' },
+                      { val: 'tired', icon: Zap, color: 'text-amber-500 bg-amber-50 dark:bg-amber-900/30' },
+                      { val: 'stressed', icon: Frown, color: 'text-rose-500 bg-rose-50 dark:bg-rose-900/30' }
+                    ].map((m) => (
+                      <button
+                        key={m.val}
+                        type="button"
+                        onClick={() => setMood(m.val as Mood)}
+                        className={`p-2 rounded-full transition-all ${mood === m.val ? `ring-2 ring-offset-2 ring-${m.color.split('-')[1]}-400 scale-110 shadow-sm` : 'opacity-60 hover:opacity-100'}`}
+                      >
+                        <div className={`p-1.5 rounded-full ${m.color}`}>
+                          <m.icon className="w-5 h-5" />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Recurring Checkbox */}
+                <div className="flex items-center justify-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
+                  <input
+                    type="checkbox"
+                    id="recurring-check-expense"
+                    checked={isRecurring}
+                    onChange={(e) => setIsRecurring(e.target.checked)}
+                    className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                  />
+                  <label htmlFor="recurring-check-expense" className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-pointer select-none">
+                    <RefreshCw className="w-4 h-4 text-slate-400" />
+                    Es recurrente
+                  </label>
+                  {isRecurring && (
+                    <select
+                      value={frequency}
+                      onChange={(e) => setFrequency(e.target.value as Frequency)}
+                      className="ml-2 px-2 py-1 bg-white dark:bg-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 text-xs font-semibold text-slate-800 dark:text-white outline-none"
                     >
-                      <div className={`p-1.5 rounded-full ${m.color}`}>
-                        <m.icon className="w-5 h-5" />
-                      </div>
-                    </button>
-                  ))}
+                      <option value="monthly">Mensual</option>
+                      <option value="weekly">Semanal</option>
+                      <option value="yearly">Anual</option>
+                    </select>
+                  )}
                 </div>
               </div>
             )}
@@ -488,38 +490,40 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                 </div>
 
                 {/* Recurring Options for Income/Expense */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-3 mb-2">
-                    <input
-                      type="checkbox"
-                      id="recurring-check"
-                      checked={isRecurring}
-                      onChange={(e) => setIsRecurring(e.target.checked)}
-                      className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
-                    />
-                    <label htmlFor="recurring-check" className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-pointer select-none">
-                      <RefreshCw className="w-4 h-4 text-slate-400" />
-                      Es recurrente
-                    </label>
-                  </div>
-
-                  {isRecurring && (
-                    <div className="pl-8 pt-1 animate-in slide-in-from-top-2 fade-in">
-                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Frecuencia</label>
-                      <select
-                        value={frequency}
-                        onChange={(e) => setFrequency(e.target.value as Frequency)}
-                        className="w-full px-3 py-2 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-white outline-none"
-                      >
-                        <option value="monthly">Mensual</option>
-                        <option value="weekly">Semanal</option>
-                        <option value="yearly">Anual</option>
-                      </select>
+                {mode === 'income' && (
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center gap-3 mb-2">
+                      <input
+                        type="checkbox"
+                        id="recurring-check-income"
+                        checked={isRecurring}
+                        onChange={(e) => setIsRecurring(e.target.checked)}
+                        className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                      />
+                      <label htmlFor="recurring-check-income" className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-pointer select-none">
+                        <RefreshCw className="w-4 h-4 text-slate-400" />
+                        Es recurrente
+                      </label>
                     </div>
-                  )}
-                </div>
 
-                {/* Income Type Selector (Income Only) */}
+                    {isRecurring && (
+                      <div className="pl-8 pt-1 animate-in slide-in-from-top-2 fade-in">
+                        <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">Frecuencia</label>
+                        <select
+                          value={frequency}
+                          onChange={(e) => setFrequency(e.target.value as Frequency)}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-white outline-none"
+                        >
+                          <option value="monthly">Mensual</option>
+                          <option value="weekly">Semanal</option>
+                          <option value="yearly">Anual</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Income Type Selector */}
                 {mode === 'income' && (
                   <div className="space-y-3">
                     <div className="space-y-2">
@@ -609,27 +613,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                     )}
                   </div>
                 )}
-
-                {/* Shared With Section - BETA/Coming Soon */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 opacity-60">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="shared-check"
-                      checked={false}
-                      disabled
-                      className="w-5 h-5 rounded-md text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 cursor-not-allowed"
-                    />
-                    <label htmlFor="shared-check" className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2 cursor-not-allowed select-none">
-                      <Users className="w-4 h-4 text-slate-400" />
-                      Compartido con alguien
-                      <span className="text-[9px] bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-bold uppercase">Próximamente</span>
-                    </label>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-2 pl-8">
-                    Esta función permitirá compartir gastos con otros usuarios. Disponible próximamente.
-                  </p>
-                </div>
               </>
             )}
 

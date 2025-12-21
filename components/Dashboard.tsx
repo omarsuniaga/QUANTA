@@ -34,6 +34,7 @@ import { notificationService } from '../services/notificationService';
 import { storageService } from '../services/storageService';
 import { InsightCard } from './InsightCard';
 import { useI18n } from '../contexts/I18nContext';
+import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 
 interface DashboardProps {
   stats: DashboardStats;
@@ -49,6 +50,9 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showOracleHelp, setShowOracleHelp] = useState(false);
+  const [showBalanceInfo, setShowBalanceInfo] = useState(false);
+  const [showIncomeInfo, setShowIncomeInfo] = useState(false);
+  const [showExpenseInfo, setShowExpenseInfo] = useState(false);
 
   // Load subscriptions and custom categories on mount
   // Optimized: Only reload when transactions length changes significantly
@@ -89,6 +93,121 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   );
 
   // --- ORACLE: CASH FLOW PREDICTION ---
+  // Calculate balance breakdown for info modal
+  const balanceBreakdown = useMemo((): AmountBreakdownItem[] => {
+    const breakdown: AmountBreakdownItem[] = [];
+    
+    // Base balance from income and expenses
+    breakdown.push({
+      label: language === 'es' ? 'Balance Base' : 'Base Balance',
+      amount: stats.totalIncome - stats.totalExpense,
+      type: 'neutral',
+      icon: 'info',
+      description: language === 'es' 
+        ? `Total de ingresos (${formatCurrencyShort(stats.totalIncome)}) menos gastos (${formatCurrencyShort(stats.totalExpense)})`
+        : `Total income (${formatCurrencyShort(stats.totalIncome)}) minus expenses (${formatCurrencyShort(stats.totalExpense)})`
+    });
+
+    // Goals contributions
+    const goalsTotal = goals.reduce((sum, g) => sum + (g.currentAmount || 0), 0);
+    if (goalsTotal > 0) {
+      breakdown.push({
+        label: language === 'es' ? 'Dinero en Metas' : 'Money in Goals',
+        amount: goalsTotal,
+        type: 'subtraction',
+        icon: 'goal',
+        description: language === 'es'
+          ? `Total ahorrado en ${goals.length} meta(s) activa(s)`
+          : `Total saved in ${goals.length} active goal(s)`
+      });
+    }
+
+    return breakdown;
+  }, [stats, goals, language, formatCurrencyShort]);
+
+  // Calculate income breakdown
+  const incomeBreakdown = useMemo((): AmountBreakdownItem[] => {
+    const breakdown: AmountBreakdownItem[] = [];
+    
+    const salaryIncome = transactions
+      .filter(t => t.type === 'income' && (t as any).incomeType === 'salary')
+      .reduce((sum, t) => sum + t.amount, 0);
+    
+    const extraIncome = transactions
+      .filter(t => t.type === 'income' && (t as any).incomeType === 'extra')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    if (salaryIncome > 0) {
+      breakdown.push({
+        label: language === 'es' ? 'Ingresos por Salario' : 'Salary Income',
+        amount: salaryIncome,
+        type: 'addition',
+        icon: 'income',
+        description: language === 'es' ? 'Ingresos regulares (sueldo, nómina)' : 'Regular income (salary, payroll)'
+      });
+    }
+
+    if (extraIncome > 0) {
+      breakdown.push({
+        label: language === 'es' ? 'Ingresos Extra' : 'Extra Income',
+        amount: extraIncome,
+        type: 'addition',
+        icon: 'income',
+        description: language === 'es' ? 'Ingresos adicionales (freelance, bonos, ventas)' : 'Additional income (freelance, bonuses, sales)'
+      });
+    }
+
+    const recurringIncome = transactions
+      .filter(t => t.type === 'income' && t.isRecurring)
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    if (recurringIncome > 0) {
+      breakdown.push({
+        label: language === 'es' ? 'Ingresos Recurrentes' : 'Recurring Income',
+        amount: recurringIncome,
+        type: 'neutral',
+        icon: 'recurring',
+        description: language === 'es' ? 'Ingresos que se repiten automáticamente' : 'Income that repeats automatically'
+      });
+    }
+
+    return breakdown;
+  }, [transactions, language]);
+
+  // Calculate expense breakdown
+  const expenseBreakdown = useMemo((): AmountBreakdownItem[] => {
+    const breakdown: AmountBreakdownItem[] = [];
+    
+    // Group by category
+    categoryData.slice(0, 5).forEach((cat: any) => {
+      breakdown.push({
+        label: cat.name,
+        amount: cat.value,
+        type: 'subtraction',
+        icon: 'expense',
+        description: language === 'es' 
+          ? `Gastos en categoría ${cat.name}`
+          : `Expenses in ${cat.name} category`
+      });
+    });
+
+    const recurringExpenses = transactions
+      .filter(t => t.type === 'expense' && t.isRecurring)
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    if (recurringExpenses > 0) {
+      breakdown.push({
+        label: language === 'es' ? 'Gastos Recurrentes' : 'Recurring Expenses',
+        amount: recurringExpenses,
+        type: 'neutral',
+        icon: 'recurring',
+        description: language === 'es' ? 'Gastos que se repiten automáticamente' : 'Expenses that repeat automatically'
+      });
+    }
+
+    return breakdown;
+  }, [transactions, categoryData, language]);
+
   const predictedBalance = useMemo(() => {
     // Calculate all recurring payments until end of month (handles weekly payments correctly)
     const today = new Date();
@@ -317,6 +436,13 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
               <ArrowUpRight className="w-4 h-4" />
             </div>
             <span className="text-[10px] sm:text-xs font-bold">{t.dashboard.income}</span>
+            <button
+              onClick={() => setShowIncomeInfo(true)}
+              className="ml-auto p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              aria-label="Info"
+            >
+              <Info className="w-3.5 h-3.5 text-slate-400" />
+            </button>
           </div>
           <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(stats.totalIncome)}</span>
         </div>
@@ -326,6 +452,13 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
               <ArrowDownRight className="w-4 h-4" />
             </div>
             <span className="text-[10px] sm:text-xs font-bold">{t.dashboard.expenses}</span>
+            <button
+              onClick={() => setShowExpenseInfo(true)}
+              className="ml-auto p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              aria-label="Info"
+            >
+              <Info className="w-3.5 h-3.5 text-slate-400" />
+            </button>
           </div>
           <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(stats.totalExpense)}</span>
         </div>
@@ -336,6 +469,13 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
               <Wallet className="w-4 h-4" />
             </div>
             <span className="text-[10px] sm:text-xs font-bold opacity-90">Balance</span>
+            <button
+              onClick={() => setShowBalanceInfo(true)}
+              className="ml-auto p-1 hover:bg-white/20 rounded-lg transition-colors"
+              aria-label="Info"
+            >
+              <Info className="w-3.5 h-3.5" />
+            </button>
           </div>
           <span className="text-lg sm:text-xl font-bold">{formatCurrencyShort(stats.balance)}</span>
         </div>
@@ -478,6 +618,40 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Amount Info Modals */}
+      <AmountInfoModal
+        isOpen={showBalanceInfo}
+        onClose={() => setShowBalanceInfo(false)}
+        title={language === 'es' ? 'Información del Balance' : 'Balance Information'}
+        subtitle={language === 'es' ? '¿De dónde sale este monto?' : 'Where does this amount come from?'}
+        totalAmount={stats.balance}
+        breakdown={balanceBreakdown}
+        currencySymbol={symbol}
+        language={language as 'es' | 'en'}
+      />
+
+      <AmountInfoModal
+        isOpen={showIncomeInfo}
+        onClose={() => setShowIncomeInfo(false)}
+        title={language === 'es' ? 'Información de Ingresos' : 'Income Information'}
+        subtitle={language === 'es' ? 'Desglose de tus ingresos' : 'Breakdown of your income'}
+        totalAmount={stats.totalIncome}
+        breakdown={incomeBreakdown}
+        currencySymbol={symbol}
+        language={language as 'es' | 'en'}
+      />
+
+      <AmountInfoModal
+        isOpen={showExpenseInfo}
+        onClose={() => setShowExpenseInfo(false)}
+        title={language === 'es' ? 'Información de Gastos' : 'Expenses Information'}
+        subtitle={language === 'es' ? 'Desglose de tus gastos' : 'Breakdown of your expenses'}
+        totalAmount={stats.totalExpense}
+        breakdown={expenseBreakdown}
+        currencySymbol={symbol}
+        language={language as 'es' | 'en'}
+      />
     </div>
   );
 };

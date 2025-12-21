@@ -10,6 +10,9 @@ import {
   CheckCircle,
   Lightbulb,
   Sparkles,
+  List,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Budget, Transaction, CustomCategory } from '../types';
 import { BudgetService } from '../services/budgetService';
@@ -24,6 +27,8 @@ interface BudgetsScreenProps {
   onCreateBudget: () => void;
   onEditBudget: (budget: Budget) => void;
   onDeleteBudget: (budgetId: string) => void;
+  onEditTransaction?: (transaction: Transaction) => void;
+  onDeleteTransaction?: (transactionId: string) => void;
 }
 
 export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
@@ -33,11 +38,14 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   onCreateBudget,
   onEditBudget,
   onDeleteBudget,
+  onEditTransaction,
+  onDeleteTransaction,
 }) => {
   const { language } = useI18n();
   const [showAlerts, setShowAlerts] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  const [expandedBudget, setExpandedBudget] = useState<string | null>(null);
 
   // Load custom categories from storage
   useEffect(() => {
@@ -137,6 +145,30 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
       return categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
     }
     return categoryId;
+  };
+
+  // Get transactions for a specific budget category
+  const getTransactionsForBudget = (budget: Budget) => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    
+    return transactions.filter(tx => {
+      if (tx.type !== 'expense' || tx.category !== budget.category) return false;
+      
+      const txDate = new Date(tx.date);
+      
+      if (budget.period === 'monthly') {
+        return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+      } else {
+        return txDate.getFullYear() === currentYear;
+      }
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+
+  // Toggle budget expansion
+  const toggleBudget = (budgetId: string) => {
+    setExpandedBudget(expandedBudget === budgetId ? null : budgetId);
   };
 
   return (
@@ -338,100 +370,192 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                   rose: 'bg-rose-500',
                 };
 
+                const budgetTransactions = getTransactionsForBudget(budget);
+                const isExpanded = expandedBudget === budget.id;
+
                 return (
                   <div
                     key={budget.id}
-                    className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-700 shadow-sm"
+                    className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm overflow-hidden"
                   >
-                    {/* Budget Header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2.5 sm:gap-3">
-                        <div
-                          className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center ${budgetColorClasses.bg} ${budgetColorClasses.text}`}
-                        >
-                          <DynamicIcon name={budget.icon || 'PiggyBank'} className="w-4 h-4 sm:w-5 sm:h-5" />
+                    {/* Budget Header - Clickable */}
+                    <div
+                      onClick={() => toggleBudget(budget.id)}
+                      className="p-3 sm:p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2.5 sm:gap-3 flex-1">
+                          <div
+                            className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center ${budgetColorClasses.bg} ${budgetColorClasses.text}`}
+                          >
+                            <DynamicIcon name={budget.icon || 'PiggyBank'} className="w-4 h-4 sm:w-5 sm:h-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5">
+                              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">
+                                {budget.name}
+                              </h3>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEditBudget(budget);
+                                }}
+                                className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                title={language === 'es' ? 'Editar presupuesto' : 'Edit budget'}
+                              >
+                                <Edit2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(language === 'es' ? '¿Eliminar este presupuesto?' : 'Delete this budget?')) {
+                                    onDeleteBudget(budget.id);
+                                  }
+                                }}
+                                className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded transition-colors"
+                                title={language === 'es' ? 'Eliminar presupuesto' : 'Delete budget'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleBudget(budget.id);
+                                }}
+                                className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
+                                title={language === 'es' ? 'Ver transacciones' : 'View transactions'}
+                              >
+                                <List className="w-3.5 h-3.5 text-slate-400" />
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                              <span className="truncate">{getCategoryName(budget.category)}</span>
+                              <span>•</span>
+                              <span>{budget.period === 'monthly' 
+                                ? (language === 'es' ? 'Mensual' : 'Monthly') 
+                                : (language === 'es' ? 'Anual' : 'Yearly')}</span>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5">
-                            <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">
-                              {budget.name}
-                            </h3>
+                        <div className="flex items-start gap-3">
+                          <div className="text-right">
+                            <div className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">
+                              {formatCurrency(budget.limit)}
+                            </div>
+                            <div className={`text-[10px] sm:text-xs font-medium ${
+                              remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                            }`}>
+                              {remaining >= 0 
+                                ? (language === 'es' ? `Quedan ${formatCurrency(remaining)}` : `${formatCurrency(remaining)} left`)
+                                : (language === 'es' ? `Excedido ${formatCurrency(Math.abs(remaining))}` : `${formatCurrency(Math.abs(remaining))} over`)}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
-                            <span className="truncate">{getCategoryName(budget.category)}</span>
-                            <span>•</span>
-                            <span>{budget.period === 'monthly' 
-                              ? (language === 'es' ? 'Mensual' : 'Monthly') 
-                              : (language === 'es' ? 'Anual' : 'Yearly')}</span>
-                          </div>
+                          {isExpanded ? (
+                            <ChevronUp className="w-5 h-5 text-slate-400" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-slate-400" />
+                          )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">
-                          {formatCurrency(budget.limit)}
+
+                      {/* Progress Bar */}
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1.5">
+                          <span className="text-slate-500 dark:text-slate-400">
+                            {language === 'es' ? 'Gastado' : 'Spent'}: <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(spent)}</span>
+                          </span>
+                          <span className={`font-semibold ${
+                            percentage < 70 ? 'text-emerald-600' : percentage < 90 ? 'text-amber-600' : 'text-rose-600'
+                          }`}>
+                            {percentage.toFixed(0)}%
+                          </span>
                         </div>
-                        <div className={`text-[10px] sm:text-xs font-medium ${
-                          remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                        }`}>
-                          {remaining >= 0 
-                            ? (language === 'es' ? `Quedan ${formatCurrency(remaining)}` : `${formatCurrency(remaining)} left`)
-                            : (language === 'es' ? `Excedido ${formatCurrency(Math.abs(remaining))}` : `${formatCurrency(Math.abs(remaining))} over`)}
+                        <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${progressColorClasses[progressColor]} rounded-full transition-all duration-300`}
+                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                          />
                         </div>
+                        {percentage >= 100 && (
+                          <div className="flex items-center gap-1 text-[10px] sm:text-xs text-rose-600 font-medium mt-1.5">
+                            <TrendingDown className="w-3.5 h-3.5" />
+                            {language === 'es' ? 'Excedido' : 'Exceeded'}
+                          </div>
+                        )}
+                        {percentage >= 80 && percentage < 100 && (
+                          <div className="flex items-center gap-1 text-[10px] sm:text-xs text-amber-600 font-medium mt-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            {language === 'es' ? 'Cerca del límite' : 'Near limit'}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="mb-3">
-                      <div className="flex items-center justify-between text-[10px] sm:text-xs mb-1.5">
-                        <span className="text-slate-500 dark:text-slate-400">
-                          {language === 'es' ? 'Gastado' : 'Spent'}: <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(spent)}</span>
-                        </span>
-                        <span className={`font-semibold ${
-                          percentage < 70 ? 'text-emerald-600' : percentage < 90 ? 'text-amber-600' : 'text-rose-600'
-                        }`}>
-                          {percentage.toFixed(0)}%
-                        </span>
+                    {/* Expanded Transactions List */}
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
+                        {budgetTransactions.length > 0 ? (
+                          <div className="divide-y divide-slate-100 dark:divide-slate-700">
+                            {budgetTransactions.map(tx => (
+                              <div
+                                key={tx.id}
+                                className="px-3 sm:px-4 py-2.5 flex items-center gap-2 hover:bg-white dark:hover:bg-slate-800/50 transition-colors"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
+                                    {tx.description || (language === 'es' ? 'Sin descripción' : 'No description')}
+                                  </p>
+                                  <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">
+                                    {new Date(tx.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric'
+                                    })}
+                                  </p>
+                                </div>
+                                <div className="text-xs sm:text-sm font-bold text-rose-600 dark:text-rose-400">
+                                  -{formatCurrency(tx.amount)}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {onEditTransaction && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onEditTransaction(tx);
+                                      }}
+                                      className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                                      title={language === 'es' ? 'Editar transacción' : 'Edit transaction'}
+                                    >
+                                      <Edit2 className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+                                    </button>
+                                  )}
+                                  {onDeleteTransaction && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (window.confirm(language === 'es' ? '¿Eliminar esta transacción?' : 'Delete this transaction?')) {
+                                          onDeleteTransaction(tx.id);
+                                        }
+                                      }}
+                                      className="p-1 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded transition-colors"
+                                      title={language === 'es' ? 'Eliminar transacción' : 'Delete transaction'}
+                                    >
+                                      <Trash2 className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="px-3 sm:px-4 py-6 text-center">
+                            <p className="text-xs sm:text-sm text-slate-400 dark:text-slate-500">
+                              {language === 'es' ? 'No hay transacciones en este período' : 'No transactions in this period'}
+                            </p>
+                          </div>
+                        )}
                       </div>
-                      <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${progressColorClasses[progressColor]} rounded-full transition-all duration-300`}
-                          style={{ width: `${Math.min(percentage, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                      <button
-                        onClick={() => onEditBudget(budget)}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 transition-colors"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                        {language === 'es' ? 'Editar' : 'Edit'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (window.confirm(language === 'es' ? '¿Eliminar este presupuesto?' : 'Delete this budget?')) {
-                            onDeleteBudget(budget.id);
-                          }
-                        }}
-                        className="flex items-center justify-center gap-1.5 py-1.5 px-3 bg-rose-50 dark:bg-rose-900/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      {percentage >= 80 && percentage < 100 && (
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs text-amber-600 font-medium ml-auto">
-                          <AlertTriangle className="w-3.5 h-3.5" />
-                          {language === 'es' ? 'Cerca' : 'Near'}
-                        </span>
-                      )}
-                      {percentage >= 100 && (
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-xs text-rose-600 font-medium ml-auto">
-                          <TrendingDown className="w-3.5 h-3.5" />
-                          {language === 'es' ? 'Excedido' : 'Exceeded'}
-                        </span>
-                      )}
-                    </div>
+                    )}
                   </div>
                 );
               })}

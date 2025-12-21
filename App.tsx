@@ -825,6 +825,8 @@ export default function App() {
               onCreateBudget={handleCreateBudget}
               onEditBudget={handleEditBudget}
               onDeleteBudget={handleDeleteBudget}
+              onEditTransaction={handleEditTransaction}
+              onDeleteTransaction={handleDeleteTransaction}
             />
           )}
 

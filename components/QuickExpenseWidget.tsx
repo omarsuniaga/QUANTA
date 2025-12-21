@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  Zap, Plus, ChevronRight, TrendingDown, Receipt, CheckCircle2
+  Zap, Plus, ChevronRight, TrendingDown, Receipt, CheckCircle2, Sparkles
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { useTransactions, useSettings, useI18n } from '../contexts';
@@ -21,18 +21,34 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   const [categories, setCategories] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  // Load categories (custom + default)
+  const [suggestedDescription, setSuggestedDescription] = useState('');
+  const [showSuggestion, setShowSuggestion] = useState(false);
+  // Load categories (ONLY custom categories created by user)
   useEffect(() => {
     const loadCategories = async () => {
       let custom = [];
       try {
         custom = await storageService.getCategories();
       } catch {}
-      // Only expense categories
-      const defaults = storageService.getDefaultCategories().filter(c => c.type === 'expense');
-      // Merge, avoiding duplicates by id
-      const merged = [...defaults, ...custom.filter(cat => !defaults.some(def => def.id === cat.id))];
-      setCategories(merged);
+      // Filter only expense categories created by user
+      const expenseCategories = custom.filter(c => c.type === 'expense');
+      
+      // If user has no categories, add a default "Express" option
+      if (expenseCategories.length === 0) {
+        expenseCategories.push({
+          id: 'express',
+          key: 'express',
+          name: { es: 'Express', en: 'Express' },
+          type: 'expense',
+          color: 'amber'
+        });
+      }
+      
+      setCategories(expenseCategories);
+      // Set first category as default
+      if (expenseCategories.length > 0) {
+        setCategory(expenseCategories[0].id);
+      }
     };
     loadCategories();
   }, []);
@@ -52,6 +68,50 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
       .filter(tx => tx.type === 'expense' && tx.date && tx.date.startsWith(today))
       .reduce((sum, tx) => sum + tx.amount, 0);
   }, [transactions]);
+
+  // Smart suggestion based on spending patterns and proportions
+  const generateSmartSuggestion = useMemo(() => {
+    if (!category || transactions.length < 5) return null;
+    
+    // Find most common descriptions for this category
+    const categoryTransactions = transactions.filter(t => 
+      t.type === 'expense' && t.category === category && t.description
+    );
+    
+    if (categoryTransactions.length === 0) return null;
+    
+    // Group by description and count
+    const descriptionMap = categoryTransactions.reduce((acc, t) => {
+      const desc = t.description.trim();
+      acc[desc] = (acc[desc] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // Get top 3 most common
+    const topDescriptions = Object.entries(descriptionMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([desc]) => desc);
+    
+    return topDescriptions.length > 0 ? topDescriptions[0] : null;
+  }, [category, transactions]);
+
+  // Update suggestion when category changes
+  useEffect(() => {
+    const suggestion = generateSmartSuggestion;
+    if (suggestion && !description) {
+      setSuggestedDescription(suggestion);
+      setShowSuggestion(true);
+    } else {
+      setShowSuggestion(false);
+    }
+  }, [category, generateSmartSuggestion, description]);
+
+  // Apply suggestion
+  const applySuggestion = () => {
+    setDescription(suggestedDescription);
+    setShowSuggestion(false);
+  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat(language === 'es' ? 'es-ES' : 'en-US', {
@@ -132,17 +192,32 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
               className="w-full pl-10 pr-2 py-2.5 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={language === 'es' ? 'Descripción...' : 'Description...'}
-            className="flex-1 min-w-0 px-3 py-2.5 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
+          <div className="flex-1 min-w-[180px] relative">
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (e.target.value) setShowSuggestion(false);
+              }}
+              placeholder={language === 'es' ? 'Descripción...' : 'Description...'}
+              className="w-full px-3 py-2.5 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            {showSuggestion && suggestedDescription && (
+              <button
+                type="button"
+                onClick={applySuggestion}
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 bg-indigo-500 hover:bg-indigo-600 text-white text-[10px] font-medium rounded-lg transition-colors"
+              >
+                <Sparkles className="w-3 h-3" />
+                {suggestedDescription.slice(0, 15)}{suggestedDescription.length > 15 ? '...' : ''}
+              </button>
+            )}
+          </div>
           <select
             value={category}
             onChange={e => setCategory(e.target.value)}
-            className="w-32 px-2 py-2 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-auto min-w-[90px] max-w-[120px] px-2 py-2 bg-slate-100 dark:bg-slate-700 border-0 rounded-xl text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             {categories.map(cat => (
               <option key={cat.id} value={cat.id}>
