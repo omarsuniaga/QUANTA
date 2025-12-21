@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { Transaction, DashboardStats, Goal, FinancialAnalysis, AIRecommendation } from '../types';
 import { aiCoachService } from '../services/aiCoachService';
+import { storageService } from '../services/storageService';
+import { useI18n } from '../contexts';
 import { Button } from './Button';
 
 interface AICoachScreenProps {
@@ -48,13 +50,16 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   onOpenChallenges,
   onOpenStrategies
 }) => {
+  const { language, t } = useI18n();
   const [analysis, setAnalysis] = useState<FinancialAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [quickTips, setQuickTips] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'recommendations' | 'insights'>('overview');
+  const [customCategories, setCustomCategories] = useState<any[]>([]);
 
   useEffect(() => {
     loadAnalysis();
+    storageService.getCategories().then(setCustomCategories).catch(console.error);
   }, []);
 
   const loadAnalysis = async () => {
@@ -66,6 +71,20 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
     const tips = await aiCoachService.getQuickTips(transactions, stats);
     setQuickTips(tips);
     setLoading(false);
+  };
+
+  // Helper to get category display name
+  const getCategoryName = (categoryId: string): string => {
+    const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
+    if (customCat) {
+      return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
+    }
+    
+    const translated = (t.categories as Record<string, string>)?.[categoryId];
+    if (translated && translated !== categoryId) return translated;
+    
+    // If no translation or it's an ID (long string), return generic name
+    return language === 'es' ? 'Otra categoría' : 'Other category';
   };
 
   const getHealthColor = (status: string) => {
@@ -367,7 +386,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                         <div className="flex-1">
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                              {cat.category}
+                              {getCategoryName(cat.category)}
                             </span>
                             <span className="text-sm font-bold text-slate-800 dark:text-white">
                               {cat.amount.toLocaleString()} {currencyCode}
