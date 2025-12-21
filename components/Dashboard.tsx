@@ -125,6 +125,42 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     return breakdown;
   }, [stats, goals, language, formatCurrencyShort]);
 
+  // --- ANALYTICS: Top Spending Categories & Pie Data ---
+  // IMPORTANT: Define categoryData FIRST as it's used by expenseBreakdown
+  const categoryData = useMemo(() => {
+    const data = transactions.reduce((acc, curr) => {
+      if (curr.type === 'expense') {
+        if (!acc[curr.category]) {
+          // First, try to find in custom categories (by id or key)
+          const customCat = customCategories.find(c => c.id === curr.category || c.key === curr.category);
+          let translatedName: string;
+          let categoryColor: string;
+          
+          if (customCat) {
+            // Use custom category name based on language
+            translatedName = customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
+            // Convert Tailwind color name to hex
+            categoryColor = TAILWIND_COLORS[customCat.color] || CATEGORY_COLORS[curr.category] || '#94a3b8';
+          } else {
+            // Fallback to translation system for default categories
+            translatedName = (t.categories as Record<string, string>)[curr.category] || curr.category;
+            categoryColor = CATEGORY_COLORS[curr.category] || '#94a3b8';
+          }
+          
+          acc[curr.category] = { 
+            name: translatedName, 
+            originalName: curr.category, // Keep original for filtering
+            value: 0, 
+            color: categoryColor
+          };
+        }
+        acc[curr.category].value += curr.amount;
+      }
+      return acc;
+    }, {} as Record<string, any>);
+    return Object.values(data).sort((a: any, b: any) => b.value - a.value);
+  }, [transactions, t.categories, customCategories, language]);
+
   // Calculate income breakdown
   const incomeBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
@@ -174,7 +210,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     return breakdown;
   }, [transactions, language]);
 
-  // Calculate expense breakdown
+  // Calculate expense breakdown (depends on categoryData)
   const expenseBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
     
@@ -208,6 +244,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     return breakdown;
   }, [transactions, categoryData, language]);
 
+  // --- ORACLE: CASH FLOW PREDICTION ---
   const predictedBalance = useMemo(() => {
     // Calculate all recurring payments until end of month (handles weekly payments correctly)
     const today = new Date();
@@ -232,41 +269,6 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     
     return stats.balance - totalPending;
   }, [stats.balance, transactions, subscriptions]);
-
-  // --- ANALYTICS: Top Spending Categories & Pie Data ---
-  const categoryData = useMemo(() => {
-    const data = transactions.reduce((acc, curr) => {
-      if (curr.type === 'expense') {
-        if (!acc[curr.category]) {
-          // First, try to find in custom categories (by id or key)
-          const customCat = customCategories.find(c => c.id === curr.category || c.key === curr.category);
-          let translatedName: string;
-          let categoryColor: string;
-          
-          if (customCat) {
-            // Use custom category name based on language
-            translatedName = customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en;
-            // Convert Tailwind color name to hex
-            categoryColor = TAILWIND_COLORS[customCat.color] || CATEGORY_COLORS[curr.category] || '#94a3b8';
-          } else {
-            // Fallback to translation system for default categories
-            translatedName = (t.categories as Record<string, string>)[curr.category] || curr.category;
-            categoryColor = CATEGORY_COLORS[curr.category] || '#94a3b8';
-          }
-          
-          acc[curr.category] = { 
-            name: translatedName, 
-            originalName: curr.category, // Keep original for filtering
-            value: 0, 
-            color: categoryColor
-          };
-        }
-        acc[curr.category].value += curr.amount;
-      }
-      return acc;
-    }, {} as Record<string, any>);
-    return Object.values(data).sort((a: any, b: any) => b.value - a.value);
-  }, [transactions, t.categories, customCategories, language]);
 
   // --- EMOTIONAL DASHBOARD: Mood Correlation ---
   const moodStats = useMemo(() => {
