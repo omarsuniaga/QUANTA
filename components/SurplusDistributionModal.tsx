@@ -85,7 +85,7 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
   language = 'es',
   onGoalsCreated
 }) => {
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const available = Math.max(0, budgetPeriodData.incomeSurplus);
   const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
