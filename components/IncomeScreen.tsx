@@ -4,7 +4,7 @@ import { Transaction } from '../types';
 import { useI18n } from '../contexts/I18nContext';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { FinancialHealthCard } from './FinancialHealthCard';
-import { SurplusDistributionModal } from './SurplusDistributionModal';
+import { SurplusDistributionView } from './SurplusDistributionView';
 import { getFinancialHealth } from '../utils/financialHealth';
 
 interface IncomeScreenProps {
@@ -34,7 +34,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'all'>('current');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; type: 'fixed' | 'extra' } | null>(null);
-  const [isSurplusModalOpen, setIsSurplusModalOpen] = useState(false);
+  const [showSurplusView, setShowSurplusView] = useState(false);
 
   // Extract financial health status from SSOT
   const { status } = getFinancialHealth(budgetPeriodData);
@@ -169,7 +169,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
         budgetPeriodData={budgetPeriodData}
         currencySymbol={currencySymbol}
         language={language}
-        onManageSurplus={hasSurplus ? () => setIsSurplusModalOpen(true) : undefined}
+        onManageSurplus={hasSurplus ? () => setShowSurplusView(true) : undefined}
       />
 
       {/* Fixed Incomes Section */}
@@ -380,15 +380,16 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
         )}
       </div>
 
-      {/* Surplus Distribution Modal */}
-      <SurplusDistributionModal
-        isOpen={isSurplusModalOpen}
-        onClose={() => setIsSurplusModalOpen(false)}
-        budgetPeriodData={budgetPeriodData}
-        currencySymbol={currencySymbol}
-        language={language}
-        onGoalsCreated={onGoalsCreated}
-      />
+      {/* Surplus Distribution View */}
+      {showSurplusView && (
+        <SurplusDistributionView
+          budgetPeriodData={budgetPeriodData}
+          currencySymbol={currencySymbol}
+          language={language}
+          onBack={() => setShowSurplusView(false)}
+          onGoalsCreated={onGoalsCreated}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
