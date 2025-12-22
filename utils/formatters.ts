@@ -85,10 +85,12 @@ export const formatCompact = (amount: number): string => {
 };
 
 /**
- * Format a date for display
+ * Formats a date string correctly (avoiding timezone shift)
  * 
- * @param dateStr - ISO date string
- * @param locale - Locale string (default: 'es-ES')
+ * IMPORTANTE: Parsea la fecha como local, no como UTC, para evitar desfase de ±1 día
+ * 
+ * @param dateStr - Date string in format "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM:SS"
+ * @param locale - Locale code
  * @param options - Intl.DateTimeFormat options
  * @returns Formatted date string
  */
@@ -97,7 +99,13 @@ export const formatDate = (
   locale: string = 'es-ES',
   options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
 ): string => {
-  const date = new Date(dateStr);
+  // Extraer solo YYYY-MM-DD (ignorar hora si existe)
+  const ymd = dateStr.split('T')[0];
+  
+  // Parsear como fecha local (no UTC) para evitar desfase
+  const [year, month, day] = ymd.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  
   return date.toLocaleDateString(locale, options);
 };
 
