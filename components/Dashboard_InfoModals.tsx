@@ -23,8 +23,7 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
   formatCurrency,
   language
 }) => {
-  useModalScrollLock(isOpen);
-  if (!isOpen) return null;
+    if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={(e) => e.stopPropagation()}>
@@ -133,8 +132,7 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
   formatCurrency,
   language
 }) => {
-  useModalScrollLock(isOpen);
-  if (!isOpen) return null;
+    if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={(e) => e.stopPropagation()}>
