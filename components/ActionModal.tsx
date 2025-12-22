@@ -213,9 +213,9 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2 pb-24">
 
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 pb-4">
 
             {/* Amount Field */}
             <div className="text-center py-1 sm:py-2">

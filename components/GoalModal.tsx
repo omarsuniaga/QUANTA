@@ -228,7 +228,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 transition-all duration-300">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-lg shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 relative max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-lg shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 relative max-h-[95vh] sm:max-h-[90vh] overflow-y-auto pb-24">
         <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
             {goal ? l.editGoal : l.newGoal}
@@ -238,7 +238,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5 pb-4">
           {/* Goal Name */}
           <div>
             <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">
