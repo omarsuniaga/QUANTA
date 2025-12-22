@@ -149,7 +149,7 @@ export const calculateDashboardInfo = (
   
   // Flujo del mes (usar budgetPeriodData que ya filtra por mes actual)
   const monthlyIncome = budgetPeriodData.incomeTotal;
-  const monthlyExpenses = budgetPeriodData.totalSpent;
+  const monthlyExpenses = budgetPeriodData.expensesTotal;
   const monthlyBalance = monthlyIncome - monthlyExpenses;
   
   // Presupuesto

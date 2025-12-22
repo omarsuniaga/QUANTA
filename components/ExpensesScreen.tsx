@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  ArrowDownRight, Zap, Calendar, AlertCircle, Coffee, ShoppingBag, Car, Home, 
+import {
+  ArrowDownRight, Zap, Calendar, AlertCircle, Coffee, ShoppingBag, Car, Home,
   Bell, Clock, Edit3, Trash2, Filter, Check, X, ChevronDown, ChevronUp,
   CreditCard, AlertTriangle, CalendarClock, History, Banknote, MoreVertical, Info
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { storageService } from '../services/storageService';
 import { smartNotificationService } from '../services/smartNotificationService';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
+import { ModalWrapper } from './ModalWrapper';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
@@ -70,15 +71,15 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   // Helper to get category display name
   const getCategoryName = (categoryId: string): string => {
     if (categoryId === 'express') return 'Express';
-    
+
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat) {
       return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
-    
+
     const translated = (t.categories as Record<string, string>)?.[categoryId];
     if (translated && translated !== categoryId) return translated;
-    
+
     // If no translation or it's an ID (long string), return generic name
     return language === 'es' ? 'Otra categoría' : 'Other category';
   };
@@ -129,16 +130,16 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   }, [expenses, currentMonth, currentYear]);
 
   // Budget calculations from centralized hook (Single Source of Truth)
-  const { 
-    budgetTotal, 
-    spentBudgeted, 
-    spentUnbudgeted, 
-    totalSpent, 
-    remaining, 
+  const {
+    budgetTotal,
+    spentBudgeted,
+    spentUnbudgeted,
+    expensesTotal,
+    remaining,
     remainingPercentage,
     incomeTotal,
     incomeSurplus,
-    hasIncomeBudgetGap 
+    hasIncomeBudgetGap
   } = budgetPeriodData;
 
   const budgetUsedPercent = remainingPercentage;
@@ -147,12 +148,12 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   // Month expense breakdown for info modal
   const monthExpenseBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
-    
+
     // Group by category for top 5
     categoryBreakdown.slice(0, 5).forEach(item => {
       const categoryName = getCategoryName(item.category);
       const percentage = thisMonthExpenses > 0 ? (item.amount / thisMonthExpenses) * 100 : 0;
-      
+
       breakdown.push({
         label: categoryName,
         amount: item.amount,
@@ -169,7 +170,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
       const date = new Date(t.date);
       return t.isRecurring && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
     });
-    
+
     if (recurringExpenses.length > 0) {
       const recurringTotal = recurringExpenses.reduce((sum, t) => sum + t.amount, 0);
       breakdown.push({
@@ -189,7 +190,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   // Budget breakdown for info modal
   const budgetBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
-    
+
     breakdown.push({
       label: language === 'es' ? 'Presupuesto Total' : 'Total Budget',
       amount: budgetTotal,
@@ -241,18 +242,18 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     const upcoming: PendingPayment[] = [];
 
     const recurringExpenses = expenses.filter(t => t.isRecurring);
-    
+
     recurringExpenses.forEach(expense => {
       const chargeDay = new Date(expense.date).getDate();
       const nextDueDate = new Date(now.getFullYear(), now.getMonth(), chargeDay);
-      
+
       // If charge day has passed this month, look at next month
       if (nextDueDate < now) {
         nextDueDate.setMonth(nextDueDate.getMonth() + 1);
       }
-      
+
       const daysUntilDue = Math.ceil((nextDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      
+
       // Show payments due within next 7 days
       if (daysUntilDue <= 7 && daysUntilDue >= 0) {
         const status = pendingPayments.get(expense.id) || 'pending';
@@ -308,7 +309,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   // Group history by date
   const groupedHistory = useMemo(() => {
     const groups: { [key: string]: Transaction[] } = {};
-    
+
     filteredHistory.forEach(expense => {
       const date = new Date(expense.date);
       const today = new Date();
@@ -344,7 +345,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   const handlePayment = async (payment: PendingPayment, action: 'paid' | 'postponed' | 'rejected') => {
     // Update local UI state
     setPendingPayments(prev => new Map(prev).set(payment.id, action));
-    
+
     // Handle notification service action
     const pendingNotification = smartNotificationService.hasPendingNotification(payment.id);
     if (pendingNotification) {
@@ -416,7 +417,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
 
       {/* Budget Card - Clickable */}
       <div className="px-3 sm:px-4 -mt-5 sm:-mt-6 mb-4 sm:mb-6">
-        <div 
+        <div
           onClick={() => setShowCategoryBreakdown(true)}
           className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-5 cursor-pointer hover:shadow-xl transition-shadow"
         >
@@ -467,10 +468,9 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           <div className="mb-1.5 sm:mb-2">
             <div className="h-2 sm:h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
-                className={`h-full transition-all duration-300 ${
-                  budgetUsedPercent >= 90 ? 'bg-rose-500' :
-                  budgetUsedPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-                }`}
+                className={`h-full transition-all duration-300 ${budgetUsedPercent >= 90 ? 'bg-rose-500' :
+                    budgetUsedPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
+                  }`}
                 style={{ width: `${Math.min(budgetUsedPercent, 100)}%` }}
               />
             </div>
@@ -484,7 +484,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
               {budgetUsedPercent.toFixed(0)}%
             </span>
           </div>
-          
+
           {/* Hint to tap */}
           <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
             <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center flex items-center justify-center gap-1">
@@ -601,7 +601,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                 {language === 'es' ? '⚠️ Presupuesto Mayor a Ingresos' : '⚠️ Budget Exceeds Income'}
               </h3>
               <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-300">
-                {language === 'es' 
+                {language === 'es'
                   ? `Tu presupuesto (${formatCurrency(budgetTotal)}) supera tus ingresos del mes (${formatCurrency(incomeTotal)}). Déficit: ${formatCurrency(Math.abs(incomeSurplus))}`
                   : `Your budget (${formatCurrency(budgetTotal)}) exceeds your monthly income (${formatCurrency(incomeTotal)}). Deficit: ${formatCurrency(Math.abs(incomeSurplus))}`}
               </p>
@@ -620,7 +620,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                 {language === 'es' ? '¡Cuidado con tu presupuesto!' : 'Watch your budget!'}
               </h3>
               <p className="text-[10px] sm:text-xs text-rose-700 dark:text-rose-300">
-                {language === 'es' 
+                {language === 'es'
                   ? `Has gastado el ${budgetUsedPercent.toFixed(0)}% de tu presupuesto mensual.`
                   : `You've spent ${budgetUsedPercent.toFixed(0)}% of your monthly budget.`}
               </p>
@@ -638,11 +638,10 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           </h2>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              showFilters 
-                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' 
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${showFilters
+                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
                 : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-            }`}
+              }`}
           >
             <Filter className="w-3.5 h-3.5" />
             {language === 'es' ? 'Filtros' : 'Filters'}
@@ -667,11 +666,10 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                   <button
                     key={option.value}
                     onClick={() => setFilter(option.value as FilterType)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      filter === option.value
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === option.value
                         ? 'bg-indigo-600 text-white'
                         : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600'
-                    }`}
+                      }`}
                   >
                     {option.label}
                   </button>
@@ -694,11 +692,10 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                   <button
                     key={option.value}
                     onClick={() => setSortOrder(option.value as SortOrder)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      sortOrder === option.value
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === option.value
                         ? 'bg-indigo-600 text-white'
                         : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600'
-                    }`}
+                      }`}
                   >
                     {option.label}
                   </button>
@@ -738,20 +735,18 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                         className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700 shadow-sm relative"
                       >
                         <div className="flex items-start gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                            expense.isRecurring 
-                              ? 'bg-indigo-50 dark:bg-indigo-900/30' 
-                              : expense.isPlanned 
-                                ? 'bg-purple-50 dark:bg-purple-900/30' 
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${expense.isRecurring
+                              ? 'bg-indigo-50 dark:bg-indigo-900/30'
+                              : expense.isPlanned
+                                ? 'bg-purple-50 dark:bg-purple-900/30'
                                 : 'bg-rose-50 dark:bg-rose-900/30'
-                          }`}>
-                            <TypeIcon className={`w-5 h-5 ${
-                              expense.isRecurring 
-                                ? 'text-indigo-500' 
-                                : expense.isPlanned 
-                                  ? 'text-purple-500' 
+                            }`}>
+                            <TypeIcon className={`w-5 h-5 ${expense.isRecurring
+                                ? 'text-indigo-500'
+                                : expense.isPlanned
+                                  ? 'text-purple-500'
                                   : 'text-rose-500'
-                            }`} />
+                              }`} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2 mb-1">
@@ -789,8 +784,8 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                         {/* Dropdown Menu */}
                         {activeMenu === expense.id && (
                           <>
-                            <div 
-                              className="fixed inset-0 z-40" 
+                            <div
+                              className="fixed inset-0 z-40"
                               onClick={() => setActiveMenu(null)}
                             />
                             <div className="absolute right-3 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden min-w-[140px]">
@@ -806,9 +801,9 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                               </button>
                               <button
                                 onClick={() => {
-                                  setDeleteConfirm({ 
-                                    id: expense.id, 
-                                    name: expense.description || getCategoryName(expense.category) 
+                                  setDeleteConfirm({
+                                    id: expense.id,
+                                    name: expense.description || getCategoryName(expense.category)
                                   });
                                   setActiveMenu(null);
                                 }}
@@ -832,11 +827,8 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
 
       {/* Category Breakdown Modal */}
       {showCategoryBreakdown && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowCategoryBreakdown(false)}>
-          <div 
-            className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[80vh] overflow-hidden flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
+        <ModalWrapper isOpen={true} onClose={() => setShowCategoryBreakdown(false)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[80vh] overflow-hidden flex flex-col">
             {/* Header */}
             <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700">
               <div className="flex items-center justify-between mb-1">
@@ -851,7 +843,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                 </button>
               </div>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                {language === 'es' 
+                {language === 'es'
                   ? `Total del mes: ${formatCurrency(thisMonthExpenses)}`
                   : `Month total: ${formatCurrency(thisMonthExpenses)}`}
               </p>
@@ -871,7 +863,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                   {categoryBreakdown.map((item, index) => {
                     const percentage = thisMonthExpenses > 0 ? (item.amount / thisMonthExpenses) * 100 : 0;
                     const categoryName = getCategoryName(item.category);
-                    
+
                     return (
                       <div
                         key={item.category}
@@ -897,7 +889,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                             </div>
                           </div>
                         </div>
-                        
+
                         {/* Progress bar */}
                         <div className="h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
                           <div
@@ -922,16 +914,13 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalWrapper>
       )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteConfirm(null)}>
-          <div 
-            className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700"
-            onClick={e => e.stopPropagation()}
-          >
+        <ModalWrapper isOpen={true} onClose={() => setDeleteConfirm(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-center mb-4">
               <div className="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
                 <Trash2 className="w-7 h-7 text-rose-600 dark:text-rose-400" />
@@ -941,8 +930,8 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
               {language === 'es' ? '¿Eliminar transacción?' : 'Delete transaction?'}
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-2">
-              {language === 'es' 
-                ? '¿Estás seguro de que deseas eliminar esta transacción?' 
+              {language === 'es'
+                ? '¿Estás seguro de que deseas eliminar esta transacción?'
                 : 'Are you sure you want to delete this transaction?'}
             </p>
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center mb-6 bg-slate-100 dark:bg-slate-700/50 rounded-lg py-2 px-3">
@@ -966,7 +955,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalWrapper>
       )}
 
       {/* Amount Info Modals */}

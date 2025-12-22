@@ -5,6 +5,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
 import { Calculator } from './Calculator';
 import { IconPicker, DynamicIcon, getColorClasses } from './IconPicker';
+import { ModalWrapper } from './ModalWrapper';
 
 interface BudgetModalProps {
   isOpen: boolean;
@@ -28,13 +29,13 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
   const [showCalculator, setShowCalculator] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [iconPickerTarget, setIconPickerTarget] = useState<'budget' | 'category'>('budget');
-  
+
   // New Category Form
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
   const [newCatName, setNewCatName] = useState({ es: '', en: '' });
   const [newCatIcon, setNewCatIcon] = useState('Tag');
   const [newCatColor, setNewCatColor] = useState('purple');
-  
+
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -113,7 +114,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
 
     // Get category name for the budget name if not provided
     const categoryData = expenseCategories.find(c => c.id === formData.category);
-    const categoryName = categoryData 
+    const categoryName = categoryData
       ? (categoryData.name[language as 'es' | 'en'] || categoryData.name.es)
       : formData.category;
 
@@ -169,24 +170,22 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
     }
   }, [newCatName, newCatIcon, newCatColor, customCategories, handleChange]);
 
-  if (!isOpen) return null;
-
   const colorClasses = getColorClasses(formData.color);
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center p-0 sm:p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
-      
-      {/* Modal */}
-      <div className="relative z-[110] bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+    <ModalWrapper isOpen={isOpen} onClose={onClose} alignment="start">
+      {/* Modal Box */}
+      <div className="relative bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg max-h-[85vh] mt-16 mb-8 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+
 
         {/* Header */}
         <div className="flex justify-between items-center p-4 sm:p-6 pb-2">
           <div className="flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border-purple-100 dark:border-purple-800">
             <PiggyBank className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wide">
-              {budget 
+              {budget
                 ? (language === 'es' ? 'Editar Presupuesto' : 'Edit Budget')
                 : (language === 'es' ? 'Nuevo Presupuesto' : 'New Budget')}
             </span>
@@ -318,8 +317,8 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
                       type="button"
                       onClick={() => handleChange('category', cat.id)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${isSelected
-                          ? `${catColorClasses.bg} ${catColorClasses.text} border-transparent shadow-md ring-2 ${catColorClasses.ring}`
-                          : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
+                        ? `${catColorClasses.bg} ${catColorClasses.text} border-transparent shadow-md ring-2 ${catColorClasses.ring}`
+                        : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
                         }`}
                     >
                       <DynamicIcon name={cat.icon} className="w-3.5 h-3.5" />
@@ -340,11 +339,10 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleChange('period', 'monthly')}
-                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                    formData.period === 'monthly'
-                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
+                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${formData.period === 'monthly'
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
                 >
                   <Calendar className="w-4 h-4" />
                   {language === 'es' ? 'Mensual' : 'Monthly'}
@@ -352,11 +350,10 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
                 <button
                   type="button"
                   onClick={() => handleChange('period', 'yearly')}
-                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                    formData.period === 'yearly'
-                      ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
+                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${formData.period === 'yearly'
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
                 >
                   <Calendar className="w-4 h-4" />
                   {language === 'es' ? 'Anual' : 'Yearly'}
@@ -378,9 +375,8 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
                     max="31"
                     value={formData.resetDay}
                     onChange={(e) => handleChange('resetDay', e.target.value)}
-                    className={`w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border text-slate-800 dark:text-slate-100 text-sm font-medium outline-none focus:ring-2 focus:ring-purple-500 ${
-                      errors.resetDay ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
-                    }`}
+                    className={`w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border text-slate-800 dark:text-slate-100 text-sm font-medium outline-none focus:ring-2 focus:ring-purple-500 ${errors.resetDay ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
+                      }`}
                   />
                 </div>
                 {errors.resetDay && <p className="text-rose-500 text-xs mt-1">{errors.resetDay}</p>}
@@ -436,7 +432,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               type="submit"
               className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all"
             >
-              {budget 
+              {budget
                 ? (language === 'es' ? 'Guardar Cambios' : 'Save Changes')
                 : (language === 'es' ? 'Crear Presupuesto' : 'Create Budget')}
             </button>
@@ -479,6 +475,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
           currencySymbol={currencySymbol}
         />
       )}
-    </div>
+      </div>
+    </ModalWrapper>
   );
 };

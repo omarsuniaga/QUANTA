@@ -207,6 +207,7 @@ export interface AIConfig {
   level: 'soft' | 'medium' | 'aggressive';
   dataSharing?: boolean;
   userGeminiApiKey?: string; // User's personal Gemini API key
+  selectedPlanId?: PlanId; // Current active financial model
 }
 
 export interface NotificationConfig {
@@ -353,6 +354,38 @@ export interface ChallengeTemplate {
   targetAmount?: number;
   targetCategory?: string;
   reward: string;
+}
+
+// --- FINANCIAL STRATEGY & PLANS ---
+
+export type PlanId = 'essentialist' | 'auditor' | 'investor' | 'defensive';
+
+export type PlanKPI = 'savings_rate' | 'zero_based_gap' | 'net_worth_growth' | 'debt_reduction_velocity' | 'runway';
+
+export interface AllocationRule {
+  categoryGroup: 'needs' | 'wants' | 'savings' | 'debt' | 'investments';
+  targetPercentage?: number; // e.g., 50 for needs
+  isStrict: boolean; // If true, UI shows warnings when exceeded
+  description?: string;
+}
+
+export interface FinancialPlan {
+  id: PlanId;
+  name: string;
+  description: string;
+  allocationRules: AllocationRule[];
+  primaryKPI: PlanKPI;
+  aiPersonality: 'friendly_coach' | 'strict_accountant' | 'wealth_manager' | 'strategist';
+}
+
+export interface FinancialHealthMetrics {
+  burnRate: number;        // Average monthly spend
+  runwayMonths: number;    // How long you survive with 0 income
+  debtToIncomeRatio: number; // Percentage of income going to debt
+  savingsRate: number;     // Percentage of income saved
+  discretionaryIncome: number; // Truly free money
+  potentialInvestment?: number; // Money available for investing (Investor plan)
+  debtFreeDate?: string;   // Estimated date (Defensive plan)
 }
 
 // --- DASHBOARD ---

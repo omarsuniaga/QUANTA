@@ -5,6 +5,7 @@ import { PAYMENT_METHODS } from '../constants';
 import { storageService } from '../services/storageService';
 import { CustomCategory } from '../types';
 import { useI18n } from '../contexts/I18nContext';
+import { ModalWrapper } from './ModalWrapper';
 
 interface FilterModalProps {
     filters: {
@@ -50,14 +51,14 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
     // Get categories with translated names based on filter type
     const displayCategories = useMemo(() => {
         let filtered = customCategories;
-        
+
         // Filter by type if not "all"
         if (localFilters.type === 'income') {
             filtered = customCategories.filter(cat => cat.type === 'income' || cat.type === 'both');
         } else if (localFilters.type === 'expense') {
             filtered = customCategories.filter(cat => cat.type === 'expense' || cat.type === 'both');
         }
-        
+
         // Map to display format with translated names
         return filtered.map(cat => ({
             key: cat.key || cat.id,
@@ -66,15 +67,10 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
     }, [customCategories, localFilters.type, language]);
 
     return (
-        <div className="fixed inset-0 z-[100] grid place-items-center p-0 sm:p-4">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                onClick={(e) => e.stopPropagation()}
-            ></div>
-
+        <ModalWrapper isOpen={true} onClose={onClose} alignment="center">
             {/* Modal */}
-            <div className="relative z-[110] bg-white dark:bg-slate-900 w-full max-w-md sm:max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="relative bg-white dark:bg-slate-900 w-full max-w-md sm:max-w-lg rounded-3xl shadow-2xl max-h-[85vh] flex flex-col overflow-hidden">
+
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
@@ -104,8 +100,8 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                             <button
                                 onClick={() => setLocalFilters({ ...localFilters, type: 'all' })}
                                 className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all ${localFilters.type === 'all'
-                                        ? 'bg-indigo-600 text-white shadow-md'
-                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                    ? 'bg-indigo-600 text-white shadow-md'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                                     }`}
                             >
                                 {t.filterModal.all}
@@ -113,8 +109,8 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                             <button
                                 onClick={() => setLocalFilters({ ...localFilters, type: 'income' })}
                                 className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all flex items-center justify-center gap-1 ${localFilters.type === 'income'
-                                        ? 'bg-emerald-600 text-white shadow-md'
-                                        : 'bg-slate-100 dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                    ? 'bg-emerald-600 text-white shadow-md'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                                     }`}
                             >
                                 <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -123,8 +119,8 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                             <button
                                 onClick={() => setLocalFilters({ ...localFilters, type: 'expense' })}
                                 className={`py-1.5 sm:py-2 px-2 sm:px-3 rounded-lg sm:rounded-xl font-medium text-xs sm:text-sm transition-all flex items-center justify-center gap-1 ${localFilters.type === 'expense'
-                                        ? 'bg-rose-600 text-white shadow-md'
-                                        : 'bg-slate-100 dark:bg-slate-700 text-rose-600 dark:text-rose-400 hover:bg-slate-200 dark:hover:bg-slate-600'
+                                    ? 'bg-rose-600 text-white shadow-md'
+                                    : 'bg-slate-100 dark:bg-slate-700 text-rose-600 dark:text-rose-400 hover:bg-slate-200 dark:hover:bg-slate-600'
                                     }`}
                             >
                                 <TrendingDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -216,7 +212,7 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
                 </div>
 
             </div>
-        </div>
+        </ModalWrapper>
     );
 };
 

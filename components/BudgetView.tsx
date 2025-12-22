@@ -67,9 +67,13 @@ export const BudgetView: React.FC<BudgetViewProps> = ({
         resetDay: (budget.resetDay || 1).toString(),
       });
     } else {
+      const defaultCategory = expenseCategories.length > 0
+        ? expenseCategories[0].id
+        : (categories && categories.length > 0 ? categories[0] : '');
+
       setFormData({
         name: '',
-        category: expenseCategories[0]?.id || categories[0] || '',
+        category: defaultCategory,
         limit: '',
         period: 'monthly',
         color: 'purple',
@@ -312,8 +316,8 @@ export const BudgetView: React.FC<BudgetViewProps> = ({
                     type="button"
                     onClick={() => handleChange('category', cat.id)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${isSelected
-                        ? `${catColorClasses.bg} ${catColorClasses.text} border-transparent shadow-md ring-2 ${catColorClasses.ring}`
-                        : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
+                      ? `${catColorClasses.bg} ${catColorClasses.text} border-transparent shadow-md ring-2 ${catColorClasses.ring}`
+                      : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
                       }`}
                   >
                     <DynamicIcon name={cat.icon} className="w-3.5 h-3.5" />
@@ -334,11 +338,10 @@ export const BudgetView: React.FC<BudgetViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleChange('period', 'monthly')}
-                className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                  formData.period === 'monthly'
-                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${formData.period === 'monthly'
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
               >
                 <Calendar className="w-4 h-4" />
                 {language === 'es' ? 'Mensual' : 'Monthly'}
@@ -346,11 +349,10 @@ export const BudgetView: React.FC<BudgetViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleChange('period', 'yearly')}
-                className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                  formData.period === 'yearly'
-                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${formData.period === 'yearly'
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-200 dark:shadow-none'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  }`}
               >
                 <Calendar className="w-4 h-4" />
                 {language === 'es' ? 'Anual' : 'Yearly'}
@@ -372,9 +374,8 @@ export const BudgetView: React.FC<BudgetViewProps> = ({
                   max="31"
                   value={formData.resetDay}
                   onChange={(e) => handleChange('resetDay', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border text-slate-800 dark:text-slate-100 text-sm font-medium outline-none focus:ring-2 focus:ring-purple-500 ${
-                    errors.resetDay ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
-                  }`}
+                  className={`w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 rounded-2xl border text-slate-800 dark:text-slate-100 text-sm font-medium outline-none focus:ring-2 focus:ring-purple-500 ${errors.resetDay ? 'border-rose-500' : 'border-slate-200 dark:border-slate-700'
+                    }`}
                 />
               </div>
               {errors.resetDay && <p className="text-rose-500 text-xs mt-1">{errors.resetDay}</p>}

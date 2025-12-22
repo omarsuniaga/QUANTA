@@ -6,6 +6,7 @@ import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts/I18nContext';
 import { DynamicIcon, getColorClasses, IconPicker } from './IconPicker';
 import { Calculator } from './Calculator';
+import { ModalWrapper } from './ModalWrapper';
 
 type ModalMode = 'income' | 'expense' | 'service';
 
@@ -29,7 +30,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const [amount, setAmount] = useState(initialValues?.amount?.toString() || '');
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
   const [category, setCategory] = useState<string>(initialValues?.category || '');
-  
+
   // Extract date and time from initialValues if editing, otherwise use current
   const extractDateTime = () => {
     if (initialValues?.date) {
@@ -43,7 +44,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       time: new Date().toTimeString().slice(0, 5)
     };
   };
-  
+
   const dateTime = extractDateTime();
   const [date, setDate] = useState(dateTime.date);
   const [time, setTime] = useState(dateTime.time);
@@ -78,7 +79,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
-  
+
   // New Category Form
   const [showNewCategoryForm, setShowNewCategoryForm] = useState(false);
   const [newCatName, setNewCatName] = useState({ es: '', en: '' });
@@ -218,12 +219,10 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   };
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center p-0 sm:p-4">
-      {/* Backdrop separado */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
-      
-      {/* Modal centrado en viewport */}
-      <div className="relative z-[110] bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
+    <ModalWrapper isOpen={true} onClose={onClose} alignment="center">
+      {/* Modal Box */}
+      <div className="relative bg-white dark:bg-slate-900 w-[95%] max-w-md lg:max-w-lg max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+
 
         {/* Header */}
         <div className="flex justify-between items-center p-4 sm:p-6 pb-2">
@@ -290,7 +289,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                     ))}
                   </div>
                 </div>
-                
+
                 {/* Recurring Checkbox */}
                 <div className="flex items-center justify-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200 dark:border-slate-700">
                   <input
@@ -445,8 +444,8 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                           type="button"
                           onClick={() => setCategory(cat.id)}
                           className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${isSelected
-                              ? `${colorClasses.bg} ${colorClasses.text} border-transparent shadow-md ring-2 ${colorClasses.ring}`
-                              : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
+                            ? `${colorClasses.bg} ${colorClasses.text} border-transparent shadow-md ring-2 ${colorClasses.ring}`
+                            : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
                             }`}
                         >
                           <DynamicIcon name={cat.icon} className="w-3.5 h-3.5" />
@@ -555,11 +554,10 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                         <button
                           type="button"
                           onClick={() => setIncomeType('salary')}
-                          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                            incomeType === 'salary'
-                              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 dark:shadow-none'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                          }`}
+                          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${incomeType === 'salary'
+                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 dark:shadow-none'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
                         >
                           <Briefcase className="w-4 h-4" />
                           Salario
@@ -567,11 +565,10 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                         <button
                           type="button"
                           onClick={() => setIncomeType('extra')}
-                          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${
-                            incomeType === 'extra'
-                              ? 'bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-none'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                          }`}
+                          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 ${incomeType === 'extra'
+                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-200 dark:shadow-none'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                            }`}
                         >
                           <Zap className="w-4 h-4" />
                           Extra
@@ -598,8 +595,8 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                                 type="button"
                                 onClick={() => setCategory(cat.id)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${isSelected
-                                    ? `${colorClasses.bg} ${colorClasses.text} border-transparent shadow-md ring-2 ${colorClasses.ring}`
-                                    : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
+                                  ? `${colorClasses.bg} ${colorClasses.text} border-transparent shadow-md ring-2 ${colorClasses.ring}`
+                                  : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
                                   }`}
                               >
                                 <DynamicIcon name={cat.icon} className="w-3.5 h-3.5" />
@@ -626,8 +623,8 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                               Este monto ya está en mis cuentas
                             </label>
                             <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 leading-relaxed">
-                              {isAlreadyInBalance 
-                                ? '✓ El ingreso NO se sumará al balance disponible (ya está reflejado en tus cuentas)' 
+                              {isAlreadyInBalance
+                                ? '✓ El ingreso NO se sumará al balance disponible (ya está reflejado en tus cuentas)'
                                 : '⚠️ Marca esta opción si el dinero ya forma parte del saldo de alguna de tus cuentas registradas'}
                             </p>
                           </div>
@@ -728,7 +725,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
           currencySymbol={currencySymbol}
         />
       )}
-    </div>
+    </ModalWrapper>
   );
 };
 

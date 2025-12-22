@@ -3,6 +3,7 @@ import { Transaction, DashboardStats, Account, Goal } from '../types';
 import { storageService } from '../services/storageService';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import { validateDate } from '../utils/validation';
 
 interface TransactionFilters {
   search: string;
@@ -20,17 +21,17 @@ interface TransactionsContextType {
   filters: TransactionFilters;
   filteredTransactions: Transaction[];
   ghostMoneyAlerts: string[];
-  
+
   // Actions
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt'>) => Promise<Transaction | null>;
   updateTransaction: (id: string, tx: Partial<Transaction>) => Promise<boolean>;
   deleteTransaction: (id: string) => Promise<boolean>;
   undoDelete: () => Promise<boolean>;
-  
+
   // Filters
   setFilters: (filters: Partial<TransactionFilters>) => void;
   clearFilters: () => void;
-  
+
   // Refresh
   refreshTransactions: () => Promise<void>;
 }
@@ -93,7 +94,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     let totalIncome = 0; // Suma total de todos los ingresos registrados
     let newIncome = 0; // Ingresos que NO están ya reflejados en el balance de cuentas
     let expense = 0;
-    
+
     transactions.forEach(t => {
       if (t.type === 'income') {
         totalIncome += t.amount;
@@ -116,7 +117,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     // Opción 1 (si hay cuentas): realBalance + newIncome - expense - committedSavings
     // Opción 2 (si no hay cuentas): totalIncome - expense - committedSavings
     const hasAccounts = accounts.length > 0;
-    const availableBalance = hasAccounts 
+    const availableBalance = hasAccounts
       ? realBalance + newIncome - expense - committedSavings
       : totalIncome - expense - committedSavings;
 
@@ -134,10 +135,10 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   const ghostMoneyAlerts = useMemo(() => {
     const warnings: string[] = [];
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    const recent = transactions.filter(t => 
+    const recent = transactions.filter(t =>
       t.type === 'expense' && new Date(t.date).getTime() > thirtyDaysAgo
     );
-    
+
     const counts: Record<string, number> = {};
     recent.forEach(t => {
       const key = `${t.amount}-${t.description}`;
@@ -159,7 +160,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       // Search
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
-        const matchesSearch = 
+        const matchesSearch =
           t.description.toLowerCase().includes(searchLower) ||
           t.category.toLowerCase().includes(searchLower) ||
           t.amount.toString().includes(searchLower);
@@ -186,6 +187,13 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Actions
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction | null> => {
     try {
+      // Validate date strictly
+      const dateError = validateDate(tx.date);
+      if (dateError) {
+        toast.error('Error de validación', dateError);
+        return null;
+      }
+
       const newTx = await storageService.addTransaction(tx);
       setTransactions(prev => [...prev, newTx]);
       toast.success(
@@ -201,8 +209,17 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>): Promise<boolean> => {
     try {
+      // Validate date if present
+      if (updates.date) {
+        const dateError = validateDate(updates.date);
+        if (dateError) {
+          toast.error('Error de validación', dateError);
+          return false;
+        }
+      }
+
       await storageService.updateTransaction(id, updates);
-      setTransactions(prev => 
+      setTransactions(prev =>
         prev.map(t => t.id === id ? { ...t, ...updates } : t)
       );
       toast.success('Transacción actualizada');
@@ -221,7 +238,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       await storageService.deleteTransaction(id);
       setTransactions(prev => prev.filter(t => t.id !== id));
       setLastDeleted(txToDelete);
-      
+
       toast.addToast({
         type: 'info',
         title: 'Transacción eliminada',
@@ -241,7 +258,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const undoDelete = useCallback(async (): Promise<boolean> => {
     if (!lastDeleted) return false;
-    
+
     try {
       const restored = await storageService.addTransaction(lastDeleted);
       setTransactions(prev => [...prev, restored]);

@@ -124,7 +124,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
     setHasExistingGoals(hasGoalsForPeriod(currentPeriod));
   }, []);
 
-  const surplus = Math.max(0, budgetPeriodData.totalIncome - budgetPeriodData.totalExpenses);
+  const surplus = Math.max(0, budgetPeriodData.incomeTotal - budgetPeriodData.expensesTotal);
   const allocations = selectedPlan ? calculatePlanAllocations(selectedPlan.id as PlanId, surplus) : null;
 
   const handlePlanSelect = (plan: AllocationPlan) => {
@@ -137,7 +137,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
     setIsCreating(true);
     try {
       const currentPeriod = getCurrentPeriodKey();
-      
+
       // Delete existing goals for this period if any
       if (hasExistingGoals) {
         await deleteGoalsForPeriod(currentPeriod);
@@ -145,7 +145,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
 
       // Create new goals based on selected plan
       await createGoalsFromPlan(selectedPlan.id as PlanId, allocations, currencySymbol, language);
-      
+
       setShowConfirmDialog(false);
       onGoalsCreated?.();
       onBack(); // Go back after successful creation
@@ -201,7 +201,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
               <span className="text-lg font-bold">{formatCurrency(surplus)}</span>
             </div>
           </div>
-          
+
           {hasExistingGoals && (
             <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
               <div className="flex items-start gap-2">
@@ -211,7 +211,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                     {language === 'es' ? 'Ya existen metas para este período' : 'Goals already exist for this period'}
                   </p>
                   <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-                    {language === 'es' 
+                    {language === 'es'
                       ? 'Se reemplazarán las metas existentes con las nuevas.'
                       : 'Existing goals will be replaced with new ones.'}
                   </p>
@@ -226,23 +226,22 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
           <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
             {language === 'es' ? 'Planes de Distribución' : 'Distribution Plans'}
           </h2>
-          
+
           <div className="grid gap-4">
             {ALLOCATION_PLANS.map((plan) => (
               <div
                 key={plan.id}
                 onClick={() => handlePlanSelect(plan)}
-                className={`bg-white dark:bg-slate-800 rounded-2xl p-6 border-2 cursor-pointer transition-all ${
-                  selectedPlan?.id === plan.id
+                className={`bg-white dark:bg-slate-800 rounded-2xl p-6 border-2 cursor-pointer transition-all ${selectedPlan?.id === plan.id
                     ? 'border-indigo-500 ring-2 ring-indigo-100 dark:ring-indigo-900/30'
                     : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                }`}
+                  }`}
               >
                 <div className="flex items-start gap-4">
                   <div className={`p-3 rounded-xl ${plan.bgColor}`}>
                     <plan.icon className={`w-6 h-6 ${plan.iconColor}`} />
                   </div>
-                  
+
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className={`font-semibold ${plan.textColor}`}>
@@ -252,11 +251,11 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                         {plan.badge}
                       </span>
                     </div>
-                    
+
                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                       {language === 'es' ? plan.description : plan.descriptionEn}
                     </p>
-                    
+
                     <div className="grid grid-cols-3 gap-4 text-xs">
                       <div>
                         <span className="text-slate-500 dark:text-slate-400">
@@ -284,7 +283,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                       </div>
                     </div>
                   </div>
-                  
+
                   {selectedPlan?.id === plan.id && (
                     <div className="flex items-center justify-center">
                       <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center">
@@ -293,7 +292,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                     </div>
                   )}
                 </div>
-                
+
                 {/* Allocation Preview */}
                 {selectedPlan?.id === plan.id && allocations && (
                   <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
@@ -365,7 +364,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
             disabled={!selectedPlan || isCreating}
             className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {isCreating 
+            {isCreating
               ? (language === 'es' ? 'Creando...' : 'Creating...')
               : (language === 'es' ? 'Confirmar' : 'Confirm')
             }
@@ -382,18 +381,18 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                 <Target className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
               </div>
             </div>
-            
+
             <h3 className="text-lg font-semibold text-slate-900 dark:text-white text-center mb-2">
               {language === 'es' ? 'Confirmar Plan' : 'Confirm Plan'}
             </h3>
-            
+
             <p className="text-sm text-slate-600 dark:text-slate-400 text-center mb-6">
               {language === 'es'
                 ? `¿Crear metas basadas en el plan "${language === 'es' ? selectedPlan.name : selectedPlan.nameEn}"?`
                 : `Create goals based on the "${language === 'es' ? selectedPlan.name : selectedPlan.nameEn}" plan?`
               }
             </p>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirmDialog(false)}
@@ -406,7 +405,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                 disabled={isCreating}
                 className="flex-1 py-2 px-4 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isCreating 
+                {isCreating
                   ? (language === 'es' ? 'Creando...' : 'Creating...')
                   : (language === 'es' ? 'Crear' : 'Create')
                 }

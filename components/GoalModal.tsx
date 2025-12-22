@@ -3,6 +3,7 @@ import { X, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, 
 import { Goal } from '../types';
 import { Button } from './Button';
 import { useI18n } from '../contexts/I18nContext';
+import { ModalWrapper } from './ModalWrapper';
 
 interface GoalModalProps {
   goal?: Goal | null;
@@ -41,14 +42,14 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   availableBalance = 0
 }) => {
   const { t, language } = useI18n();
-  
+
   // Basic fields
   const [name, setName] = useState(goal?.name || '');
   const [target, setTarget] = useState(goal?.targetAmount.toString() || '');
   const [current, setCurrent] = useState(goal?.currentAmount.toString() || '0');
   const [icon, setIcon] = useState(goal?.icon || 'save');
   const [color, setColor] = useState(goal?.color || 'indigo');
-  
+
   // Savings plan fields
   const [calculationMode, setCalculationMode] = useState<'time' | 'amount'>(goal?.calculationMode || 'time');
   const [contributionAmount, setContributionAmount] = useState(goal?.contributionAmount?.toString() || '');
@@ -89,7 +90,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   const calculatedTime = useMemo(() => {
     const contribution = parseFloat(contributionAmount) || 0;
     if (contribution <= 0 || remainingAmount <= 0) return null;
-    
+
     const monthlyContribution = contribution * getFrequencyMultiplier(contributionFrequency);
     const months = remainingAmount / monthlyContribution;
     return Math.ceil(months);
@@ -99,7 +100,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   const calculatedContribution = useMemo(() => {
     const months = parseInt(targetMonths) || 0;
     if (months <= 0 || remainingAmount <= 0) return null;
-    
+
     const multiplier = getFrequencyMultiplier(contributionFrequency);
     const totalContributions = months * multiplier;
     return Math.ceil(remainingAmount / totalContributions);
@@ -227,12 +228,10 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   const freqLabel = (freq: typeof FREQUENCY_OPTIONS[0]) => language === 'es' ? freq.labelEs : freq.labelEn;
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center p-2 sm:p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
-      
-      {/* Modal */}
-      <div className="relative z-[110] bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-lg shadow-2xl border border-white/20 dark:border-slate-700 max-h-[85vh] overflow-y-auto pb-24 animate-slide-up">
+    <ModalWrapper isOpen={true} onClose={onClose} alignment="start">
+      {/* Modal Box */}
+      <div className="relative bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg max-h-[85vh] mt-16 mb-8 rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+
         <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
             {goal ? l.editGoal : l.newGoal}
@@ -312,17 +311,16 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                   <Calculator className="w-4 h-4" />
                   {l.savingsStrategy}
                 </label>
-                
+
                 {/* Mode Toggle */}
                 <div className="grid grid-cols-2 gap-2 mb-4">
                   <button
                     type="button"
                     onClick={() => setCalculationMode('time')}
-                    className={`p-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      calculationMode === 'time'
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
+                    className={`p-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${calculationMode === 'time'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
                   >
                     <Clock className="w-4 h-4" />
                     {l.calculateTime}
@@ -330,11 +328,10 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setCalculationMode('amount')}
-                    className={`p-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      calculationMode === 'amount'
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
+                    className={`p-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${calculationMode === 'amount'
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
                   >
                     <Wallet className="w-4 h-4" />
                     {l.calculateAmount}
@@ -352,11 +349,10 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                         key={freq.value}
                         type="button"
                         onClick={() => setContributionFrequency(freq.value as any)}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                          contributionFrequency === freq.value
-                            ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        }`}
+                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${contributionFrequency === freq.value
+                          ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}
                       >
                         {freqLabel(freq)}
                       </button>
@@ -378,7 +374,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                       placeholder="1000"
                       className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
                     />
-                    
+
                     {/* Feasibility warning */}
                     {contributionAmount && !isFeasible && (
                       <div className="mt-2 flex items-center gap-2 text-amber-600 dark:text-amber-400">
@@ -401,9 +397,9 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                         </p>
                         <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
                           <Calendar className="w-3 h-3 inline mr-1" />
-                          {new Date(getTargetDateFromMonths(calculatedTime)).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { 
-                            month: 'long', 
-                            year: 'numeric' 
+                          {new Date(getTargetDateFromMonths(calculatedTime)).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                            month: 'long',
+                            year: 'numeric'
                           })}
                         </p>
                       </div>
@@ -434,7 +430,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                         <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
                           {calculatedContribution.toLocaleString()} {currencyCode} <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{l.perPeriod}</span>
                         </p>
-                        
+
                         {/* Feasibility check for calculated amount */}
                         {calculatedContribution > availableBalance && (
                           <div className="mt-2 flex items-center gap-2 text-amber-600 dark:text-amber-400">
@@ -458,13 +454,11 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setAutoDeduct(!autoDeduct)}
-                    className={`w-12 h-6 rounded-full transition-all ${
-                      autoDeduct ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
-                    }`}
+                    className={`w-12 h-6 rounded-full transition-all ${autoDeduct ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
+                      }`}
                   >
-                    <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                      autoDeduct ? 'translate-x-6' : 'translate-x-0.5'
-                    }`} />
+                    <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${autoDeduct ? 'translate-x-6' : 'translate-x-0.5'
+                      }`} />
                   </button>
                 </div>
               </div>
@@ -482,11 +476,10 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                   key={item.name}
                   type="button"
                   onClick={() => setIcon(item.name)}
-                  className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all ${
-                    icon === item.name 
-                      ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-md' 
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                  }`}
+                  className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all ${icon === item.name
+                    ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-md'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                    }`}
                 >
                   <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
@@ -505,10 +498,9 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all ${
-                    color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'
-                  }`}
-                  style={{ backgroundColor: `var(--color-${c}-500, ${c})` }} 
+                  className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'
+                    }`}
+                  style={{ backgroundColor: `var(--color-${c}-500, ${c})` }}
                 >
                   <div className={`w-full h-full rounded-full bg-${c}-500`}></div>
                 </button>
@@ -529,7 +521,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </ModalWrapper>
   );
 };
 

@@ -11,7 +11,7 @@ import { CategoryProfileScreen } from '../CategoryProfileScreen';
 import { GoalView } from '../GoalView';
 import { PromoView } from '../PromoView';
 import { BudgetView } from '../BudgetView';
-import { Transaction, Goal, DashboardStats, CustomCategory, Promo, Budget } from '../../types';
+import { Transaction, Goal, DashboardStats, CustomCategory, Promo, Budget, AppSettings } from '../../types';
 
 interface ScreenRendererProps {
   // Screen states
@@ -75,6 +75,7 @@ interface ScreenRendererProps {
   transactions: Transaction[];
   stats: DashboardStats;
   customCategories: CustomCategory[];
+  settings?: AppSettings;
   currencySymbol: string;
   currencyCode: string;
   availableBalance: number;
@@ -115,6 +116,7 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
   transactions,
   stats,
   customCategories,
+  settings,
   currencySymbol,
   currencyCode,
   availableBalance,
@@ -128,6 +130,7 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
             transactions={transactions}
             stats={stats}
             goals={goals}
+            selectedPlanId={settings?.aiConfig?.selectedPlanId}
             currencySymbol={currencySymbol}
             currencyCode={currencyCode}
             onBack={onCloseScreens.aiCoach}

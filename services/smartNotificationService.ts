@@ -12,10 +12,12 @@
  * 7. Resumen semanal
  */
 
-import { Transaction, Goal, Subscription, DashboardStats, Budget } from '../types';
+import { Transaction, Goal, Subscription, DashboardStats, Budget, FinancialPlan, PlanId } from '../types';
 import { pushNotificationService } from './pushNotificationService';
 import { notificationService } from './notificationService';
 import { storageService } from './storageService';
+import { CATEGORY_TO_GROUP } from '../constants/financialPlans';
+import { calculateBurnRate } from '../utils/financialMathCore';
 
 // ========================
 // TIPOS DE NOTIFICACIONES
@@ -811,6 +813,135 @@ class SmartNotificationService {
   }
 
   // ========================
+  // 9. ALERTAS DE MODELO FINANCIERO
+  // ========================
+
+  async checkModelBasedAlerts(
+    transactions: Transaction[],
+    stats: DashboardStats,
+    planId: PlanId = 'essentialist',
+    language: 'es' | 'en' = 'es'
+  ): Promise<AppNotification[]> {
+    if (!this.preferences.budgetAlerts) return [];
+
+    const notifications: AppNotification[] = [];
+    const notificationIdBase = `model_${planId}_${new Date().toISOString().split('T')[0]}`;
+
+    // Calculate current allocations
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    
+    const allocations = {
+      needs: 0,
+      wants: 0,
+      savings: 0,
+      debt: 0,
+      investments: 0
+    };
+
+    // Calculate income for percentages
+    const totalIncome = recentTx
+      .filter(t => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0) || 1; // Avoid div by 0
+
+    recentTx.filter(t => t.type === 'expense').forEach(t => {
+      const group = CATEGORY_TO_GROUP[t.category] || 'wants';
+      allocations[group] += t.amount;
+    });
+
+    // 1. ESSENTIALIST LOGIC (50/30/20)
+    if (planId === 'essentialist') {
+      const needsPct = (allocations.needs / totalIncome) * 100;
+      if (needsPct > 55) { // 5% tolerance
+        const id = `${notificationIdBase}_needs`;
+        if (!this.notifications.some(n => n.id === id)) {
+          notifications.push(this.createNotification(
+            'budget_warning',
+            language === 'es' ? 'Alerta Esencialista' : 'Essentialist Alert',
+            language === 'es' 
+              ? `Tus gastos esenciales están al ${needsPct.toFixed(0)}% (Meta: 50%). Intenta reducir fijos.`
+              : `Your essential expenses are at ${needsPct.toFixed(0)}% (Target: 50%). Try reducing fixed costs.`,
+            'medium'
+          ));
+        }
+      }
+    }
+
+    // 2. AUDITOR LOGIC (Zero-Based)
+    if (planId === 'auditor') {
+      const assigned = allocations.needs + allocations.wants + allocations.savings + allocations.debt + allocations.investments;
+      const unassigned = totalIncome - assigned;
+      
+      if (unassigned > totalIncome * 0.05) { // If >5% is unassigned
+        const id = `${notificationIdBase}_unassigned`;
+        if (!this.notifications.some(n => n.id === id)) {
+          notifications.push(this.createNotification(
+            'budget_warning',
+            language === 'es' ? 'Dinero sin Asignar' : 'Unassigned Money',
+            language === 'es'
+              ? `Tienes fondos sin propósito asignado. El Auditor requiere que cada moneda tenga un trabajo.`
+              : `You have unassigned funds. The Auditor requires every penny to have a job.`,
+            'medium'
+          ));
+        }
+      }
+    }
+
+    // 3. DEFENSIVE LOGIC (Debt Focus)
+    if (planId === 'defensive') {
+      const hasDebt = allocations.debt > 0; // Simple check, ideally check debt accounts
+      const wantsPct = (allocations.wants / totalIncome) * 100;
+      
+      if (hasDebt && wantsPct > 10) {
+        const id = `${notificationIdBase}_defensive`;
+        if (!this.notifications.some(n => n.id === id)) {
+          notifications.push(this.createNotification(
+            'budget_exceeded',
+            language === 'es' ? 'Modo Defensivo Activado' : 'Defensive Mode Active',
+            language === 'es'
+              ? `Estás gastando en deseos (${wantsPct.toFixed(0)}%) mientras tienes deuda. Prioriza pagar la deuda.`
+              : `You're spending on wants (${wantsPct.toFixed(0)}%) while having debt. Prioritize debt payment.`,
+            'high'
+          ));
+        }
+      }
+    }
+
+    // 4. VELOCITY CHECK (Burn Rate Alert) - Applies to all
+    const burnRate = calculateBurnRate(recentTx, 30);
+    // If burn rate projects running out of money before month end
+    // (Simple logic: Balance / BurnRate < DaysRemainingInMonth)
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    const daysLeft = daysInMonth - today.getDate();
+    
+    if (stats.balance > 0 && burnRate > 0) {
+      const daysOfRunway = stats.balance / burnRate;
+      if (daysOfRunway < daysLeft) {
+        const id = `${notificationIdBase}_velocity`;
+        if (!this.notifications.some(n => n.id === id)) {
+          notifications.push(this.createNotification(
+            'budget_warning',
+            language === 'es' ? 'Velocidad de Gasto Alta' : 'High Spending Velocity',
+            language === 'es'
+              ? `A este ritmo (${Math.round(burnRate)}/día), te quedarás sin fondos el día ${Math.round(today.getDate() + daysOfRunway)}.`
+              : `At this rate (${Math.round(burnRate)}/day), you'll run out of funds on day ${Math.round(today.getDate() + daysOfRunway)}.`,
+            'high'
+          ));
+        }
+      }
+    }
+
+    for (const n of notifications) {
+      n.id = n.id || `${notificationIdBase}_${Math.random()}`; // Ensure ID
+      await this.sendNotification(n);
+    }
+
+    return notifications;
+  }
+
+  // ========================
   // VERIFICACIÓN COMPLETA
   // ========================
 
@@ -822,7 +953,8 @@ class SmartNotificationService {
     stats: DashboardStats,
     currency: string,
     language: 'es' | 'en' = 'es',
-    currencySymbol: string = '$'
+    currencySymbol: string = '$',
+    planId: PlanId = 'essentialist'
   ): Promise<AppNotification[]> {
     if (!this.preferences.enabled) return [];
     
@@ -859,9 +991,12 @@ class SmartNotificationService {
       const milestoneNotifs = await this.checkGoalMilestones(goals, language);
       allNotifications.push(...milestoneNotifs);
 
-      // 5. Alertas de presupuesto
+      // 5. Alertas de presupuesto (Legacy + Model Based)
       const budgetNotifs = await this.checkBudgetAlerts(budgets, transactions, currency, language);
       allNotifications.push(...budgetNotifs);
+      
+      const modelNotifs = await this.checkModelBasedAlerts(transactions, stats, planId, language);
+      allNotifications.push(...modelNotifs);
 
       // 6. Gastos inusuales
       const unusualNotif = await this.checkUnusualExpenses(transactions, currency, language);

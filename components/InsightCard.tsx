@@ -9,16 +9,17 @@ interface InsightCardProps {
   transactions: Transaction[];
   stats: DashboardStats;
   goals: Goal[];
+  selectedPlanId?: string;
 }
 
-export const InsightCard: React.FC<InsightCardProps> = ({ transactions, stats, goals }) => {
+export const InsightCard: React.FC<InsightCardProps> = ({ transactions, stats, goals, selectedPlanId }) => {
   const [insights, setInsights] = useState<AIInsight[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const generateInsight = async () => {
     setLoading(true);
-    const result = await geminiService.getFinancialInsights(transactions, stats, goals);
+    const result = await geminiService.getFinancialInsights(transactions, stats, goals, selectedPlanId);
     setInsights(result);
     setActiveIndex(0);
     setLoading(false);

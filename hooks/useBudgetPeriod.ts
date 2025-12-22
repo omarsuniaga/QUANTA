@@ -22,7 +22,7 @@ export interface BudgetPeriodData {
   // Expense breakdown
   spentBudgeted: number;         // Expenses that match a budget category (within budget)
   spentUnbudgeted: number;       // Expenses without a matching budget (out of budget)
-  totalSpent: number;            // spentBudgeted + spentUnbudgeted
+  expensesTotal: number;         // spentBudgeted + spentUnbudgeted
   
   // Calculated values
   remaining: number;             // budgetTotal - spentBudgeted
@@ -117,7 +117,7 @@ export const useBudgetPeriod = (
       budgetItemsCount,
       spentBudgeted,
       spentUnbudgeted,
-      totalSpent,
+      expensesTotal: totalSpent,
       remaining,
       remainingPercentage,
       incomeTotal,

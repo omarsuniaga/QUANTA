@@ -35,7 +35,10 @@ import { Wallet, ArrowUpRight, ArrowDownRight, BellRing, TrendingUp, HelpCircle,
 import { notificationService } from '../services/notificationService';
 import { storageService } from '../services/storageService';
 import { InsightCard } from './InsightCard';
+import { FinancialHealthCard } from './FinancialHealthCard';
+import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
 import { useI18n } from '../contexts/I18nContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 import { BudgetInfoModal, SurplusInfoModal } from './Dashboard_InfoModals';
 
@@ -54,6 +57,7 @@ interface DashboardProps {
 
 const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goals, accounts, budgetPeriodData, onAddClick, onFilter, onManageSurplus, currencyConfig, isActive = true }) => {
   const { t, language } = useI18n();
+  const { settings } = useSettings();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showOracleHelp, setShowOracleHelp] = useState(false);
@@ -78,7 +82,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     };
     loadData();
   }, [transactions.length]); // Only reload when transactions count changes
-  
+
   // Check for notifications (memoized to avoid recalculation on every render)
   const upcomingPayments = useMemo(() =>
     notificationService.getUpcomingTransactions(transactions),
@@ -105,11 +109,11 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     // Calculate all recurring payments until end of month (handles weekly payments correctly)
     const today = new Date();
     const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
+
     // Get ALL recurring payment occurrences from transactions until end of month
     const allRecurringPayments = notificationService.getAllRecurringPaymentsUntil(transactions, endOfMonth);
     const totalFromTransactions = allRecurringPayments.reduce((sum, p) => sum + p.amount, 0);
-    
+
     // Get ALL subscription payments until end of month (for legacy subscriptions without linked transactions)
     // Filter out subscriptions that already have linked transactions to avoid double counting
     const transactionSubscriptionIds = new Set(
@@ -120,9 +124,9 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     const unlinkedSubscriptions = subscriptions.filter(s => !transactionSubscriptionIds.has(s.id));
     const subscriptionPayments = notificationService.getSubscriptionPaymentsUntil(unlinkedSubscriptions, endOfMonth);
     const totalFromSubscriptions = subscriptionPayments.reduce((sum, p) => sum + p.amount, 0);
-    
+
     const totalPending = totalFromTransactions + totalFromSubscriptions;
-    
+
     return stats.balance - totalPending;
   }, [stats.balance, transactions, subscriptions]);
 
@@ -136,14 +140,14 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   // Calculate balance breakdown for info modal
   const balanceBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
-    
+
     // Base balance from income and expenses
     breakdown.push({
       label: language === 'es' ? 'Balance Base' : 'Base Balance',
       amount: stats.totalIncome - stats.totalExpense,
       type: 'neutral',
       icon: 'info',
-      description: language === 'es' 
+      description: language === 'es'
         ? `Total de ingresos (${formatCurrencyShort(stats.totalIncome)}) menos gastos (${formatCurrencyShort(stats.totalExpense)})`
         : `Total income (${formatCurrencyShort(stats.totalIncome)}) minus expenses (${formatCurrencyShort(stats.totalExpense)})`
     });
@@ -175,7 +179,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
           const customCat = customCategories.find(c => c.id === curr.category || c.key === curr.category);
           let translatedName: string;
           let categoryColor: string;
-          
+
           if (customCat) {
             // Use custom category name based on language
             translatedName = customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || 'Sin categoría';
@@ -184,21 +188,21 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
           } else {
             // Fallback to translation system for default categories
             const categoryTranslation = (t.categories as Record<string, string>)[curr.category];
-            
+
             // If no translation found, it might be an ID - use a generic name
             if (!categoryTranslation || categoryTranslation === curr.category) {
               translatedName = language === 'es' ? 'Otra categoría' : 'Other category';
             } else {
               translatedName = categoryTranslation;
             }
-            
+
             categoryColor = CATEGORY_COLORS[curr.category] || '#94a3b8';
           }
-          
-          acc[curr.category] = { 
-            name: translatedName, 
+
+          acc[curr.category] = {
+            name: translatedName,
             originalName: curr.category, // Keep original for filtering
-            value: 0, 
+            value: 0,
             color: categoryColor
           };
         }
@@ -212,11 +216,11 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   // Calculate income breakdown
   const incomeBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
-    
+
     const salaryIncome = transactions
       .filter(t => t.type === 'income' && (t as any).incomeType === 'salary')
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
     const extraIncome = transactions
       .filter(t => t.type === 'income' && (t as any).incomeType === 'extra')
       .reduce((sum, t) => sum + t.amount, 0);
@@ -261,7 +265,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   // Calculate expense breakdown (depends on categoryData)
   const expenseBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
-    
+
     // Group by category
     categoryData.slice(0, 5).forEach((cat: any) => {
       breakdown.push({
@@ -269,7 +273,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
         amount: cat.value,
         type: 'subtraction',
         icon: 'expense',
-        description: language === 'es' 
+        description: language === 'es'
           ? `Gastos en categoría ${cat.name}`
           : `Expenses in ${cat.name} category`
       });
@@ -329,6 +333,15 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     return data;
   }, [transactions, language]);
 
+  const financialHealthMetrics = useMemo(() => {
+    return calculateFinancialHealthMetrics(
+      transactions,
+      stats.balance,
+      budgetPeriodData.incomeTotal,
+      budgetPeriodData.expensesTotal
+    );
+  }, [transactions, stats.balance, budgetPeriodData.incomeTotal, budgetPeriodData.expensesTotal]);
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -349,7 +362,23 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     <div className="space-y-6 pb-32 animate-in fade-in duration-500">
 
       {/* AI COACH INSIGHTS */}
-      <InsightCard transactions={transactions} stats={stats} goals={goals} />
+      <InsightCard
+        transactions={transactions}
+        stats={stats}
+        goals={goals}
+        selectedPlanId={settings?.aiConfig?.selectedPlanId}
+      />
+
+      {/* FINANCIAL HEALTH & DEEP METRICS */}
+      <div className="-mx-3 sm:mx-0">
+        <FinancialHealthCard
+          budgetPeriodData={budgetPeriodData}
+          financialHealthMetrics={financialHealthMetrics}
+          currencySymbol={symbol}
+          language={language as 'es' | 'en'}
+          onManageSurplus={onManageSurplus}
+        />
+      </div>
 
       {/* Notifications Banner */}
       {upcomingPayments.length > 0 && (
@@ -410,8 +439,8 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-white/10 text-xs text-slate-400 leading-relaxed">
-            {language === 'es' 
-              ? 'Proyección = Balance del mes - recurrentes pendientes' 
+            {language === 'es'
+              ? 'Proyección = Balance del mes - recurrentes pendientes'
               : 'Projection = Monthly balance - pending recurring'}
           </div>
         </div>
@@ -419,7 +448,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
         {/* Projection Info Modal */}
         {showProjectionInfo && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowProjectionInfo(false)}>
-            <div 
+            <div
               className="bg-gradient-to-br from-indigo-900 to-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-indigo-500/30"
               onClick={e => e.stopPropagation()}
             >
@@ -440,19 +469,18 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
                 </button>
               </div>
               <p className="text-slate-300 text-sm leading-relaxed mb-4">
-                {language === 'es' 
+                {language === 'es'
                   ? 'Esta proyección estima tu balance al final del mes considerando todos tus pagos recurrentes pendientes.'
                   : 'This projection estimates your balance at the end of the month considering all your pending recurring payments.'}
               </p>
-              
+
               {/* Breakdown */}
               <div className="space-y-2 mb-4">
                 {dashboardInfo.endOfMonthProjection.breakdown.map((item, idx) => (
-                  <div key={idx} className={`flex justify-between p-3 rounded-lg ${
-                    item.type === 'base' ? 'bg-blue-500/20' :
+                  <div key={idx} className={`flex justify-between p-3 rounded-lg ${item.type === 'base' ? 'bg-blue-500/20' :
                     item.type === 'pending' ? 'bg-rose-500/20' :
-                    'bg-emerald-500/20'
-                  }`}>
+                      'bg-emerald-500/20'
+                    }`}>
                     <span className="text-sm font-medium text-white">{item.label}</span>
                     <span className="text-sm font-bold text-white">
                       {item.type === 'pending' ? '-' : ''}{formatCurrencyShort(item.amount)}
@@ -460,7 +488,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
                   </div>
                 ))}
               </div>
-              
+
               <div className="bg-indigo-500/20 rounded-xl p-3 mb-4">
                 <p className="text-indigo-200 text-sm">
                   <strong>{language === 'es' ? 'Fórmula:' : 'Formula:'}</strong> {language === 'es' ? 'Balance del mes - Recurrentes pendientes' : 'Monthly balance - Pending recurring'}

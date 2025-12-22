@@ -163,14 +163,13 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
         </div>
 
         {/* Filter and Export Buttons */}
-        <div className="flex gap-1.5 sm:gap-2">
+        <div className="flex gap-1.5 sm:gap-2 sm:mx-2">
           <button
             onClick={() => setShowFilterModal(true)}
-            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-bold transition-all text-xs sm:text-sm ${
-              hasActiveFilters
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-            }`}
+            className={`flex-1 flex items-center justify-center gap-1.5 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl font-bold transition-all text-xs sm:text-sm ${hasActiveFilters
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
+              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+              }`}
           >
             <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             <span>
@@ -192,7 +191,7 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
 
       {/* Stats Summary */}
       {hasActiveFilters && (
-        <div className="px-3 sm:px-4 mb-3 sm:mb-4">
+        <div className="px-3 sm:px-4 space-y-4 sm:space-y-6">
           <div className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <div className="text-center">
@@ -242,7 +241,7 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
       )}
 
       {/* Transaction List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="px-3 sm:px-4 space-y-4 sm:space-y-6">
         <TransactionList
           transactions={filteredTransactions}
           onEdit={onEdit}

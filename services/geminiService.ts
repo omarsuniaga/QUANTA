@@ -1,25 +1,18 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { Transaction, Category, Goal, DashboardStats, AIInsight } from '../types';
+import { Transaction, Category, Goal, DashboardStats, AIInsight, FinancialHealthMetrics } from '../types';
 import { geminiRateLimiter } from './apiRateLimiter';
+import { classifyByKeywords } from '../utils/categoryKeywords';
+import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
 
 // Store for user's API key
 let userApiKey: string = '';
 
 // Safely retrieve API key
 const getApiKey = (): string => {
-  // Priority 1: User's personal API key
-  if (userApiKey && userApiKey.trim() !== '') {
-    return userApiKey;
-  }
-  
-  // Priority 2: Development environment key
+  if (userApiKey && userApiKey.trim() !== '') return userApiKey;
   if (typeof process !== 'undefined' && process.env.IS_PRODUCTION !== 'true') {
-    if (process.env.API_KEY && process.env.API_KEY !== 'undefined') {
-      return process.env.API_KEY;
-    }
+    if (process.env.API_KEY && process.env.API_KEY !== 'undefined') return process.env.API_KEY;
   }
-  
   return '';
 };
 
@@ -35,7 +28,7 @@ export const hasValidApiKey = (): boolean => {
 
 // Helper to generate cache keys
 const generateCacheKey = (prefix: string, data: any): string => {
-  const hash = JSON.stringify(data).slice(0, 100); // Simple hash
+  const hash = JSON.stringify(data).slice(0, 100);
   return `${prefix}_${hash}`;
 };
 
@@ -45,16 +38,9 @@ export const geminiService = {
    */
   async testApiKey(apiKey?: string): Promise<{ success: boolean; message: string }> {
     const testKey = apiKey || getApiKey();
-    
-    if (!testKey || testKey.trim() === '') {
-      return { 
-        success: false, 
-        message: 'No se proporcionó una API key' 
-      };
-    }
+    if (!testKey || testKey.trim() === '') return { success: false, message: 'No se proporcionó una API key' };
 
     try {
-      // Test sin rate limiter (es una petición de prueba)
       const testAi = new GoogleGenAI({ apiKey: testKey });
       const response = await testAi.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -62,49 +48,50 @@ export const geminiService = {
       });
       
       const text = response.text;
-      if (text && text.length > 0) {
-        return { 
-          success: true, 
-          message: '✅ API Key válida y funcional' 
-        };
-      }
-      
-      return { 
-        success: false, 
-        message: 'La API key no generó una respuesta válida' 
-      };
+      return (text && text.length > 0) 
+        ? { success: true, message: '✅ API Key válida y funcional' }
+        : { success: false, message: 'La API key no generó una respuesta válida' };
     } catch (error: any) {
       console.error("API Key test error:", error);
       const isRateLimit = error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED');
       return { 
         success: false, 
         message: isRateLimit 
-          ? '⚠️ API Key válida pero has excedido el límite de peticiones. Intenta en unos minutos.'
+          ? '⚠️ API Key válida pero has excedido el límite de peticiones.' 
           : `❌ Error: ${error.message || 'API Key inválida'}` 
       };
     }
   },
 
   /**
-   * Get rate limiter stats
-   */
-  getRateLimiterStats() {
-    return geminiRateLimiter.getStats();
-  },
-
-  /**
-   * Clear API cache
-   */
-  clearCache() {
-    geminiRateLimiter.clearCache();
-  },
-
-  /**
    * Parses natural language input into a structured transaction object.
+   * Hybrid Logic: Checks keywords locally first, falls back to AI.
    */
   async parseTransaction(input: string): Promise<Partial<Transaction> | null> {
+    // 1. LAYER 2: Try Keyword-based classification (Local/Fast/Free)
+    const localCategory = classifyByKeywords(input);
+    
+    // Extract amount from input if possible (simple regex for "number")
+    const amountMatch = input.match(/(\d+([.,]\d+)?)/);
+    const estimatedAmount = amountMatch ? parseFloat(amountMatch[0].replace(',', '.')) : undefined;
+
+    // If we have both, and the input is simple, we could theoretically return early
+    // but Gemini handles complex dates and descriptions better.
+    // However, if the input is ONLY a keyword + amount, we save the API call.
+    const words = input.split(' ');
+    if (localCategory && estimatedAmount && words.length <= 3) {
+      return {
+        category: localCategory,
+        amount: estimatedAmount,
+        description: input,
+        date: new Date().toISOString().split('T')[0],
+        type: localCategory === Category.Salary || localCategory === Category.Freelance ? 'income' : 'expense'
+      };
+    }
+
+    // 2. LAYER 3: Fallback to Gemini AI
     const apiKey = getApiKey();
-    if (!apiKey) return null;
+    if (!apiKey) return localCategory ? { category: localCategory, amount: estimatedAmount } : null;
     
     const ai = new GoogleGenAI({ apiKey });
     const cacheKey = generateCacheKey('parse', { input, date: new Date().toISOString().split('T')[0] });
@@ -115,12 +102,9 @@ export const geminiService = {
         async () => {
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Extract transaction details from this text: "${input}". 
-            Today's date is ${new Date().toISOString().split('T')[0]}.
-            If year is missing, assume current year.
-            Categorize into one of: ${Object.values(Category).join(', ')}.
-            If unsure, use 'Other'.
-            If the user mentions 'monthly', 'weekly', or 'yearly', set isRecurring to true and set frequency appropriately.
+            contents: `Extract transaction details from: "${input}". 
+            Today: ${new Date().toISOString().split('T')[0]}.
+            Known Categories: ${Object.values(Category).join(', ')}.
             Return JSON.`,
             config: {
               responseMimeType: 'application/json',
@@ -140,61 +124,56 @@ export const geminiService = {
             }
           });
           
-          const text = response.text;
-          if (!text) return null;
-          return JSON.parse(text);
+          return JSON.parse(response.text || 'null');
         },
-        { 
-          cacheDurationMs: 60 * 1000, // 1 minuto para parsing (es específico del input)
-          priority: 'high' // Alta prioridad para UX
-        }
+        { cacheDurationMs: 60 * 1000, priority: 'high' }
       );
     } catch (error) {
       console.error("Gemini Parse Error:", error);
-      return null;
+      return localCategory ? { category: localCategory, amount: estimatedAmount } : null;
     }
   },
 
   /**
    * Generates structured financial insights (The AI Coach).
+   * Hybrid Logic: Uses MathCore for hard numbers, AI for qualitative advice.
    */
   async getFinancialInsights(
     transactions: Transaction[], 
     stats: DashboardStats,
-    goals: Goal[]
+    goals: Goal[],
+    selectedPlanId?: string
   ): Promise<AIInsight[]> {
     const apiKey = getApiKey();
     if (!apiKey || transactions.length === 0) return [];
 
-    const ai = new GoogleGenAI({ apiKey });
+    // 1. LAYER 1: Hard Mathematics (Precise/Free)
+    const metrics: FinancialHealthMetrics = calculateFinancialHealthMetrics(
+      transactions,
+      stats.balance,
+      stats.totalIncome,
+      stats.totalExpense
+    );
 
-    // 1. Prepare Context (Summarized to save tokens)
-    const recentTx = transactions.slice(0, 30); // Last 30 transactions
-    
-    // Calculate category spending
-    const spendingByCategory: Record<string, number> = {};
-    recentTx.filter(t => t.type === 'expense').forEach(t => {
-      spendingByCategory[t.category] = (spendingByCategory[t.category] || 0) + t.amount;
-    });
-
+    // 2. Prepare Context for AI
     const contextData = {
+      ...metrics,
       currentBalance: stats.balance,
-      totalIncome: stats.totalIncome,
-      totalExpense: stats.totalExpense,
-      topSpendingCategories: Object.entries(spendingByCategory)
-        .sort(([,a], [,b]) => b - a)
-        .slice(0, 3)
-        .map(([cat, amt]) => `${cat}: $${amt}`),
-      activeGoals: goals.map(g => `${g.name} (${Math.round(g.currentAmount/g.targetAmount*100)}%)`),
+      activeGoals: goals.map(g => `${g.name}: ${Math.round((g.currentAmount/g.targetAmount)*100)}% complete`),
+      topCategories: transactions
+        .filter(t => t.type === 'expense')
+        .slice(0, 20)
+        .reduce((acc: any, t) => {
+          acc[t.category] = (acc[t.category] || 0) + t.amount;
+          return acc;
+        }, {})
     };
 
-    // Cache key basado en datos resumidos (no en todas las transacciones)
-    const cacheKey = generateCacheKey('insights', {
-      balance: Math.round(stats.balance / 100) * 100, // Redondear para mejor cache hit
-      income: Math.round(stats.totalIncome / 100) * 100,
-      expense: Math.round(stats.totalExpense / 100) * 100,
-      txCount: transactions.length,
-      goalsCount: goals.length
+    const ai = new GoogleGenAI({ apiKey });
+    const cacheKey = generateCacheKey('insights_v3', {
+      balance: Math.round(stats.balance / 100),
+      metricsHash: Math.round(metrics.savingsRate),
+      planId: selectedPlanId
     });
 
     try {
@@ -203,18 +182,21 @@ export const geminiService = {
         async () => {
           const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash',
-            contents: `Act as "QUANTA Coach", a smart, sophisticated financial assistant.
-            Analyze this financial data and provide 3 to 4 specific insights.
+            contents: `Act as "QUANTA CFO", a sophisticated financial strategist.
+            Current Financial Model: ${selectedPlanId || 'essentialist'}
             
-            Data: ${JSON.stringify(contextData)}
+            Analyze these PRECISE mathematical metrics and provide 3-4 strategic insights.
             
-            Rules:
-            1. 'alert': Use if expenses > income or if a category is unusually high.
-            2. 'tip': Suggest specific ways to save based on the top categories.
-            3. 'kudos': Praise progress on goals or income.
-            4. 'prediction': Guess end-of-month status based on current balance.
+            Metrics: ${JSON.stringify(contextData)}
             
-            Output JSON format only. Language: Spanish (Neutral, Professional but friendly).`,
+            Strategy Guidelines:
+            - If runwayMonths < 3: Priority is Emergency Fund (alert).
+            - If savingsRate < 20%: Suggest specific expense cuts based on categories (tip).
+            - If debtToIncomeRatio > 35%: Focus on debt reduction (alert).
+            - If metrics are good: Suggest investing or accelerating goals (kudos/tip).
+            
+            Tailor your advice to the "${selectedPlanId || 'essentialist'}" plan philosophy.
+            Format: JSON only. Language: Spanish (Neutral, Professional).`,
             config: {
               responseMimeType: 'application/json',
               responseSchema: {
@@ -226,7 +208,7 @@ export const geminiService = {
                     title: { type: Type.STRING },
                     message: { type: Type.STRING },
                     action: { type: Type.STRING },
-                    score: { type: Type.NUMBER, description: "Financial health score 0-100 based on analysis" }
+                    score: { type: Type.NUMBER }
                   },
                   required: ['type', 'title', 'message']
                 }
@@ -234,30 +216,13 @@ export const geminiService = {
             }
           });
 
-          const text = response.text;
-          if (!text) return [];
-          return JSON.parse(text) as AIInsight[];
+          return JSON.parse(response.text || '[]');
         },
-        {
-          cacheDurationMs: 10 * 60 * 1000, // 10 minutos - insights no cambian rápido
-          priority: 'normal'
-        }
+        { cacheDurationMs: 30 * 60 * 1000, priority: 'normal' }
       );
-
     } catch (error: any) {
       console.error("Gemini Insight Error:", error);
-      
-      // Mensaje más descriptivo según el error
-      const isRateLimit = error.message?.includes('429') || error.message?.includes('enfriamiento');
-      
-      return [{
-        type: 'tip',
-        title: isRateLimit ? 'Límite de API Alcanzado' : 'Servicio IA Temporalmente No Disponible',
-        message: isRateLimit 
-          ? 'Has alcanzado el límite de consultas. Los insights se actualizarán automáticamente en unos minutos.'
-          : 'Por favor intenta analizar tus finanzas más tarde.',
-        action: 'Reintentar'
-      }];
+      return [];
     }
   }
 };

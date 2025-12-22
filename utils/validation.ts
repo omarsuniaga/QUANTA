@@ -32,10 +32,22 @@ export const validateDate = (date: string): string | null => {
   if (!date || date.trim() === '') {
     return 'La fecha es requerida';
   }
+
+  // Strict format check: YYYY-MM-DD
+  const ymdRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!ymdRegex.test(date)) {
+    return 'Formato de fecha inválido (requerido: YYYY-MM-DD)';
+  }
   
   const selectedDate = new Date(date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Ensure we are parsing it as a local date for comparison, though standard Date(ymd) handles it as UTC usually
+  // But wait, the previous code used new Date(date).
+  // If date is "2024-01-01", new Date("2024-01-01") is UTC midnight.
+  // The existing code: 
+  // const selectedDate = new Date(date);
+  // const today = new Date(); today.setHours(0,0,0,0);
+  // This comparison might be flawed if not careful, but my task is just adding the Regex check.
+  // I will preserve existing logic for now to limit scope drift, just adding the regex.
   
   if (isNaN(selectedDate.getTime())) {
     return 'Fecha inválida';

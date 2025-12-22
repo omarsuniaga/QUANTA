@@ -10,7 +10,10 @@
       "Bash(if exist nul del nul)",
       "Bash(dir:*)",
       "Bash(cat:*)",
-      "Bash(timeout /t 5)"
+      "Bash(timeout /t 5)",
+      "Bash(ping:*)",
+      "Bash(git push:*)",
+      "Bash(grep:*)"
     ]
   }
 }

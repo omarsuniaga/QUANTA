@@ -1,14 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { ArrowUpRight, Briefcase, Zap, Edit2, Trash2, TrendingUp, Calendar, MoreVertical } from 'lucide-react';
-import { Transaction } from '../types';
+import { Transaction, DashboardStats } from '../types';
 import { useI18n } from '../contexts/I18nContext';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { FinancialHealthCard } from './FinancialHealthCard';
 import { SurplusDistributionView } from './SurplusDistributionView';
 import { getFinancialHealth } from '../utils/financialHealth';
+import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
+import { ModalWrapper } from './ModalWrapper';
 
 interface IncomeScreenProps {
   transactions: Transaction[];
+  stats: DashboardStats;
   currencySymbol?: string;
   currencyCode?: string;
   budgetPeriodData: BudgetPeriodData;
@@ -21,6 +24,7 @@ interface IncomeScreenProps {
 
 export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   transactions,
+  stats,
   currencySymbol = 'RD$',
   currencyCode = 'DOP',
   budgetPeriodData,
@@ -80,6 +84,16 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
 
     return recentIncomes.reduce((sum, t) => sum + t.amount, 0) / (monthsCount || 1);
   }, [incomeTransactions]);
+
+  // Calculate Deep Health Metrics
+  const financialHealthMetrics = useMemo(() => {
+    return calculateFinancialHealthMetrics(
+      transactions,
+      stats.balance,
+      budgetPeriodData.incomeTotal,
+      budgetPeriodData.expensesTotal
+    );
+  }, [transactions, stats.balance, budgetPeriodData.incomeTotal, budgetPeriodData.expensesTotal]);
 
   const formatCurrency = (amount: number) => {
     const locale = language === 'es' ? 'es-DO' : 'en-US';
@@ -167,6 +181,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
       {/* Financial Health Card - Compact by default */}
       <FinancialHealthCard
         budgetPeriodData={budgetPeriodData}
+        financialHealthMetrics={financialHealthMetrics}
         currencySymbol={currencySymbol}
         language={language}
         onManageSurplus={hasSurplus ? () => setShowSurplusView(true) : undefined}
@@ -393,11 +408,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeleteConfirm(null)}>
-          <div 
-            className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700"
-            onClick={e => e.stopPropagation()}
-          >
+        <ModalWrapper isOpen={true} onClose={() => setDeleteConfirm(null)}>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700">
             <div className="flex items-center justify-center mb-4">
               <div className="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
                 <Trash2 className="w-7 h-7 text-rose-600 dark:text-rose-400" />
@@ -434,7 +446,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalWrapper>
       )}
     </div>
   );

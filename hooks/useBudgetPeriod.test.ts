@@ -115,14 +115,14 @@ describe('useBudgetPeriod - Budget categorization', () => {
     // budgetTotal = 5,000 + 2,000 = 7,000
     // spentBudgeted = 1,000 (Food) + 500 (Transport) = 1,500
     // spentUnbudgeted = 800 (Entertainment) = 800
-    // totalSpent = 1,500 + 800 = 2,300
+    // expensesTotal = 1,500 + 800 = 2,300
     // remaining = 7,000 - 1,500 = 5,500
     // incomeTotal = 10,000
 
     expect(data.budgetTotal).toBe(7000);
     expect(data.spentBudgeted).toBe(1500);
     expect(data.spentUnbudgeted).toBe(800);
-    expect(data.totalSpent).toBe(2300);
+    expect(data.expensesTotal).toBe(2300);
     expect(data.remaining).toBe(5500);
     expect(data.incomeTotal).toBe(10000);
     expect(data.budgetedExpenses.length).toBe(2); // tx1, tx2

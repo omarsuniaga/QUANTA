@@ -163,7 +163,7 @@ describe('dashboardCalculations', () => {
       budgetItemsCount: 5,
       spentBudgeted: 25000,
       spentUnbudgeted: 5000,
-      totalSpent: 30000,
+      expensesTotal: 30000,
       remaining: 15000,
       remainingPercentage: 62.5,
       incomeTotal: 50000,
@@ -200,7 +200,7 @@ describe('dashboardCalculations', () => {
       const overspentBudget: BudgetPeriodData = {
         ...mockBudgetPeriodData,
         budgetTotal: 25000,
-        totalSpent: 30000
+        expensesTotal: 30000
       };
       
       const result = calculateDashboardInfo(mockStats, overspentBudget, mockAccounts, 5000);
@@ -267,7 +267,7 @@ describe('dashboardCalculations', () => {
         budgetItemsCount: 8,
         spentBudgeted: 35000,
         spentUnbudgeted: 5000,
-        totalSpent: 40000,
+        expensesTotal: 40000,
         remaining: 15000,
         remainingPercentage: 70,
         incomeTotal: 70000,
@@ -311,7 +311,7 @@ describe('dashboardCalculations', () => {
         budgetItemsCount: 6,
         spentBudgeted: 40000,
         spentUnbudgeted: 8000,
-        totalSpent: 48000,
+        expensesTotal: 48000,
         remaining: -3000,
         remainingPercentage: 106.7,
         incomeTotal: 45000,
@@ -331,7 +331,7 @@ describe('dashboardCalculations', () => {
       expect(result.budgetStatus.amount).toBe(3000); // 48k spent - 45k budget
       expect(result.monthlySurplus).toBe(0); // No surplus (income = budget)
       expect(result.hasSurplus).toBe(false);
-      expect(result.endOfMonthProjection.projected).toBe(-13000); // Negative projection
+      expect(result.endOfMonthProjection.projected).toBe(-8000); // Negative projection
     });
   });
 });

@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Info, TrendingUp, TrendingDown, Target, PiggyBank, RefreshCw, Percent, AlertCircle } from 'lucide-react';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 export interface AmountBreakdownItem {
   label: string;
@@ -30,6 +31,8 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
   language = 'es',
   subtitle
 }) => {
+  useModalScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   const formatCurrency = (amount: number) => {
@@ -85,12 +88,18 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
-      
+    <div
+      className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex justify-center items-start overflow-y-auto pointer-events-auto"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
       {/* Modal */}
-      <div className="relative z-[110] bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] overflow-hidden flex flex-col">
+      <div
+        className="relative bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] mt-16 mb-8 mx-4 flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-br from-indigo-500 to-indigo-600">
           <div className="flex items-start justify-between mb-2">
@@ -114,7 +123,7 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
               <X className="w-5 h-5 text-white" />
             </button>
           </div>
-          
+
           {/* Total Amount Display */}
           <div className="mt-4 p-4 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20">
             <div className="text-xs font-bold text-white/80 uppercase tracking-wide mb-1">
@@ -186,5 +195,7 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
         </div>
       </div>
     </div>
+
   );
 };
+

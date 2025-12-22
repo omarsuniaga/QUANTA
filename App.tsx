@@ -101,7 +101,7 @@ export default function App() {
     addGoal,
     updateGoal,
     deleteGoal,
-    addTransaction,
+    addTransaction: async (tx) => { await addTransaction(tx); },
     currencyCode,
     currencySymbol,
     toast,
@@ -274,6 +274,7 @@ export default function App() {
       {activeTab === 'income' && (
         <IncomeScreen
           transactions={transactions}
+          stats={stats}
           currencySymbol={currencySymbol}
           currencyCode={currencyCode}
           budgetPeriodData={currentBudgetPeriod}
@@ -369,23 +370,6 @@ export default function App() {
         </div>
       )}
 
-      {/* === MODALS === */}
-      <ModalRenderer
-        actionModal={modalManager.actionModal}
-        filterModal={modalManager.filterModal}
-        notificationPrompt={modalManager.notificationPrompt}
-        onSaveFromModal={(data) => transactionHandlers.handleSaveFromModal(data, modalManager.actionModal.mode!, modalManager.actionModal.editingItem)}
-        onApplyFilters={setFilters}
-        onCloseModals={{
-          action: modalManager.closeActionModal,
-          filter: modalManager.closeFilterModal,
-          notificationPrompt: modalManager.hideNotificationPrompt,
-        }}
-        filters={filters}
-        currencySymbol={currencySymbol}
-        currencyCode={currencyCode}
-        availableBalance={stats.balance}
-      />
 
       {/* === FULL SCREEN COMPONENTS === */}
       <ScreenRenderer
@@ -442,6 +426,7 @@ export default function App() {
         transactions={transactions}
         stats={stats}
         customCategories={screenManager.customCategories}
+        settings={settings}
         currencySymbol={currencySymbol}
         currencyCode={currencyCode}
         availableBalance={stats.totalIncome - stats.totalExpense}
@@ -449,6 +434,24 @@ export default function App() {
 
       {/* === PWA INSTALL PROMPT === */}
       <PWAInstallPrompt />
+
+      {/* === MODALS (Rendered last for proper overlay) === */}
+      <ModalRenderer
+        actionModal={modalManager.actionModal}
+        filterModal={modalManager.filterModal}
+        notificationPrompt={modalManager.notificationPrompt}
+        onSaveFromModal={(data) => transactionHandlers.handleSaveFromModal(data, modalManager.actionModal.mode!, modalManager.actionModal.editingItem)}
+        onApplyFilters={setFilters}
+        onCloseModals={{
+          action: modalManager.closeActionModal,
+          filter: modalManager.closeFilterModal,
+          notificationPrompt: modalManager.hideNotificationPrompt,
+        }}
+        filters={filters}
+        currencySymbol={currencySymbol}
+        currencyCode={currencyCode}
+        availableBalance={stats.balance}
+      />
     </AppLayout>
   );
 }

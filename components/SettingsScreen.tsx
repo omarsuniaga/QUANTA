@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { AppSettings, QuickAction, Account } from '../types';
+import { AppSettings, QuickAction, Account, PlanId } from '../types';
 import { Button } from './Button';
-import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity, HelpCircle, Building2, Wallet, Banknote, Edit2 } from 'lucide-react';
+import { FINANCIAL_PLANS } from '../constants/financialPlans';
+import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity, HelpCircle, Building2, Wallet, Banknote, Edit2, ShieldCheck, PieChart as PieChartIcon, TrendingUp } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts';
 import { GeminiApiKeySettings } from './GeminiApiKeySettings';
@@ -355,6 +356,53 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     1,234.56 {settings.currency.localCode}
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* Financial Plan Selection */}
+            <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-1.5 sm:p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400">
+                    <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">
+                      {language === 'es' ? 'Modelo de Estrategia' : 'Strategy Model'}
+                    </p>
+                    <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                      {language === 'es' ? 'Define cómo QUANTA analiza tu dinero' : 'Define how QUANTA analyzes your money'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                {Object.values(FINANCIAL_PLANS).map((plan) => {
+                  const isSelected = settings.aiConfig.selectedPlanId === plan.id || (!settings.aiConfig.selectedPlanId && plan.id === 'essentialist');
+                  return (
+                    <button
+                      key={plan.id}
+                      onClick={() => onUpdateSettings({
+                        ...settings,
+                        aiConfig: { ...settings.aiConfig, selectedPlanId: plan.id as PlanId }
+                      })}
+                      className={`flex flex-col p-3 rounded-xl border-2 transition-all text-left ${
+                        isSelected 
+                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
+                          : 'border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-sm text-slate-800 dark:text-white">{plan.name}</span>
+                        {isSelected && <Check className="w-4 h-4 text-purple-600 dark:text-purple-400" />}
+                      </div>
+                      <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+                        {plan.description}
+                      </p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

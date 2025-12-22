@@ -23,11 +23,11 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
   formatCurrency,
   language
 }) => {
-    if (!isOpen) return null;
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={(e) => e.stopPropagation()}>
-      <div 
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4" onClick={onClose}>
+      <div
         className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700"
         onClick={e => e.stopPropagation()}
       >
@@ -47,13 +47,13 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
             <X className="w-5 h-5 text-slate-400" />
           </button>
         </div>
-        
+
         <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mb-4">
-          {language === 'es' 
+          {language === 'es'
             ? 'El presupuesto muestra cuánto planeas gastar este mes y si estás dentro o fuera de ese límite.'
             : 'The budget shows how much you plan to spend this month and whether you are within or over that limit.'}
         </p>
-        
+
         <div className="space-y-3 mb-4">
           <div className="flex justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -63,7 +63,7 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
               {formatCurrency(budgetTotal)}
             </span>
           </div>
-          
+
           <div className="flex justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50">
             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
               {language === 'es' ? 'Gastado a la fecha:' : 'Spent to date:'}
@@ -72,7 +72,7 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
               {formatCurrency(monthlyExpenses)}
             </span>
           </div>
-          
+
           {budgetStatus.type === 'restante' && (
             <div className="flex justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20">
               <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
@@ -83,7 +83,7 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
               </span>
             </div>
           )}
-          
+
           {budgetStatus.type === 'excedente' && (
             <div className="flex justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20">
               <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
@@ -95,13 +95,13 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
             </div>
           )}
         </div>
-        
+
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 mb-4">
           <p className="text-blue-700 dark:text-blue-300 text-sm">
             <strong>{language === 'es' ? 'Fórmula:' : 'Formula:'}</strong> {language === 'es' ? 'Restante = Presupuesto - Gastos' : 'Remaining = Budget - Expenses'}
           </p>
         </div>
-        
+
         <button
           onClick={onClose}
           className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors"
@@ -132,11 +132,11 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
   formatCurrency,
   language
 }) => {
-    if (!isOpen) return null;
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={(e) => e.stopPropagation()}>
-      <div 
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4" onClick={onClose}>
+      <div
         className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-emerald-400"
         onClick={e => e.stopPropagation()}
       >
@@ -156,13 +156,13 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
             <X className="w-5 h-5 text-white" />
           </button>
         </div>
-        
+
         <p className="text-emerald-50 text-sm leading-relaxed mb-4">
-          {language === 'es' 
+          {language === 'es'
             ? 'El superávit es el dinero disponible después de cubrir tu presupuesto. Es ideal para ahorros o metas financieras.'
             : 'The surplus is money available after covering your budget. It\'s ideal for savings or financial goals.'}
         </p>
-        
+
         <div className="space-y-3 mb-4">
           <div className="flex justify-between p-3 rounded-lg bg-white/20">
             <span className="text-sm font-medium text-white">
@@ -172,7 +172,7 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
               {formatCurrency(monthlyIncome)}
             </span>
           </div>
-          
+
           <div className="flex justify-between p-3 rounded-lg bg-white/20">
             <span className="text-sm font-medium text-white">
               {language === 'es' ? 'Presupuesto total:' : 'Total budget:'}
@@ -181,7 +181,7 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
               {formatCurrency(budgetTotal)}
             </span>
           </div>
-          
+
           <div className="flex justify-between p-3 rounded-lg bg-white/30">
             <span className="text-sm font-medium text-white">
               {language === 'es' ? '💰 Superávit:' : '💰 Surplus:'}
@@ -191,13 +191,13 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
             </span>
           </div>
         </div>
-        
+
         <div className="bg-white/20 rounded-xl p-3 mb-4">
           <p className="text-white text-sm">
             <strong>{language === 'es' ? 'Fórmula:' : 'Formula:'}</strong> {language === 'es' ? 'Superávit = Ingresos - Presupuesto' : 'Surplus = Income - Budget'}
           </p>
         </div>
-        
+
         <button
           onClick={onClose}
           className="w-full py-2.5 bg-white/20 hover:bg-white/30 text-white font-semibold rounded-xl transition-colors"

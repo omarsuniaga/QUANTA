@@ -67,13 +67,13 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   // Build category names map for displaying names instead of IDs
   const categoryNamesMap = useMemo(() => {
     const map = new Map<string, string>();
-    
+
     // Add custom categories from storageService
     customCategories.forEach(cat => {
       const name = cat.name[language as 'es' | 'en'] || cat.name.es || cat.name.en;
       map.set(cat.id, name);
     });
-    
+
     return map;
   }, [customCategories, language]);
 
@@ -89,17 +89,17 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
       .filter(b => b.isActive)
       .reduce((sum, b) => sum + b.limit, 0);
 
-    const totalSpent = updatedBudgets
+    const expensesTotal = updatedBudgets
       .filter(b => b.isActive)
       .reduce((sum, b) => sum + (b.spent || 0), 0);
 
-    const totalRemaining = totalBudgeted - totalSpent;
+    const totalRemaining = totalBudgeted - expensesTotal;
 
     return {
       totalBudgeted,
-      totalSpent,
+      expensesTotal,
       totalRemaining,
-      percentage: totalBudgeted > 0 ? (totalSpent / totalBudgeted) * 100 : 0,
+      percentage: totalBudgeted > 0 ? (expensesTotal / totalBudgeted) * 100 : 0,
     };
   }, [updatedBudgets]);
 
@@ -152,12 +152,12 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
-    
+
     return transactions.filter(tx => {
       if (tx.type !== 'expense' || tx.category !== budget.category) return false;
-      
+
       const txDate = new Date(tx.date);
-      
+
       if (budget.period === 'monthly') {
         return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
       } else {
@@ -203,18 +203,17 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
           {/* Progress Bar */}
           <div className="pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-700">
             <div className="flex items-center justify-between text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-2">
-              <span className="font-medium">{language === 'es' ? 'Gastado' : 'Spent'}: <span className="text-slate-800 dark:text-white font-bold">{formatCurrency(summaryStats.totalSpent)}</span></span>
+              <span className="font-medium">{language === 'es' ? 'Gastado' : 'Spent'}: <span className="text-slate-800 dark:text-white font-bold">{formatCurrency(summaryStats.expensesTotal)}</span></span>
               <span className="font-bold">{summaryStats.percentage.toFixed(0)}%</span>
             </div>
             <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  summaryStats.percentage < 70
-                    ? 'bg-emerald-500'
-                    : summaryStats.percentage < 90
+                className={`h-full rounded-full transition-all duration-300 ${summaryStats.percentage < 70
+                  ? 'bg-emerald-500'
+                  : summaryStats.percentage < 90
                     ? 'bg-amber-500'
                     : 'bg-rose-500'
-                }`}
+                  }`}
                 style={{ width: `${Math.min(summaryStats.percentage, 100)}%` }}
               />
             </div>
@@ -268,7 +267,7 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                     </p>
                     {suggestion.suggestedAmount && (
                       <p className="text-xs sm:text-sm text-violet-600 dark:text-violet-400 mt-1">
-                        {language === 'es' 
+                        {language === 'es'
                           ? `Sugerencia: ${currencySymbol}${suggestion.suggestedAmount.toLocaleString()}`
                           : `Suggested: ${currencySymbol}${suggestion.suggestedAmount.toLocaleString()}`}
                       </p>
@@ -346,7 +345,7 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                 {language === 'es' ? 'No tienes presupuestos configurados' : 'No budgets configured'}
               </p>
               <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">
-                {language === 'es' 
+                {language === 'es'
                   ? 'Crea tu primer presupuesto para controlar tus gastos'
                   : 'Create your first budget to track your spending'}
               </p>
@@ -431,8 +430,8 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
                               <span className="truncate">{getCategoryName(budget.category)}</span>
                               <span>•</span>
-                              <span>{budget.period === 'monthly' 
-                                ? (language === 'es' ? 'Mensual' : 'Monthly') 
+                              <span>{budget.period === 'monthly'
+                                ? (language === 'es' ? 'Mensual' : 'Monthly')
                                 : (language === 'es' ? 'Anual' : 'Yearly')}</span>
                             </div>
                           </div>
@@ -442,10 +441,9 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                             <div className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">
                               {formatCurrency(budget.limit)}
                             </div>
-                            <div className={`text-[10px] sm:text-xs font-medium ${
-                              remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
-                            }`}>
-                              {remaining >= 0 
+                            <div className={`text-[10px] sm:text-xs font-medium ${remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                              }`}>
+                              {remaining >= 0
                                 ? (language === 'es' ? `Quedan ${formatCurrency(remaining)}` : `${formatCurrency(remaining)} left`)
                                 : (language === 'es' ? `Excedido ${formatCurrency(Math.abs(remaining))}` : `${formatCurrency(Math.abs(remaining))} over`)}
                             </div>
@@ -464,9 +462,8 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                           <span className="text-slate-500 dark:text-slate-400">
                             {language === 'es' ? 'Gastado' : 'Spent'}: <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(spent)}</span>
                           </span>
-                          <span className={`font-semibold ${
-                            percentage < 70 ? 'text-emerald-600' : percentage < 90 ? 'text-amber-600' : 'text-rose-600'
-                          }`}>
+                          <span className={`font-semibold ${percentage < 70 ? 'text-emerald-600' : percentage < 90 ? 'text-amber-600' : 'text-rose-600'
+                            }`}>
                             {percentage.toFixed(0)}%
                           </span>
                         </div>

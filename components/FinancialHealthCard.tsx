@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle, ChevronDown, ChevronUp, TrendingDown, TrendingUp, Sparkles } from 'lucide-react';
+import { AlertTriangle, CheckCircle, ChevronDown, ChevronUp, TrendingDown, TrendingUp, Sparkles, Clock, Percent, Landmark, Wallet } from 'lucide-react';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { getFinancialHealth, getStatusColor, FinancialHealthStatus } from '../utils/financialHealth';
+import { FinancialHealthMetrics } from '../types';
 
 interface FinancialHealthCardProps {
   budgetPeriodData: BudgetPeriodData;
+  financialHealthMetrics?: FinancialHealthMetrics;
   currencySymbol?: string;
   language?: 'es' | 'en';
   onManageSurplus?: () => void;
@@ -226,6 +228,72 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
               </div>
             )}
             
+            {/* Deep Math Metrics */}
+            {financialHealthMetrics && (
+              <div className="pt-4 border-t border-current/10">
+                <h4 className={`text-[10px] font-bold uppercase tracking-wider mb-3 ${colors.text} opacity-80`}>
+                  {language === 'es' ? 'Métricas de Salud Profunda' : 'Deep Health Metrics'}
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Runway */}
+                  <div className="bg-white/40 dark:bg-black/20 p-3 rounded-xl border border-current/5">
+                    <div className="flex items-center gap-2 mb-1 opacity-70">
+                      <Clock className="w-3 h-3" />
+                      <span className="text-[10px] font-bold">{language === 'es' ? 'RUNWAY' : 'RUNWAY'}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">{financialHealthMetrics.runwayMonths.toFixed(1)} {language === 'es' ? 'meses' : 'months'}</span>
+                      <span className="text-[9px] opacity-70 leading-tight">
+                        {language === 'es' ? 'Supervivencia con $0 ingresos' : 'Survival with $0 income'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Savings Rate */}
+                  <div className="bg-white/40 dark:bg-black/20 p-3 rounded-xl border border-current/5">
+                    <div className="flex items-center gap-2 mb-1 opacity-70">
+                      <Percent className="w-3 h-3" />
+                      <span className="text-[10px] font-bold">{language === 'es' ? 'TASA AHORRO' : 'SAVINGS RATE'}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">{financialHealthMetrics.savingsRate.toFixed(1)}%</span>
+                      <span className="text-[9px] opacity-70 leading-tight">
+                        {language === 'es' ? 'De tus ingresos totales' : 'Of your total income'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* DTI */}
+                  <div className="bg-white/40 dark:bg-black/20 p-3 rounded-xl border border-current/5">
+                    <div className="flex items-center gap-2 mb-1 opacity-70">
+                      <Landmark className="w-3 h-3" />
+                      <span className="text-[10px] font-bold">{language === 'es' ? 'RATIO DEUDA' : 'DEBT RATIO (DTI)'}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">{financialHealthMetrics.debtToIncomeRatio.toFixed(1)}%</span>
+                      <span className="text-[9px] opacity-70 leading-tight">
+                        {language === 'es' ? 'Compromiso de ingresos' : 'Income commitment'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Discretionary */}
+                  <div className="bg-white/40 dark:bg-black/20 p-3 rounded-xl border border-current/5">
+                    <div className="flex items-center gap-2 mb-1 opacity-70">
+                      <Wallet className="w-3 h-3" />
+                      <span className="text-[10px] font-bold">{language === 'es' ? 'DISCRECIONAL' : 'DISCRETIONARY'}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold">{formatCurrency(financialHealthMetrics.discretionaryIncome)}</span>
+                      <span className="text-[9px] opacity-70 leading-tight">
+                        {language === 'es' ? 'Dinero realmente libre' : 'Truly free money'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Actions (Expanded) */}
             {hasSurplus && onManageSurplus && (
               <button

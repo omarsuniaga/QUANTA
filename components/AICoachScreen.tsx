@@ -31,6 +31,7 @@ interface AICoachScreenProps {
   transactions: Transaction[];
   stats: DashboardStats;
   goals: Goal[];
+  selectedPlanId?: string;
   currencySymbol: string;
   currencyCode: string;
   onBack: () => void;
@@ -43,6 +44,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   transactions,
   stats,
   goals,
+  selectedPlanId,
   currencySymbol,
   currencyCode,
   onBack,
@@ -65,7 +67,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   const loadAnalysis = async () => {
     setLoading(true);
     try {
-      const result = await aiCoachService.analyzeFinances(transactions, stats, goals);
+      const result = await aiCoachService.analyzeFinances(transactions, stats, goals, selectedPlanId);
       if (result) {
         setAnalysis(result);
       }
