@@ -103,9 +103,11 @@ export interface Transaction {
   // Context
   isRecurring: boolean;
   frequency?: Frequency;
-  
-  paymentMethodId?: string; // Maps to "paymentMethodId" in Firestore
-  // Legacy/UI helper
+
+  // Payment Method - Dual format for compatibility
+  paymentMethodType?: 'cash' | 'bank' | 'card' | 'other'; // Type of payment method
+  paymentMethodId?: string; // Maps to "paymentMethodId" in Firestore (Account ID or 'cash')
+  // Legacy/UI helper - for backward compatibility with old transactions
   paymentMethod?: string; 
 
   notes?: string;

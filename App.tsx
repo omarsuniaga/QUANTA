@@ -116,7 +116,7 @@ export default function App() {
     updateBudget,
     deleteBudget,
     toast,
-    closeBudgetModal: modalManager.closeBudgetModal,
+    closeBudgetModal: screenManager.closeBudgetView,
   });
 
   // Budget period calculations (Single Source of Truth)
@@ -239,8 +239,8 @@ export default function App() {
           <GoalsWidget
             goals={goals}
             onAddContribution={goalHandlers.handleAddContribution}
-            onEditGoal={modalManager.openGoalModal}
-            onAddGoal={() => modalManager.openGoalModal()}
+            onEditGoal={screenManager.openGoalView}
+            onAddGoal={() => screenManager.openGoalView()}
             onDeleteContribution={goalHandlers.handleDeleteContribution}
             currencySymbol={currencySymbol}
             currencyCode={currencyCode}
@@ -250,8 +250,8 @@ export default function App() {
           {/* Promo Carousel */}
           <PromoCarousel
             promos={promos}
-            onEditPromo={modalManager.openPromoModal}
-            onAddPromo={() => modalManager.openPromoModal()}
+            onEditPromo={screenManager.openPromoView}
+            onAddPromo={() => screenManager.openPromoView()}
           />
 
           {/* Dashboard Stats */}
@@ -319,8 +319,8 @@ export default function App() {
           budgets={budgets}
           transactions={transactions}
           currencySymbol={currencySymbol}
-          onCreateBudget={() => modalManager.openBudgetModal()}
-          onEditBudget={modalManager.openBudgetModal}
+          onCreateBudget={() => screenManager.openBudgetView()}
+          onEditBudget={screenManager.openBudgetView}
           onDeleteBudget={budgetHandlers.handleDeleteBudget}
           onEditTransaction={(tx) => transactionHandlers.handleEditTransaction(tx, modalManager.openActionModal)}
           onDeleteTransaction={transactionHandlers.handleDeleteTransaction}
@@ -372,30 +372,12 @@ export default function App() {
       {/* === MODALS === */}
       <ModalRenderer
         actionModal={modalManager.actionModal}
-        goalModal={modalManager.goalModal}
-        promoModal={modalManager.promoModal}
-        budgetModal={modalManager.budgetModal}
         filterModal={modalManager.filterModal}
         notificationPrompt={modalManager.notificationPrompt}
         onSaveFromModal={(data) => transactionHandlers.handleSaveFromModal(data, modalManager.actionModal.mode!, modalManager.actionModal.editingItem)}
-        onSaveGoal={goalHandlers.handleSaveGoal}
-        onDeleteGoal={goalHandlers.handleDeleteGoal}
-        onSavePromo={async (promo) => {
-          const exists = promos.some(p => p.id === promo.id);
-          exists ? await updatePromo(promo) : await addPromo(promo);
-          modalManager.closePromoModal();
-        }}
-        onDeletePromo={async (id) => {
-          await deletePromo(id);
-          modalManager.closePromoModal();
-        }}
-        onSaveBudget={budgetHandlers.handleSaveBudget}
         onApplyFilters={setFilters}
         onCloseModals={{
           action: modalManager.closeActionModal,
-          goal: modalManager.closeGoalModal,
-          promo: modalManager.closePromoModal,
-          budget: modalManager.closeBudgetModal,
           filter: modalManager.closeFilterModal,
           notificationPrompt: modalManager.hideNotificationPrompt,
         }}
@@ -415,6 +397,9 @@ export default function App() {
         notificationCenterScreen={screenManager.notificationCenterScreen}
         notificationPrefsScreen={screenManager.notificationPrefsScreen}
         goalsManagementScreen={screenManager.goalsManagementScreen}
+        goalViewScreen={screenManager.goalViewScreen}
+        promoViewScreen={screenManager.promoViewScreen}
+        budgetViewScreen={screenManager.budgetViewScreen}
         categoryProfileScreen={screenManager.categoryProfileScreen}
         onCloseScreens={{
           aiCoach: screenManager.closeAICoach,
@@ -425,6 +410,9 @@ export default function App() {
           notificationCenter: screenManager.closeNotificationCenter,
           notificationPrefs: screenManager.closeNotificationPrefs,
           goalsManagement: screenManager.closeGoalsManagement,
+          goalView: screenManager.closeGoalView,
+          promoView: screenManager.closePromoView,
+          budgetView: screenManager.closeBudgetView,
           categoryProfile: screenManager.closeCategoryProfile,
         }}
         onOpenRelatedScreens={{
@@ -433,10 +421,21 @@ export default function App() {
           strategies: screenManager.openStrategies,
           notificationPrefs: screenManager.openNotificationPrefs,
         }}
-        onAddGoal={() => modalManager.openGoalModal()}
-        onEditGoal={modalManager.openGoalModal}
+        onAddGoal={() => screenManager.openGoalView()}
+        onEditGoal={screenManager.openGoalView}
+        onSaveGoal={goalHandlers.handleSaveGoal}
         onDeleteGoal={deleteGoal}
         onUpdateGoal={updateGoal}
+        onSavePromo={async (promo) => {
+          const exists = promos.some(p => p.id === promo.id);
+          exists ? await updatePromo(promo) : await addPromo(promo);
+          screenManager.closePromoView();
+        }}
+        onDeletePromo={async (id) => {
+          await deletePromo(id);
+          screenManager.closePromoView();
+        }}
+        onSaveBudget={budgetHandlers.handleSaveBudget}
         onEditTransaction={(tx) => transactionHandlers.handleEditTransaction(tx, modalManager.openActionModal)}
         onDeleteTransaction={transactionHandlers.handleDeleteTransaction}
         goals={goals}

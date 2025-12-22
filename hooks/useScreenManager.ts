@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { CustomCategory } from '../types';
+import { CustomCategory, Goal, Promo, Budget } from '../types';
 
 /**
  * Gestiona el estado de todas las pantallas completas (full-screen screens)
@@ -19,6 +19,18 @@ export function useScreenManager() {
   const [showNotificationCenter, setShowNotificationCenter] = useState(false);
   const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
   const [showGoalsManagement, setShowGoalsManagement] = useState(false);
+
+  // Goal view screen
+  const [showGoalView, setShowGoalView] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
+
+  // Promo view screen
+  const [showPromoView, setShowPromoView] = useState(false);
+  const [editingPromo, setEditingPromo] = useState<Promo | null>(null);
+
+  // Budget view screen
+  const [showBudgetView, setShowBudgetView] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
 
   // Category profile screen
   const [showCategoryProfile, setShowCategoryProfile] = useState(false);
@@ -51,6 +63,39 @@ export function useScreenManager() {
   const openGoalsManagement = useCallback(() => setShowGoalsManagement(true), []);
   const closeGoalsManagement = useCallback(() => setShowGoalsManagement(false), []);
 
+  // Goal view handlers
+  const openGoalView = useCallback((goal?: Goal | null) => {
+    setEditingGoal(goal || null);
+    setShowGoalView(true);
+  }, []);
+
+  const closeGoalView = useCallback(() => {
+    setShowGoalView(false);
+    setEditingGoal(null);
+  }, []);
+
+  // Promo view handlers
+  const openPromoView = useCallback((promo?: Promo | null) => {
+    setEditingPromo(promo || null);
+    setShowPromoView(true);
+  }, []);
+
+  const closePromoView = useCallback(() => {
+    setShowPromoView(false);
+    setEditingPromo(null);
+  }, []);
+
+  // Budget view handlers
+  const openBudgetView = useCallback((budget?: Budget | null) => {
+    setEditingBudget(budget || null);
+    setShowBudgetView(true);
+  }, []);
+
+  const closeBudgetView = useCallback(() => {
+    setShowBudgetView(false);
+    setEditingBudget(null);
+  }, []);
+
   // Category profile handlers
   const openCategoryProfile = useCallback((category: string) => {
     setSelectedCategory(category);
@@ -72,6 +117,12 @@ export function useScreenManager() {
     setShowNotificationCenter(false);
     setShowNotificationPrefs(false);
     setShowGoalsManagement(false);
+    setShowGoalView(false);
+    setEditingGoal(null);
+    setShowPromoView(false);
+    setEditingPromo(null);
+    setShowBudgetView(false);
+    setEditingBudget(null);
     setShowCategoryProfile(false);
     setSelectedCategory(null);
   }, []);
@@ -110,6 +161,21 @@ export function useScreenManager() {
     goalsManagementScreen: { show: showGoalsManagement },
     openGoalsManagement,
     closeGoalsManagement,
+
+    // Goal view screen
+    goalViewScreen: { show: showGoalView, goal: editingGoal },
+    openGoalView,
+    closeGoalView,
+
+    // Promo view screen
+    promoViewScreen: { show: showPromoView, promo: editingPromo },
+    openPromoView,
+    closePromoView,
+
+    // Budget view screen
+    budgetViewScreen: { show: showBudgetView, budget: editingBudget },
+    openBudgetView,
+    closeBudgetView,
 
     // Category profile screen
     categoryProfileScreen: {

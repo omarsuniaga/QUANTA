@@ -131,10 +131,27 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
     // La fecha representa "el día del evento" en el calendario del usuario, no un instante UTC
     const eventDate = date; // Ya viene como "YYYY-MM-DD" del input type="date"
 
+    // Determinar el tipo de método de pago basado en el ID seleccionado
+    let paymentType: 'cash' | 'bank' | 'card' | 'other' | undefined = undefined;
+    if (paymentMethodId) {
+      if (paymentMethodId === 'cash') {
+        paymentType = 'cash';
+      } else {
+        // Buscar la cuenta en accounts para obtener su tipo
+        const selectedAccount = accounts.find(acc => acc.id === paymentMethodId);
+        if (selectedAccount) {
+          paymentType = selectedAccount.type === 'wallet' ? 'other' : selectedAccount.type;
+        }
+      }
+    }
+
     const baseData = {
       amount: parseFloat(amount),
       description: concept,
       category,
+      paymentMethodId: paymentMethodId || null,
+      paymentMethodType: paymentType,
+      // Mantener paymentMethod para backward compatibility
       paymentMethod: paymentMethodId,
     };
 
@@ -163,7 +180,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       });
     }
     onClose();
-  }, [mode, amount, concept, category, paymentMethodId, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
+  }, [mode, amount, concept, category, paymentMethodId, accounts, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
 
   // UI Config
   const config = {

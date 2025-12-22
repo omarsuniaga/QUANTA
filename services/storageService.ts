@@ -239,14 +239,18 @@ export const storageService = {
         const firebaseTxs = snapshot.docs.map(doc => {
           const data = doc.data();
           const amountVal = typeof data.amount === 'object' ? data.amount.value : data.amount;
-          
-          return { 
+
+          return {
             id: doc.id,
             ...data,
             amount: amountVal,
             monetaryDetails: typeof data.amount === 'object' ? data.amount : undefined,
-            paymentMethod: data.paymentMethodId,
-            description: data.description || '' 
+            // Backward compatibility: cargar paymentMethodId desde Firebase
+            paymentMethodId: data.paymentMethodId,
+            paymentMethodType: data.paymentMethodType,
+            // Mantener paymentMethod para compatibilidad con código existente
+            paymentMethod: data.paymentMethodId || data.paymentMethod,
+            description: data.description || ''
           } as Transaction;
         });
         // Save to local for offline use
@@ -290,7 +294,9 @@ export const storageService = {
       date: fullDate,
       amount: transaction.amount,
       notes: transaction.notes || '',
-      paymentMethod: transaction.paymentMethod,
+      paymentMethodId: transaction.paymentMethodId,
+      paymentMethodType: transaction.paymentMethodType,
+      paymentMethod: transaction.paymentMethod, // Backward compatibility
       isRecurring: !!transaction.isRecurring,
       frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : undefined,
       gigType: transaction.gigType,
@@ -317,7 +323,8 @@ export const storageService = {
           date: fullDate,
           notes: transaction.notes || '',
           amount: monetaryAmount,
-          paymentMethodId: transaction.paymentMethod,
+          paymentMethodId: transaction.paymentMethodId || transaction.paymentMethod, // Usar el nuevo campo o fallback
+          paymentMethodType: transaction.paymentMethodType || null,
           isRecurring: !!transaction.isRecurring,
           frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : null,
           gigType: transaction.gigType || null,
@@ -335,8 +342,9 @@ export const storageService = {
         saveToLocal(LS_KEYS.TRANSACTIONS, updatedLocalTxs);
         
         // Update Account Balance
-        if (transaction.paymentMethod) {
-          this._updateAccountBalance(uid, transaction.paymentMethod, transaction.amount, transaction.type === 'income');
+        const accountIdToUpdate = transaction.paymentMethodId || transaction.paymentMethod;
+        if (accountIdToUpdate && accountIdToUpdate !== 'cash') {
+          await this._updateAccountBalance(uid, accountIdToUpdate, transaction.amount, transaction.type === 'income');
         }
       } catch(e) {
         console.warn("Failed to save transaction to Firebase (saved locally)", e);
@@ -348,9 +356,12 @@ export const storageService = {
 
   async updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
     const settings = await this.getSettings();
-    
-    // 1. Update in localStorage first
+
+    // 0. Get original transaction to handle balance updates
     const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+    const originalTx = localTxs.find(t => t.id === id);
+
+    // 1. Update in localStorage first
     const updatedLocalTxs = localTxs.map(t => {
       if (t.id === id) {
         return { ...t, ...updates };
@@ -358,26 +369,52 @@ export const storageService = {
       return t;
     });
     saveToLocal(LS_KEYS.TRANSACTIONS, updatedLocalTxs);
-    
-    // 2. Try to sync to Firebase if available
+
+    // 2. Handle account balance updates if payment method or amount changed
+    if (canUseFirebase() && originalTx) {
+      const uid = getUserId();
+
+      // Determinar si cambió el método de pago o el monto
+      const oldAccountId = originalTx.paymentMethodId || originalTx.paymentMethod;
+      const newAccountId = updates.paymentMethodId !== undefined ? updates.paymentMethodId : oldAccountId;
+      const oldAmount = originalTx.amount;
+      const newAmount = updates.amount !== undefined ? updates.amount : oldAmount;
+      const oldType = originalTx.type;
+      const newType = updates.type !== undefined ? updates.type : oldType;
+
+      // Revertir el balance anterior (si existía una cuenta asociada)
+      if (oldAccountId && oldAccountId !== 'cash') {
+        // Revertir: si era ingreso, restar; si era gasto, sumar
+        await this._updateAccountBalance(uid, oldAccountId, oldAmount, oldType !== 'income');
+      }
+
+      // Aplicar el nuevo balance (si hay una cuenta asociada)
+      if (newAccountId && newAccountId !== 'cash') {
+        await this._updateAccountBalance(uid, newAccountId, newAmount, newType === 'income');
+      }
+    }
+
+    // 3. Try to sync to Firebase if available
     if (canUseFirebase()) {
       const uid = getUserId();
       // Construct update payload
       const updatePayload: any = {};
-      
+
       if (updates.type) updatePayload.type = updates.type;
       if (updates.category) updatePayload.category = updates.category;
       if (updates.description) updatePayload.description = updates.description;
       if (updates.date) updatePayload.date = updates.date;
       if (updates.notes !== undefined) updatePayload.notes = updates.notes;
-      if (updates.paymentMethod) updatePayload.paymentMethodId = updates.paymentMethod;
+      if (updates.paymentMethodId !== undefined) updatePayload.paymentMethodId = updates.paymentMethodId;
+      if (updates.paymentMethodType !== undefined) updatePayload.paymentMethodType = updates.paymentMethodType;
+      if (updates.paymentMethod !== undefined) updatePayload.paymentMethodId = updates.paymentMethod; // Backward compat
       if (updates.isRecurring !== undefined) updatePayload.isRecurring = updates.isRecurring;
       if (updates.frequency) updatePayload.frequency = updates.frequency;
       if (updates.gigType) updatePayload.gigType = updates.gigType;
       if (updates.mood) updatePayload.mood = updates.mood;
       if (updates.receiptUrl) updatePayload.receiptUrl = updates.receiptUrl;
       if (updates.sharedWith) updatePayload.sharedWith = updates.sharedWith;
-      
+
       // Update amount if provided
       if (updates.amount !== undefined) {
         const monetaryAmount: MonetaryAmount = {
@@ -389,7 +426,7 @@ export const storageService = {
         };
         updatePayload.amount = monetaryAmount;
       }
-      
+
       try {
         await getUserRef(uid).collection('transactions').doc(id).update(updatePayload);
       } catch(e) {
@@ -399,18 +436,32 @@ export const storageService = {
   },
 
   async deleteTransaction(id: string): Promise<void> {
-    // 1. Delete from localStorage first
+    // 0. Get transaction to revert balance
     const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+    const txToDelete = localTxs.find(t => t.id === id);
+
+    // 1. Delete from localStorage first
     const filteredTxs = localTxs.filter(t => t.id !== id);
     saveToLocal(LS_KEYS.TRANSACTIONS, filteredTxs);
-    
-    // 2. Try to delete from Firebase if available
+
+    // 2. Revert account balance if transaction had a payment method
+    if (canUseFirebase() && txToDelete) {
+      const uid = getUserId();
+      const accountId = txToDelete.paymentMethodId || txToDelete.paymentMethod;
+
+      // Revertir el balance: si era ingreso, restar; si era gasto, sumar
+      if (accountId && accountId !== 'cash') {
+        await this._updateAccountBalance(uid, accountId, txToDelete.amount, txToDelete.type !== 'income');
+      }
+    }
+
+    // 3. Try to delete from Firebase if available
     if (canUseFirebase()) {
       const uid = getUserId();
       try {
         await getUserRef(uid).collection('transactions').doc(id).delete();
-      } catch (e) { 
-        console.warn("Delete transaction from Firebase failed (deleted locally)", e); 
+      } catch (e) {
+        console.warn("Delete transaction from Firebase failed (deleted locally)", e);
       }
     }
   },

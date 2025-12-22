@@ -8,7 +8,10 @@ import { NotificationCenter } from '../NotificationCenter';
 import { NotificationPreferences } from '../NotificationPreferences';
 import { GoalsManagement } from '../GoalsManagement';
 import { CategoryProfileScreen } from '../CategoryProfileScreen';
-import { Transaction, Goal, DashboardStats, CustomCategory } from '../../types';
+import { GoalView } from '../GoalView';
+import { PromoView } from '../PromoView';
+import { BudgetView } from '../BudgetView';
+import { Transaction, Goal, DashboardStats, CustomCategory, Promo, Budget } from '../../types';
 
 interface ScreenRendererProps {
   // Screen states
@@ -20,6 +23,9 @@ interface ScreenRendererProps {
   notificationCenterScreen: { show: boolean };
   notificationPrefsScreen: { show: boolean };
   goalsManagementScreen: { show: boolean };
+  goalViewScreen: { show: boolean; goal: Goal | null };
+  promoViewScreen: { show: boolean; promo: Promo | null };
+  budgetViewScreen: { show: boolean; budget: Budget | null };
   categoryProfileScreen: { show: boolean; category: string | null };
 
   // Handlers
@@ -32,6 +38,9 @@ interface ScreenRendererProps {
     notificationCenter: () => void;
     notificationPrefs: () => void;
     goalsManagement: () => void;
+    goalView: () => void;
+    promoView: () => void;
+    budgetView: () => void;
     categoryProfile: () => void;
   };
 
@@ -46,8 +55,16 @@ interface ScreenRendererProps {
   // Goal handlers
   onAddGoal: () => void;
   onEditGoal: (goal?: Goal) => void;
+  onSaveGoal: (goal: Goal) => Promise<void>;
   onDeleteGoal: (id: string) => Promise<void>;
   onUpdateGoal: (goal: Goal) => Promise<void>;
+
+  // Promo handlers
+  onSavePromo: (promo: Promo) => Promise<void>;
+  onDeletePromo: (id: string) => Promise<void>;
+
+  // Budget handlers
+  onSaveBudget: (budget: Partial<Budget>) => Promise<void>;
 
   // Transaction handlers
   onEditTransaction: (transaction: Transaction) => void;
@@ -78,13 +95,20 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
   notificationCenterScreen,
   notificationPrefsScreen,
   goalsManagementScreen,
+  goalViewScreen,
+  promoViewScreen,
+  budgetViewScreen,
   categoryProfileScreen,
   onCloseScreens,
   onOpenRelatedScreens,
   onAddGoal,
   onEditGoal,
+  onSaveGoal,
   onDeleteGoal,
   onUpdateGoal,
+  onSavePromo,
+  onDeletePromo,
+  onSaveBudget,
   onEditTransaction,
   onDeleteTransaction,
   goals,
@@ -217,6 +241,39 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
           currencySymbol={currencySymbol}
           currencyCode={currencyCode}
           availableBalance={availableBalance}
+        />
+      )}
+
+      {/* Goal View Full Screen */}
+      {goalViewScreen.show && (
+        <GoalView
+          goal={goalViewScreen.goal}
+          onSave={onSaveGoal}
+          onDelete={onDeleteGoal}
+          onBack={onCloseScreens.goalView}
+          currencySymbol={currencySymbol}
+          currencyCode={currencyCode}
+          availableBalance={availableBalance}
+        />
+      )}
+
+      {/* Promo View Full Screen */}
+      {promoViewScreen.show && (
+        <PromoView
+          promo={promoViewScreen.promo}
+          onSave={onSavePromo}
+          onDelete={onDeletePromo}
+          onBack={onCloseScreens.promoView}
+        />
+      )}
+
+      {/* Budget View Full Screen */}
+      {budgetViewScreen.show && (
+        <BudgetView
+          budget={budgetViewScreen.budget}
+          onSave={onSaveBudget}
+          onBack={onCloseScreens.budgetView}
+          currencySymbol={currencySymbol}
         />
       )}
 
