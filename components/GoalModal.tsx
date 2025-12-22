@@ -3,7 +3,6 @@ import { X, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, 
 import { Goal } from '../types';
 import { Button } from './Button';
 import { useI18n } from '../contexts/I18nContext';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface GoalModalProps {
   goal?: Goal | null;
@@ -42,7 +41,6 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   availableBalance = 0
 }) => {
   const { t, language } = useI18n();
-  useModalScrollLock(true);
   
   // Basic fields
   const [name, setName] = useState(goal?.name || '');

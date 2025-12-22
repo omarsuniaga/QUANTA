@@ -1,6 +1,5 @@
 import React from 'react';
 import { X, Info, Wallet, TrendingUp } from 'lucide-react';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface BudgetInfoModalProps {
   isOpen: boolean;

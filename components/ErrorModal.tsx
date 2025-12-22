@@ -1,6 +1,5 @@
 import React from 'react';
 import { AlertCircle, X } from 'lucide-react';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { Button } from './Button';
 
 interface ErrorModalProps {
@@ -11,7 +10,6 @@ interface ErrorModalProps {
 }
 
 export const ErrorModal: React.FC<ErrorModalProps> = ({ isOpen, title = 'Error', message, onClose }) => {
-  useModalScrollLock(isOpen);
   if (!isOpen) return null;
 
   return (

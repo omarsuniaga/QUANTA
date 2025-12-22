@@ -5,7 +5,6 @@ import { PAYMENT_METHODS } from '../constants';
 import { storageService } from '../services/storageService';
 import { CustomCategory } from '../types';
 import { useI18n } from '../contexts/I18nContext';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface FilterModalProps {
     filters: {
@@ -22,7 +21,6 @@ interface FilterModalProps {
 
 const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, onClose }) => {
     const { t, language } = useI18n();
-    useModalScrollLock(true);
     const [localFilters, setLocalFilters] = useState(filters);
     const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
 

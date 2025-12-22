@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { X, Plane, ShoppingBag, Gift, Star, Coffee, Music, Trash2 } from 'lucide-react';
 import { Promo } from '../types';
 import { Button } from './Button';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface PromoModalProps {
   promo?: Promo | null;
@@ -23,7 +22,6 @@ const ICONS = [
 const COLORS = ['blue', 'purple', 'rose', 'amber', 'emerald', 'indigo'];
 
 export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete, onClose }) => {
-  useModalScrollLock(true);
   const [title, setTitle] = useState(promo?.title || '');
   const [subtitle, setSubtitle] = useState(promo?.subtitle || '');
   const [icon, setIcon] = useState(promo?.icon || 'Star');

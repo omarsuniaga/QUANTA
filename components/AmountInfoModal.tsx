@@ -1,6 +1,5 @@
 import React from 'react';
 import { X, Info, TrendingUp, TrendingDown, Target, PiggyBank, RefreshCw, Percent, AlertCircle } from 'lucide-react';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 export interface AmountBreakdownItem {
   label: string;
@@ -84,8 +83,6 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
     if (type === 'neutral' || amount === 0) return '';
     return type === 'addition' ? '+' : '-';
   };
-
-  useModalScrollLock(isOpen);
 
   return (
     <div 

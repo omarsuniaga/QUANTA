@@ -5,7 +5,6 @@ import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
 import { Calculator } from './Calculator';
 import { IconPicker, DynamicIcon, getColorClasses } from './IconPicker';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface BudgetModalProps {
   isOpen: boolean;
@@ -24,8 +23,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
   onClose,
   onSave,
 }) => {
-  const { language } = useI18n();
-  useModalScrollLock(isOpen);
+  const { t, language } = useI18n();
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showCalculator, setShowCalculator] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);

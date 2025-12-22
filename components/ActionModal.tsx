@@ -6,7 +6,6 @@ import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts/I18nContext';
 import { DynamicIcon, getColorClasses, IconPicker } from './IconPicker';
 import { Calculator } from './Calculator';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 type ModalMode = 'income' | 'expense' | 'service';
 
@@ -26,8 +25,6 @@ interface ActionModalProps {
 }
 
 const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSave, initialValues, currencySymbol = '$' }) => {
-  // Bloquear scroll del body mientras el modal está abierto
-  useModalScrollLock(true);
   // Common Fields
   const [amount, setAmount] = useState(initialValues?.amount?.toString() || '');
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
@@ -130,8 +127,9 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
-    // Combine date and time into full ISO string
-    const fullDateTime = `${date}T${time}:00`;
+    // IMPORTANTE: Guardar fecha como YYYY-MM-DD (sin timezone) para evitar desfase de ±1 día
+    // La fecha representa "el día del evento" en el calendario del usuario, no un instante UTC
+    const eventDate = date; // Ya viene como "YYYY-MM-DD" del input type="date"
 
     const baseData = {
       amount: parseFloat(amount),
@@ -153,7 +151,8 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       onSave({
         ...baseData,
         type: mode as TransactionType,
-        date: fullDateTime, // Now includes time
+        date: eventDate, // Guardar solo YYYY-MM-DD (fecha calendario, no timestamp)
+        time: time, // Guardar hora por separado si se necesita para ordenamiento
         notes,
         mood,
         gigType: mode === 'income' ? gigType : undefined,

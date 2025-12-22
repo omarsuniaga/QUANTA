@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, PiggyBank, Target, Sparkles, TrendingUp, Shield, Info, Check, AlertTriangle } from 'lucide-react';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { calculatePlanAllocations, PlanId } from '../utils/surplusPlan';
 import { createGoalsFromPlan, getCurrentPeriodKey, hasGoalsForPeriod, deleteGoalsForPeriod } from '../services/goalsService';
@@ -86,7 +85,7 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
   language = 'es',
   onGoalsCreated
 }) => {
-  useModalScrollLock(isOpen);
+  const { t, language } = useI18n();
   const available = Math.max(0, budgetPeriodData.incomeSurplus);
   const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
