@@ -3,6 +3,7 @@ import { X, PiggyBank, Target, Sparkles, TrendingUp, Shield, Info, Check, AlertT
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { calculatePlanAllocations, PlanId } from '../utils/surplusPlan';
 import { createGoalsFromPlan, getCurrentPeriodKey, hasGoalsForPeriod, deleteGoalsForPeriod } from '../services/goalsService';
+import { useI18n } from '../contexts/I18nContext';
 
 interface AllocationPlan {
   id: string;
