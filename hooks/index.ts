@@ -4,7 +4,7 @@
  */
 
 export { useAppNavigation } from './useAppNavigation';
-export type { TabType, SwipeHandlers } from './useAppNavigation';
+export type { TabType, SwipeHandlers, SwipeState } from './useAppNavigation';
 
 export { useModalManager } from './useModalManager';
 export type { ModalState } from './useModalManager';

@@ -26,9 +26,9 @@ interface RateLimiterConfig {
 }
 
 const DEFAULT_CONFIG: RateLimiterConfig = {
-  maxRequestsPerMinute: 10, // Gemini free tier: ~15 RPM, dejamos margen
-  maxRetries: 3,
-  baseCacheDurationMs: 5 * 60 * 1000, // 5 minutos de cache por defecto
+  maxRequestsPerMinute: 5, // Más conservador para evitar 429
+  maxRetries: 2, // Reducir reintentos (de 3 a 2)
+  baseCacheDurationMs: 10 * 60 * 1000, // 10 minutos de cache (más largo)
   enableCache: true
 };
 
@@ -186,28 +186,33 @@ class APIRateLimiter {
     if (isRateLimitError) {
       console.warn(`[RateLimiter] Error 429 detectado. Errores consecutivos: ${this.consecutiveErrors}`);
       
-      // Activar cooldown progresivo
+      // Activar cooldown mucho más largo
       const cooldownMs = Math.min(
-        30000 * Math.pow(2, this.consecutiveErrors - 1), // 30s, 60s, 120s, etc.
-        5 * 60 * 1000 // Máximo 5 minutos
+        60000 * Math.pow(2, this.consecutiveErrors - 1), // 60s, 120s, 240s, etc.
+        10 * 60 * 1000 // Máximo 10 minutos
       );
       
       this.isInCooldown = true;
       this.cooldownEndTime = Date.now() + cooldownMs;
       
-      console.warn(`[RateLimiter] Cooldown activado por ${cooldownMs / 1000}s`);
+      console.warn(`[RateLimiter] ⏸️ Cooldown activado por ${Math.ceil(cooldownMs / 1000)}s. NO se harán más requests.`);
+      
+      // NO reintentar en errores 429 - esperar a cooldown
+      console.error(`[RateLimiter] ❌ Request cancelado. Usa cache o espera ${Math.ceil(cooldownMs / 1000)}s.`);
+      request.reject(new Error(`Rate limit exceeded. Wait ${Math.ceil(cooldownMs / 1000)}s before retrying.`));
+      return;
     }
 
-    // Reintentar si no hemos excedido el máximo
+    // Reintentar solo para otros errores (NO 429)
     if (request.retries < this.config.maxRetries) {
       request.retries++;
       
       const backoffMs = Math.min(
-        1000 * Math.pow(2, request.retries), // 2s, 4s, 8s
-        30000 // Máximo 30s
+        5000 * Math.pow(2, request.retries), // 10s, 20s (más largo)
+        60000 // Máximo 60s
       );
       
-      console.log(`[RateLimiter] Reintento ${request.retries}/${this.config.maxRetries} en ${backoffMs}ms`);
+      console.log(`[RateLimiter] Reintento ${request.retries}/${this.config.maxRetries} en ${backoffMs / 1000}s`);
       
       await this.sleep(backoffMs);
       

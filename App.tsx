@@ -56,6 +56,7 @@ export default function App() {
     promos,
     quickActions,
     budgets,
+    accounts,
     isDarkMode,
     currencySymbol,
     currencyCode,
@@ -76,7 +77,7 @@ export default function App() {
   const { t } = useI18n();
 
   // === CUSTOM HOOKS ===
-  const { activeTab, navigateToTab, swipeHandlers, mainContentRef } = useAppNavigation('dashboard', clearFilters);
+  const { activeTab, navigateToTab, swipeHandlers, swipeState, mainContentRef } = useAppNavigation('dashboard', clearFilters);
   const modalManager = useModalManager();
   const screenManager = useScreenManager();
 
@@ -180,6 +181,7 @@ export default function App() {
       onOpenActionModal={modalManager.openActionModal}
       onOpenAICoach={screenManager.openAICoach}
       swipeHandlers={swipeHandlers}
+      swipeState={swipeState}
       mainContentRef={mainContentRef}
       t={t}
     >
@@ -257,9 +259,13 @@ export default function App() {
             stats={stats}
             transactions={transactions}
             goals={goals}
+            accounts={accounts}
+            budgetPeriodData={currentBudgetPeriod}
             onAddClick={() => modalManager.openActionModal('expense')}
             onFilter={(type, value) => transactionHandlers.handleFilter(type, value, screenManager.openCategoryProfile)}
+            onManageSurplus={() => navigateToTab('income')}
             currencyConfig={settings?.currency || { localCode: 'USD', localSymbol: '$', rateToBase: 1 }}
+            isActive={activeTab === 'dashboard'}
           />
         </div>
       )}

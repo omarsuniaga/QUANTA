@@ -71,9 +71,17 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
     // Load quick tips if we have an API key
     if (transactions.length > 5) {
       setLoading(true);
-      const tips = await aiCoachService.getQuickTips(transactions, stats);
-      setQuickTips(tips);
-      setLoading(false);
+      try {
+        const tips = await aiCoachService.getQuickTips(transactions, stats);
+        setQuickTips(tips);
+      } catch (error: any) {
+        // Silenciar errores de rate limit - mostrar tips anteriores del cache
+        if (!error.message?.includes('Rate limit')) {
+          console.error('[AICoachWidget] Error loading tips:', error);
+        }
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

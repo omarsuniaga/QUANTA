@@ -42,14 +42,22 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
 
   const loadStrategies = async () => {
     setLoading(true);
-    const result = await aiCoachService.analyzeStrategy(transactions, stats);
-    setStrategies(result);
-    // Auto-select the first (most compatible) strategy
-    if (result.length > 0) {
-      const sorted = [...result].sort((a, b) => b.compatibility - a.compatibility);
-      setSelectedStrategy(sorted[0]);
+    try {
+      const result = await aiCoachService.analyzeStrategy(transactions, stats);
+      setStrategies(result);
+      // Auto-select the first (most compatible) strategy
+      if (result.length > 0) {
+        const sorted = [...result].sort((a, b) => b.compatibility - a.compatibility);
+        setSelectedStrategy(sorted[0]);
+      }
+    } catch (error: any) {
+      // Silenciar errores de rate limit - usar cache
+      if (!error.message?.includes('Rate limit')) {
+        console.error('[Strategies] Error loading strategies:', error);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const getStatusIcon = (status: string) => {

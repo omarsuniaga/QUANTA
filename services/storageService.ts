@@ -607,7 +607,7 @@ export const storageService = {
     if (canUseFirebase()) {
       const uid = getUserId();
       try {
-        const snapshot = await getUserRef(uid).collection('quick_actions').get();
+        const snapshot = await getUserRef(uid).collection('quickActions').get();
         const firebaseActions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuickAction));
         saveToLocal(LS_KEYS.QUICK_ACTIONS, firebaseActions);
         return firebaseActions;
@@ -628,7 +628,7 @@ export const storageService = {
       const uid = getUserId();
       const batch = db!.batch();
       actions.forEach(qa => {
-        const ref = getUserRef(uid).collection('quick_actions').doc(qa.id);
+        const ref = getUserRef(uid).collection('quickActions').doc(qa.id);
         batch.set(ref, qa);
       });
       try {

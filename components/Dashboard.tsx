@@ -4,7 +4,9 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
 } from 'recharts';
-import { Transaction, DashboardStats, Category, AppSettings, Goal, Subscription, CustomCategory } from '../types';
+import { Transaction, DashboardStats, Category, AppSettings, Goal, Subscription, CustomCategory, Account } from '../types';
+import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
+import { calculateDashboardInfo } from '../utils/dashboardCalculations';
 import { CATEGORY_COLORS } from '../constants';
 
 // Tailwind color name to hex mapping for custom categories
@@ -35,24 +37,29 @@ import { storageService } from '../services/storageService';
 import { InsightCard } from './InsightCard';
 import { useI18n } from '../contexts/I18nContext';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
+import { BudgetInfoModal, SurplusInfoModal } from './Dashboard_InfoModals';
 
 interface DashboardProps {
   stats: DashboardStats;
   transactions: Transaction[];
-  goals: Goal[]; // Added goals prop
+  goals: Goal[];
+  accounts: Account[];
+  budgetPeriodData: BudgetPeriodData;
   onAddClick: () => void;
   onFilter: (type: 'category' | 'date', value: string) => void;
+  onManageSurplus?: () => void;
   currencyConfig: AppSettings['currency'];
+  isActive?: boolean; // Control de renderizado de charts para evitar warnings
 }
 
-const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goals, onAddClick, onFilter, currencyConfig }) => {
+const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goals, accounts, budgetPeriodData, onAddClick, onFilter, onManageSurplus, currencyConfig, isActive = true }) => {
   const { t, language } = useI18n();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showOracleHelp, setShowOracleHelp] = useState(false);
-  const [showBalanceInfo, setShowBalanceInfo] = useState(false);
-  const [showIncomeInfo, setShowIncomeInfo] = useState(false);
-  const [showExpenseInfo, setShowExpenseInfo] = useState(false);
+  const [showProjectionInfo, setShowProjectionInfo] = useState(false);
+  const [showBudgetInfo, setShowBudgetInfo] = useState(false);
+  const [showSurplusInfo, setShowSurplusInfo] = useState(false);
 
   // Load subscriptions and custom categories on mount
   // Optimized: Only reload when transactions length changes significantly
@@ -93,6 +100,39 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   );
 
   // --- ORACLE: CASH FLOW PREDICTION ---
+  // Must be calculated first as dashboardInfo depends on it
+  const predictedBalance = useMemo(() => {
+    // Calculate all recurring payments until end of month (handles weekly payments correctly)
+    const today = new Date();
+    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    
+    // Get ALL recurring payment occurrences from transactions until end of month
+    const allRecurringPayments = notificationService.getAllRecurringPaymentsUntil(transactions, endOfMonth);
+    const totalFromTransactions = allRecurringPayments.reduce((sum, p) => sum + p.amount, 0);
+    
+    // Get ALL subscription payments until end of month (for legacy subscriptions without linked transactions)
+    // Filter out subscriptions that already have linked transactions to avoid double counting
+    const transactionSubscriptionIds = new Set(
+      transactions
+        .filter(t => (t as any).subscriptionId)
+        .map(t => (t as any).subscriptionId)
+    );
+    const unlinkedSubscriptions = subscriptions.filter(s => !transactionSubscriptionIds.has(s.id));
+    const subscriptionPayments = notificationService.getSubscriptionPaymentsUntil(unlinkedSubscriptions, endOfMonth);
+    const totalFromSubscriptions = subscriptionPayments.reduce((sum, p) => sum + p.amount, 0);
+    
+    const totalPending = totalFromTransactions + totalFromSubscriptions;
+    
+    return stats.balance - totalPending;
+  }, [stats.balance, transactions, subscriptions]);
+
+  // --- DASHBOARD CALCULATIONS (SSOT) ---
+  const dashboardInfo = useMemo(() => {
+    const totalPending = stats.balance - predictedBalance;
+    return calculateDashboardInfo(stats, budgetPeriodData, accounts, totalPending);
+  }, [stats, budgetPeriodData, accounts, predictedBalance]);
+
+  // --- BALANCE BREAKDOWN INFO ---
   // Calculate balance breakdown for info modal
   const balanceBreakdown = useMemo((): AmountBreakdownItem[] => {
     const breakdown: AmountBreakdownItem[] = [];
@@ -252,32 +292,6 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     return breakdown;
   }, [transactions, categoryData, language]);
 
-  // --- ORACLE: CASH FLOW PREDICTION ---
-  const predictedBalance = useMemo(() => {
-    // Calculate all recurring payments until end of month (handles weekly payments correctly)
-    const today = new Date();
-    const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    
-    // Get ALL recurring payment occurrences from transactions until end of month
-    const allRecurringPayments = notificationService.getAllRecurringPaymentsUntil(transactions, endOfMonth);
-    const totalFromTransactions = allRecurringPayments.reduce((sum, p) => sum + p.amount, 0);
-    
-    // Get ALL subscription payments until end of month (for legacy subscriptions without linked transactions)
-    // Filter out subscriptions that already have linked transactions to avoid double counting
-    const transactionSubscriptionIds = new Set(
-      transactions
-        .filter(t => (t as any).subscriptionId)
-        .map(t => (t as any).subscriptionId)
-    );
-    const unlinkedSubscriptions = subscriptions.filter(s => !transactionSubscriptionIds.has(s.id));
-    const subscriptionPayments = notificationService.getSubscriptionPaymentsUntil(unlinkedSubscriptions, endOfMonth);
-    const totalFromSubscriptions = subscriptionPayments.reduce((sum, p) => sum + p.amount, 0);
-    
-    const totalPending = totalFromTransactions + totalFromSubscriptions;
-    
-    return stats.balance - totalPending;
-  }, [stats.balance, transactions, subscriptions]);
-
   // --- EMOTIONAL DASHBOARD: Mood Correlation ---
   const moodStats = useMemo(() => {
     const moods = { happy: 0, tired: 0, stressed: 0, neutral: 0 };
@@ -360,7 +374,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
         </div>
       )}
 
-      {/* ORACLE PREDICTION CARD */}
+      {/* PROYECCIÓN FIN DE MES CARD */}
       <div className="bg-gradient-to-br from-indigo-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500 blur-3xl opacity-20 rounded-full"></div>
         <div className="relative z-10">
@@ -369,11 +383,13 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
               <div className="p-1.5 bg-indigo-500/30 rounded-lg">
                 <HelpCircle className="w-4 h-4 text-indigo-300" />
               </div>
-              <span className="text-xs font-bold uppercase tracking-wider text-indigo-200">{t.dashboard.oracle}</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-200">
+                {language === 'es' ? 'Proyección fin de mes' : 'End of Month Projection'}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowOracleHelp(true)}
+                onClick={() => setShowProjectionInfo(true)}
                 className="p-1.5 bg-indigo-500/20 hover:bg-indigo-500/40 rounded-lg transition-colors"
                 aria-label="Info"
               >
@@ -385,22 +401,24 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
 
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-slate-400 text-sm mb-1">{t.dashboard.balanceProjection}</p>
-              <h3 className="text-3xl font-bold">{formatCurrencyShort(predictedBalance)}</h3>
+              <p className="text-slate-400 text-sm mb-1">{language === 'es' ? 'Proyección' : 'Projection'}</p>
+              <h3 className="text-3xl font-bold">{formatCurrencyShort(dashboardInfo.endOfMonthProjection.projected)}</h3>
             </div>
             <div className="text-right">
-              <p className="text-xs text-rose-300 mb-0.5">{t.dashboard.pending}</p>
-              <p className="font-semibold text-rose-400">-{formatCurrencyShort(stats.balance - predictedBalance)}</p>
+              <p className="text-xs text-rose-300 mb-0.5">{language === 'es' ? 'Pendiente' : 'Pending'}</p>
+              <p className="font-semibold text-rose-400">-{formatCurrencyShort(dashboardInfo.endOfMonthProjection.pendingRecurring)}</p>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-white/10 text-xs text-slate-400 leading-relaxed">
-            {t.dashboard.recurringBillsInfo}
+            {language === 'es' 
+              ? 'Proyección = Balance del mes - recurrentes pendientes' 
+              : 'Projection = Monthly balance - pending recurring'}
           </div>
         </div>
 
-        {/* Oracle Help Modal */}
-        {showOracleHelp && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowOracleHelp(false)}>
+        {/* Projection Info Modal */}
+        {showProjectionInfo && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowProjectionInfo(false)}>
             <div 
               className="bg-gradient-to-br from-indigo-900 to-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-indigo-500/30"
               onClick={e => e.stopPropagation()}
@@ -410,96 +428,147 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
                   <div className="p-2 bg-indigo-500/30 rounded-xl">
                     <HelpCircle className="w-6 h-6 text-indigo-300" />
                   </div>
-                  <h3 className="text-lg font-bold text-white">{t.dashboard.oracleHelpTitle}</h3>
+                  <h3 className="text-lg font-bold text-white">
+                    {language === 'es' ? 'Proyección Fin de Mes' : 'End of Month Projection'}
+                  </h3>
                 </div>
                 <button
-                  onClick={() => setShowOracleHelp(false)}
+                  onClick={() => setShowProjectionInfo(false)}
                   className="p-1 hover:bg-white/10 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-slate-400" />
                 </button>
               </div>
               <p className="text-slate-300 text-sm leading-relaxed mb-4">
-                {t.dashboard.oracleHelpContent}
+                {language === 'es' 
+                  ? 'Esta proyección estima tu balance al final del mes considerando todos tus pagos recurrentes pendientes.'
+                  : 'This projection estimates your balance at the end of the month considering all your pending recurring payments.'}
               </p>
+              
+              {/* Breakdown */}
+              <div className="space-y-2 mb-4">
+                {dashboardInfo.endOfMonthProjection.breakdown.map((item, idx) => (
+                  <div key={idx} className={`flex justify-between p-3 rounded-lg ${
+                    item.type === 'base' ? 'bg-blue-500/20' :
+                    item.type === 'pending' ? 'bg-rose-500/20' :
+                    'bg-emerald-500/20'
+                  }`}>
+                    <span className="text-sm font-medium text-white">{item.label}</span>
+                    <span className="text-sm font-bold text-white">
+                      {item.type === 'pending' ? '-' : ''}{formatCurrencyShort(item.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              
               <div className="bg-indigo-500/20 rounded-xl p-3 mb-4">
                 <p className="text-indigo-200 text-sm">
-                  {t.dashboard.oracleHelpTip}
+                  <strong>{language === 'es' ? 'Fórmula:' : 'Formula:'}</strong> {language === 'es' ? 'Balance del mes - Recurrentes pendientes' : 'Monthly balance - Pending recurring'}
                 </p>
               </div>
               <button
-                onClick={() => setShowOracleHelp(false)}
+                onClick={() => setShowProjectionInfo(false)}
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors"
               >
-                {t.dashboard.gotIt}
+                {language === 'es' ? 'Entendido' : 'Got it'}
               </button>
             </div>
           </div>
         )}
       </div>
 
-      {/* MAIN STATS GRID */}
+      {/* MAIN STATS GRID - 4 NEW CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+        {/* A) Card Ingresos (este mes) */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col">
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 mb-2">
             <div className="bg-emerald-100 dark:bg-emerald-900/30 p-1.5 rounded-full">
               <ArrowUpRight className="w-4 h-4" />
             </div>
-            <span className="text-[10px] sm:text-xs font-bold">{t.dashboard.income}</span>
-            <button
-              onClick={() => setShowIncomeInfo(true)}
-              className="ml-auto p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              aria-label="Info"
-            >
-              <Info className="w-3.5 h-3.5 text-slate-400" />
-            </button>
+            <span className="text-[10px] sm:text-xs font-bold">{language === 'es' ? 'Ingresos (mes)' : 'Income (month)'}</span>
           </div>
-          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(stats.totalIncome)}</span>
+          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(dashboardInfo.monthlyIncome)}</span>
+          <span className="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 mt-1">{language === 'es' ? 'Este mes' : 'This month'}</span>
         </div>
+
+        {/* B) Card Gastos (este mes) */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col">
           <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 mb-2">
             <div className="bg-rose-100 dark:bg-rose-900/30 p-1.5 rounded-full">
               <ArrowDownRight className="w-4 h-4" />
             </div>
-            <span className="text-[10px] sm:text-xs font-bold">{t.dashboard.expenses}</span>
+            <span className="text-[10px] sm:text-xs font-bold">{language === 'es' ? 'Gastos (mes)' : 'Expenses (month)'}</span>
+          </div>
+          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(dashboardInfo.monthlyExpenses)}</span>
+          <span className="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 mt-1">{language === 'es' ? 'A la fecha' : 'To date'}</span>
+        </div>
+
+        {/* C) Card Presupuesto (restante o excedente) */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col">
+          <div className="flex items-center gap-2 mb-2">
+            <div className={`p-1.5 rounded-full ${dashboardInfo.budgetStatus.type === 'restante' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'}`}>
+              <Wallet className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] sm:text-xs font-bold text-slate-700 dark:text-slate-300">{language === 'es' ? 'Presupuesto' : 'Budget'}</span>
             <button
-              onClick={() => setShowExpenseInfo(true)}
+              onClick={() => setShowBudgetInfo(true)}
               className="ml-auto p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
               aria-label="Info"
             >
               <Info className="w-3.5 h-3.5 text-slate-400" />
             </button>
           </div>
-          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">{formatCurrencyShort(stats.totalExpense)}</span>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400">{formatCurrencyShort(dashboardInfo.budgetTotal)}</span>
+            {dashboardInfo.budgetStatus.type === 'restante' ? (
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400">{language === 'es' ? 'Restante:' : 'Remaining:'}</span>
+                <span className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrencyShort(dashboardInfo.budgetStatus.amount)}</span>
+              </div>
+            ) : dashboardInfo.budgetStatus.type === 'excedente' ? (
+              <div className="flex items-baseline gap-1">
+                <span className="text-xs sm:text-sm font-bold text-amber-600 dark:text-amber-400">{language === 'es' ? 'Excedente:' : 'Overspent:'}</span>
+                <span className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">{formatCurrencyShort(dashboardInfo.budgetStatus.amount)}</span>
+              </div>
+            ) : (
+              <span className="text-base sm:text-lg font-bold text-slate-600 dark:text-slate-400">{language === 'es' ? 'Exacto' : 'Exact'}</span>
+            )}
+          </div>
         </div>
-        {/* Balance Card - Visible on tablet/desktop */}
-        <div className="hidden md:flex bg-gradient-to-br from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-700 rounded-2xl p-3 sm:p-4 shadow-sm flex-col text-white">
+
+        {/* D) Card Superávit del mes */}
+        <div className={`rounded-2xl p-3 sm:p-4 shadow-sm border flex flex-col ${dashboardInfo.hasSurplus ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 dark:from-emerald-600 dark:to-emerald-700 text-white border-emerald-400' : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'}`}>
           <div className="flex items-center gap-2 mb-2">
-            <div className="bg-white/20 p-1.5 rounded-full">
-              <Wallet className="w-4 h-4" />
+            <div className={`p-1.5 rounded-full ${dashboardInfo.hasSurplus ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-700'}`}>
+              <TrendingUp className={`w-4 h-4 ${dashboardInfo.hasSurplus ? 'text-white' : 'text-slate-600 dark:text-slate-400'}`} />
             </div>
-            <span className="text-[10px] sm:text-xs font-bold opacity-90">Balance</span>
+            <span className={`text-[10px] sm:text-xs font-bold ${dashboardInfo.hasSurplus ? 'opacity-90' : 'text-slate-700 dark:text-slate-300'}`}>
+              {language === 'es' ? 'Superávit' : 'Surplus'}
+            </span>
             <button
-              onClick={() => setShowBalanceInfo(true)}
-              className="ml-auto p-1 hover:bg-white/20 rounded-lg transition-colors"
+              onClick={() => setShowSurplusInfo(true)}
+              className={`ml-auto p-1 rounded-lg transition-colors ${dashboardInfo.hasSurplus ? 'hover:bg-white/20' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
               aria-label="Info"
             >
-              <Info className="w-3.5 h-3.5" />
+              <Info className={`w-3.5 h-3.5 ${dashboardInfo.hasSurplus ? 'text-white/80' : 'text-slate-400'}`} />
             </button>
           </div>
-          <span className="text-lg sm:text-xl font-bold">{formatCurrencyShort(stats.balance)}</span>
-        </div>
-        {/* Savings Rate - Visible on tablet/desktop */}
-        <div className="hidden md:flex bg-white dark:bg-slate-800 rounded-2xl p-3 sm:p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex-col">
-          <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-2">
-            <div className="bg-blue-100 dark:bg-blue-900/30 p-1.5 rounded-full">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold">Tasa de Ahorro</span>
-          </div>
-          <span className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">
-            {stats.totalIncome > 0 ? Math.round(((stats.totalIncome - stats.totalExpense) / stats.totalIncome) * 100) : 0}%
+          <span className={`text-lg sm:text-xl font-bold ${dashboardInfo.hasSurplus ? 'text-white' : 'text-slate-800 dark:text-white'}`}>
+            {formatCurrencyShort(dashboardInfo.monthlySurplus)}
           </span>
+          {dashboardInfo.hasSurplus && onManageSurplus && (
+            <button
+              onClick={onManageSurplus}
+              className="mt-2 text-[9px] sm:text-[10px] font-semibold bg-white/20 hover:bg-white/30 px-2 py-1 rounded-lg transition-colors"
+            >
+              {language === 'es' ? 'Administrar' : 'Manage'}
+            </button>
+          )}
+          {!dashboardInfo.hasSurplus && (
+            <span className="text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+              {language === 'es' ? 'Sin superávit' : 'No surplus'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -514,37 +583,45 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
         </div>
 
         <div className="flex flex-col md:flex-row gap-6 md:gap-8">
-          {/* Pie Chart */}
-          <div className="h-[180px] sm:h-[200px] w-full md:w-1/2 relative min-w-0" style={{ minHeight: 180 }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={70}
-                  paddingAngle={5}
-                  dataKey="value"
-                  onClick={(data) => onFilter('category', data.originalName)}
-                  cursor="pointer"
-                  stroke="none"
-                >
-                  {categoryData.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} strokeWidth={0} />
-                  ))}
-                </Pie>
-                <RechartsTooltip
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  itemStyle={{ fontSize: '12px', fontWeight: '600' }}
-                  formatter={(value: number) => formatCurrencyShort(value)}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            {/* Center Icon */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <PieChartIcon className="w-5 h-5 sm:w-6 sm:h-6 text-slate-300 dark:text-slate-600 opacity-50" />
-            </div>
+          {/* Pie Chart - Solo renderizar cuando la vista está activa */}
+          <div className="w-full md:w-1/2 relative min-h-[200px]">
+            {isActive && categoryData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={categoryData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={false}
+                    outerRadius="70%"
+                    fill="#8884d8"
+                    dataKey="value"
+                    onClick={(_, index) => {
+                      const cat = categoryData[index];
+                      if (cat && cat.name) onFilter('category', cat.name);
+                    }}
+                    cursor="pointer"
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip
+                    content={({ active, payload }) => active && payload?.[0] ? CustomTooltip({ active, payload }) : null}
+                    formatter={(value: number) => formatCurrencyShort(value)}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              // Placeholder mientras la vista no está activa o sin datos
+              <div className="w-full h-[200px] flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                <svg className="w-12 h-12 text-slate-300 dark:text-slate-600 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
+                </svg>
+              </div>
+            )}
           </div>
 
           {/* Ranking List - Scrollable to show all categories */}
@@ -600,66 +677,60 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
       )}
 
       {/* TREND BAR CHART */}
-      <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-3xl shadow-soft border border-slate-100 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
+      <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
+        <div className="flex items-center justify-between gap-2 mb-4 sm:mb-6">
           <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white">{t.dashboard.trend6Months}</h3>
           <span className="text-[10px] text-slate-400 bg-slate-50 dark:bg-slate-700 px-2 py-1 rounded-md hidden sm:block">{t.dashboard.tapBarsToFilter}</span>
         </div>
-        <div className="h-[180px] sm:h-[200px] md:h-[250px] w-full min-w-0" style={{ minHeight: 180 }}>
-          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
-            <BarChart
-              data={barData}
-              barGap={4}
-              margin={{ left: -20, right: 0 }}
-              onClick={(data) => {
-                if (data && data.activePayload && data.activePayload[0]) {
-                  onFilter('date', data.activePayload[0].payload.key);
-                }
-              }}
-              cursor="pointer"
-            >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(val) => `${(val / 1000).toFixed(0)}k ${code}`} />
-              <RechartsTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.1)' }} />
-              <Bar dataKey="income" fill="#10b981" radius={[4, 4, 4, 4]} barSize={8} />
-              <Bar dataKey="expense" fill="#f43f5e" radius={[4, 4, 4, 4]} barSize={8} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="w-full min-h-[200px]">
+          {isActive && barData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart
+                data={barData}
+                barGap={4}
+                margin={{ left: -20, right: 0 }}
+                onClick={(data) => {
+                  if (data && data.activePayload && data.activePayload[0]) {
+                    onFilter('date', data.activePayload[0].payload.key);
+                  }
+                }}
+                cursor="pointer"
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(val) => `${(val / 1000).toFixed(0)}k ${code}`} />
+                <Bar dataKey="income" fill="#10b981" radius={[4, 4, 4, 4]} barSize={8} />
+                <Bar dataKey="expense" fill="#f43f5e" radius={[4, 4, 4, 4]} barSize={8} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="w-full h-[200px] flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <svg className="w-12 h-12 text-slate-300 dark:text-slate-600 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Amount Info Modals */}
-      <AmountInfoModal
-        isOpen={showBalanceInfo}
-        onClose={() => setShowBalanceInfo(false)}
-        title={language === 'es' ? 'Información del Balance' : 'Balance Information'}
-        subtitle={language === 'es' ? '¿De dónde sale este monto?' : 'Where does this amount come from?'}
-        totalAmount={stats.balance}
-        breakdown={balanceBreakdown}
-        currencySymbol={symbol}
+      {/* INFO MODALS */}
+      <BudgetInfoModal
+        isOpen={showBudgetInfo}
+        onClose={() => setShowBudgetInfo(false)}
+        budgetTotal={dashboardInfo.budgetTotal}
+        monthlyExpenses={dashboardInfo.monthlyExpenses}
+        budgetStatus={dashboardInfo.budgetStatus}
+        formatCurrency={formatCurrencyShort}
         language={language as 'es' | 'en'}
       />
 
-      <AmountInfoModal
-        isOpen={showIncomeInfo}
-        onClose={() => setShowIncomeInfo(false)}
-        title={language === 'es' ? 'Información de Ingresos' : 'Income Information'}
-        subtitle={language === 'es' ? 'Desglose de tus ingresos' : 'Breakdown of your income'}
-        totalAmount={stats.totalIncome}
-        breakdown={incomeBreakdown}
-        currencySymbol={symbol}
-        language={language as 'es' | 'en'}
-      />
-
-      <AmountInfoModal
-        isOpen={showExpenseInfo}
-        onClose={() => setShowExpenseInfo(false)}
-        title={language === 'es' ? 'Información de Gastos' : 'Expenses Information'}
-        subtitle={language === 'es' ? 'Desglose de tus gastos' : 'Breakdown of your expenses'}
-        totalAmount={stats.totalExpense}
-        breakdown={expenseBreakdown}
-        currencySymbol={symbol}
+      <SurplusInfoModal
+        isOpen={showSurplusInfo}
+        onClose={() => setShowSurplusInfo(false)}
+        monthlySurplus={dashboardInfo.monthlySurplus}
+        monthlyIncome={dashboardInfo.monthlyIncome}
+        budgetTotal={dashboardInfo.budgetTotal}
+        formatCurrency={formatCurrencyShort}
         language={language as 'es' | 'en'}
       />
     </div>
@@ -672,20 +743,29 @@ const arePropsEqual = (prevProps: DashboardProps, nextProps: DashboardProps) => 
   return (
     // Compare stats object (shallow comparison of key values)
     prevProps.stats.balance === nextProps.stats.balance &&
-    prevProps.stats.income === nextProps.stats.income &&
-    prevProps.stats.expenses === nextProps.stats.expenses &&
+    prevProps.stats.totalIncome === nextProps.stats.totalIncome &&
+    prevProps.stats.totalExpense === nextProps.stats.totalExpense &&
     // Compare transactions array length and reference
     prevProps.transactions.length === nextProps.transactions.length &&
     prevProps.transactions === nextProps.transactions &&
     // Compare goals array length and reference
     prevProps.goals.length === nextProps.goals.length &&
     prevProps.goals === nextProps.goals &&
+    // Compare accounts array
+    prevProps.accounts.length === nextProps.accounts.length &&
+    prevProps.accounts === nextProps.accounts &&
+    // Compare budget period data
+    prevProps.budgetPeriodData.period === nextProps.budgetPeriodData.period &&
+    prevProps.budgetPeriodData.budgetTotal === nextProps.budgetPeriodData.budgetTotal &&
     // Compare currency config
     prevProps.currencyConfig?.localSymbol === nextProps.currencyConfig?.localSymbol &&
     prevProps.currencyConfig?.localCode === nextProps.currencyConfig?.localCode &&
+    // Compare isActive (important for chart rendering)
+    prevProps.isActive === nextProps.isActive &&
     // Functions are assumed stable (from parent with useCallback)
     prevProps.onAddClick === nextProps.onAddClick &&
-    prevProps.onFilter === nextProps.onFilter
+    prevProps.onFilter === nextProps.onFilter &&
+    prevProps.onManageSurplus === nextProps.onManageSurplus
   );
 };
 

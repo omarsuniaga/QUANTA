@@ -54,9 +54,17 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
 
   const loadChallenges = async () => {
     setLoading(true);
-    const generated = await aiCoachService.generateChallenges(transactions, stats, goals);
-    setChallenges(generated);
-    setLoading(false);
+    try {
+      const generated = await aiCoachService.generateChallenges(transactions, stats, goals);
+      setChallenges(generated);
+    } catch (error: any) {
+      // Silenciar errores de rate limit - usar challenges del cache
+      if (!error.message?.includes('Rate limit')) {
+        console.error('[Challenges] Error loading challenges:', error);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadActiveChallenges = () => {

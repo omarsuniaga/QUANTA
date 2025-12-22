@@ -64,13 +64,23 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
 
   const loadAnalysis = async () => {
     setLoading(true);
-    const result = await aiCoachService.analyzeFinances(transactions, stats, goals);
-    if (result) {
-      setAnalysis(result);
+    try {
+      const result = await aiCoachService.analyzeFinances(transactions, stats, goals);
+      if (result) {
+        setAnalysis(result);
+      }
+      const tips = await aiCoachService.getQuickTips(transactions, stats);
+      setQuickTips(tips);
+    } catch (error: any) {
+      // Silenciar errores de rate limit - el cache se usará automáticamente
+      if (error.message?.includes('Rate limit')) {
+        console.log('[AICoach] Usando datos en caché por rate limit');
+      } else {
+        console.error('[AICoach] Error loading analysis:', error);
+      }
+    } finally {
+      setLoading(false);
     }
-    const tips = await aiCoachService.getQuickTips(transactions, stats);
-    setQuickTips(tips);
-    setLoading(false);
   };
 
   // Helper to get category display name

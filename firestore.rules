@@ -273,30 +273,29 @@ service cloud.firestore {
     // ============================================
     // Goals created from surplus distribution plans are stored at root level
     // Each goal belongs to a specific user (userId field)
+    //
+    // IMPORTANT: serverTimestamp() fields (createdAt, deletedAt) are NOT available
+    // in request.resource.data during rule validation. They are processed AFTER
+    // validation succeeds. Therefore, we cannot include them in hasAll() checks.
 
     match /goals/{goalId} {
-      // Helper function: Check if goal belongs to authenticated user
-      function isGoalOwner() {
-        return isAuthenticated() && 
-               request.auth.uid == resource.data.userId;
-      }
-
       // Helper function: Validate new goal creation
       function isValidGoalCreate() {
         return isAuthenticated() &&
-               // userId MUST match authenticated user
+               // userId MUST match authenticated user (security check)
                request.resource.data.userId == request.auth.uid &&
-               // Required fields
+               // Required fields (excluding serverTimestamp fields)
                request.resource.data.keys().hasAll([
-                 'userId', 'name', 'targetAmount', 'currentAmount', 
-                 'status', 'source', 'createdAt'
+                 'userId', 'name', 'targetAmount', 'currentAmount', 'status', 'source'
                ]) &&
                // Amounts validation
                isValidAmount(request.resource.data.targetAmount) &&
                isValidNonNegativeAmount(request.resource.data.currentAmount) &&
                request.resource.data.currentAmount <= request.resource.data.targetAmount &&
-               // Status must be 'active' on creation
+               // Status must be 'active' or 'completed' on creation
                request.resource.data.status in ['active', 'completed'] &&
+               // Source validation (manual or surplus_plan)
+               request.resource.data.source is string &&
                // Size check
                isValidSize();
       }
@@ -304,22 +303,26 @@ service cloud.firestore {
       // Helper function: Validate goal update
       function isValidGoalUpdate() {
         return isAuthenticated() &&
-               // Cannot change userId
-               request.resource.data.userId == resource.data.userId &&
                // Must be owner
                request.auth.uid == resource.data.userId &&
-               // Cannot change createdAt
-               request.resource.data.createdAt == resource.data.createdAt &&
+               // Cannot change userId
+               request.resource.data.userId == resource.data.userId &&
+               // Cannot change createdAt if it exists
+               (!request.resource.data.keys().hasAny(['createdAt']) || 
+                request.resource.data.createdAt == resource.data.createdAt) &&
                // Amounts validation
                isValidAmount(request.resource.data.targetAmount) &&
                isValidNonNegativeAmount(request.resource.data.currentAmount) &&
-               // Valid status transitions
+               // Valid status transitions (active, completed, deleted for soft-delete)
                request.resource.data.status in ['active', 'deleted', 'completed'] &&
+               // If status is 'deleted', deletedAt can be set (serverTimestamp)
+               // We don't validate deletedAt presence since it's a serverTimestamp
                // Size check
                isValidSize();
       }
 
       // READ: User can only read their own goals
+      // Supports queries with userId filter
       allow read: if isAuthenticated() && 
                     resource.data.userId == request.auth.uid;
 
@@ -327,11 +330,11 @@ service cloud.firestore {
       allow create: if isValidGoalCreate();
 
       // UPDATE: User can only update their own goals
-      // Allows updating status to 'deleted' (soft-delete)
+      // Allows updating status to 'deleted' (soft-delete) with deletedAt timestamp
       allow update: if isValidGoalUpdate();
 
-      // DELETE: Physical deletion not allowed (use soft-delete instead)
-      // Set status='deleted' via update
+      // DELETE: Physical deletion blocked - use soft-delete instead
+      // Set status='deleted' and deletedAt via update
       allow delete: if false;
     }
 

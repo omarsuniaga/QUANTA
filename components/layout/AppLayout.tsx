@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, DashboardStats } from '../../types';
-import { TabType, SwipeHandlers } from '../../hooks/useAppNavigation';
+import { TabType, SwipeHandlers, SwipeState } from '../../hooks/useAppNavigation';
 import { DesktopSidebar } from './DesktopSidebar';
 import { MobileHeader } from './MobileHeader';
 import { MainContent } from './MainContent';
@@ -32,6 +32,7 @@ interface AppLayoutProps {
   onOpenActionModal: (mode: 'income' | 'expense' | 'service') => void;
   onOpenAICoach: () => void;
   swipeHandlers: SwipeHandlers;
+  swipeState: SwipeState;
   mainContentRef: React.RefObject<HTMLElement>;
   t: TranslationObject;
   children: React.ReactNode;
@@ -56,6 +57,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   onOpenActionModal,
   onOpenAICoach,
   swipeHandlers,
+  swipeState,
   mainContentRef,
   t,
   children,
@@ -97,6 +99,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           {/* Main Content with swipe support */}
           <MainContent
             swipeHandlers={swipeHandlers}
+            swipeState={swipeState}
             mainContentRef={mainContentRef}
           >
             {children}
