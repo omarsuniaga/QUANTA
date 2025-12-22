@@ -66,15 +66,15 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
     }, [customCategories, localFilters.type, language]);
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[100] grid place-items-center p-0 sm:p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
                 onClick={(e) => e.stopPropagation()}
-            />
+            ></div>
 
             {/* Modal */}
-            <div className="relative w-full max-w-md lg:max-w-lg bg-white dark:bg-slate-800 rounded-t-2xl sm:rounded-3xl shadow-2xl max-h-[90vh] sm:max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-4 duration-300">
+            <div className="relative z-[110] bg-white dark:bg-slate-900 w-full max-w-md sm:max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[85vh] overflow-y-auto">
 
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700 sticky top-0 bg-white dark:bg-slate-800 z-10">

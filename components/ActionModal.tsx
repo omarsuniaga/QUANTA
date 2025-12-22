@@ -201,11 +201,12 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   };
 
   return (
-    <div 
-      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center transition-all duration-300 p-0 sm:p-4"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl animate-slide-up flex flex-col relative overflow-hidden">
+    <div className="fixed inset-0 z-[100] grid place-items-center p-0 sm:p-4">
+      {/* Backdrop separado */}
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
+      
+      {/* Modal centrado en viewport */}
+      <div className="relative z-[110] bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden animate-slide-up">
 
         {/* Header */}
         <div className="flex justify-between items-center p-4 sm:p-6 pb-2">

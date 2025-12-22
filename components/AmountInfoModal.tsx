@@ -85,14 +85,12 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
   };
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div 
-        className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] overflow-hidden flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[100] grid place-items-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
+      
+      {/* Modal */}
+      <div className="relative z-[110] bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-br from-indigo-500 to-indigo-600">
           <div className="flex items-start justify-between mb-2">

@@ -103,14 +103,12 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
   if (!isOpen) return null;
   
   return (
-    <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div 
-        className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[100] grid place-items-center p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
+      
+      {/* Modal */}
+      <div className="relative z-[110] bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="p-4 sm:p-6 border-b border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between">

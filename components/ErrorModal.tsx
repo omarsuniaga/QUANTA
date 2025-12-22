@@ -13,11 +13,12 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({ isOpen, title = 'Error',
   if (!isOpen) return null;
 
   return (
-    <div 
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-xs sm:max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+    <div className="fixed inset-0 z-[100] grid place-items-center p-2 sm:p-4 animate-in fade-in duration-200">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={(e) => e.stopPropagation()} />
+      
+      {/* Modal */}
+      <div className="relative z-[110] bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-xs sm:max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
         <div className="bg-rose-50 p-4 sm:p-6 flex flex-col items-center justify-center border-b border-rose-100">
           <div className="w-12 h-12 sm:w-16 sm:h-16 bg-rose-100 text-rose-500 rounded-full flex items-center justify-center mb-2 sm:mb-3 shadow-inner">
             <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8" />
