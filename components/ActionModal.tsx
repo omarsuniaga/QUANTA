@@ -6,6 +6,7 @@ import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts/I18nContext';
 import { DynamicIcon, getColorClasses, IconPicker } from './IconPicker';
 import { Calculator } from './Calculator';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 type ModalMode = 'income' | 'expense' | 'service';
 
@@ -25,6 +26,8 @@ interface ActionModalProps {
 }
 
 const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSave, initialValues, currencySymbol = '$' }) => {
+  // Bloquear scroll del body mientras el modal está abierto
+  useModalScrollLock(true);
   // Common Fields
   const [amount, setAmount] = useState(initialValues?.amount?.toString() || '');
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
@@ -199,7 +202,10 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center transition-all duration-300 p-0 sm:p-4">
+    <div 
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center transition-all duration-300 p-0 sm:p-4"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="bg-white dark:bg-slate-900 w-full max-w-md lg:max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] sm:rounded-3xl rounded-t-3xl shadow-2xl animate-slide-up flex flex-col relative overflow-hidden">
 
         {/* Header */}

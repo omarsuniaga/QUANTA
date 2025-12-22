@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Info, Wallet, TrendingUp } from 'lucide-react';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface BudgetInfoModalProps {
   isOpen: boolean;
@@ -23,10 +24,11 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
   formatCurrency,
   language
 }) => {
+  useModalScrollLock(isOpen);
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={(e) => e.stopPropagation()}>
       <div 
         className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700"
         onClick={e => e.stopPropagation()}
@@ -132,10 +134,11 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
   formatCurrency,
   language
 }) => {
+  useModalScrollLock(isOpen);
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4" onClick={(e) => e.stopPropagation()}>
       <div 
         className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-emerald-400"
         onClick={e => e.stopPropagation()}

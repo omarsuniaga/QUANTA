@@ -5,6 +5,7 @@ import { PAYMENT_METHODS } from '../constants';
 import { storageService } from '../services/storageService';
 import { CustomCategory } from '../types';
 import { useI18n } from '../contexts/I18nContext';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface FilterModalProps {
     filters: {
@@ -21,6 +22,7 @@ interface FilterModalProps {
 
 const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, onClose }) => {
     const { t, language } = useI18n();
+    useModalScrollLock(true);
     const [localFilters, setLocalFilters] = useState(filters);
     const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
 
@@ -66,11 +68,11 @@ const FilterModalComponent: React.FC<FilterModalProps> = ({ filters, onApply, on
     }, [customCategories, localFilters.type, language]);
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4">
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                onClick={onClose}
+                onClick={(e) => e.stopPropagation()}
             />
 
             {/* Modal */}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Plane, ShoppingBag, Gift, Star, Coffee, Music, Trash2 } from 'lucide-react';
 import { Promo } from '../types';
 import { Button } from './Button';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 interface PromoModalProps {
   promo?: Promo | null;
@@ -22,6 +23,7 @@ const ICONS = [
 const COLORS = ['blue', 'purple', 'rose', 'amber', 'emerald', 'indigo'];
 
 export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete, onClose }) => {
+  useModalScrollLock(true);
   const [title, setTitle] = useState(promo?.title || '');
   const [subtitle, setSubtitle] = useState(promo?.subtitle || '');
   const [icon, setIcon] = useState(promo?.icon || 'Star');
@@ -47,7 +49,10 @@ export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete,
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 transition-all duration-300">
+    <div 
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 transition-all duration-300"
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl w-full max-w-md lg:max-w-lg shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto pb-24">
         <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center sticky top-0 bg-white dark:bg-slate-900 z-10">
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">{promo ? 'Editar Idea' : 'Nueva Idea'}</h2>

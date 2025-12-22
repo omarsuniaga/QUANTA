@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Info, TrendingUp, TrendingDown, Target, PiggyBank, RefreshCw, Percent, AlertCircle } from 'lucide-react';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 
 export interface AmountBreakdownItem {
   label: string;
@@ -84,10 +85,12 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
     return type === 'addition' ? '+' : '-';
   };
 
+  useModalScrollLock(isOpen);
+
   return (
     <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={onClose}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+      onClick={(e) => e.stopPropagation()}
     >
       <div 
         className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] overflow-hidden flex flex-col"

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, PiggyBank, Target, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, PiggyBank, Target, Sparkles, TrendingUp, Shield, Info, Check, AlertTriangle } from 'lucide-react';
+import { useModalScrollLock } from '../hooks/useModalScrollLock';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { calculatePlanAllocations, PlanId } from '../utils/surplusPlan';
 import { createGoalsFromPlan, getCurrentPeriodKey, hasGoalsForPeriod, deleteGoalsForPeriod } from '../services/goalsService';
@@ -85,6 +86,7 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
   language = 'es',
   onGoalsCreated
 }) => {
+  useModalScrollLock(isOpen);
   const available = Math.max(0, budgetPeriodData.incomeSurplus);
   const [confirmPlan, setConfirmPlan] = useState<PlanId | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
@@ -103,8 +105,8 @@ export const SurplusDistributionModal: React.FC<SurplusDistributionModalProps> =
   
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      onClick={(e) => e.stopPropagation()}
     >
       <div 
         className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl"
