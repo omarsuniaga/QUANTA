@@ -18,3 +18,5 @@ export { useTransactionHandlers } from './useTransactionHandlers';
 export { useGoalHandlers } from './useGoalHandlers';
 
 export { useBudgetHandlers } from './useBudgetHandlers';
+
+export { useModalScrollLock } from './useModalScrollLock';
