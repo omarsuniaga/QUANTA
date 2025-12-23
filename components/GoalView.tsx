@@ -1,601 +1,370 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { ArrowLeft, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, Clock, Wallet, TrendingUp, Info } from 'lucide-react';
-import { Goal } from '../types';
+import { Goal, Transaction } from '../types';
+import { parseLocalDate } from '../utils/dateHelpers';
 import { Button } from './Button';
 import { useI18n } from '../contexts/I18nContext';
 
 interface GoalViewProps {
-  goal?: Goal | null;
-  onSave: (goal: Goal) => void;
-  onDelete: (id: string) => void;
+  goal: Goal;
+  transactions: Transaction[];
+  currencySymbol: string;
+  currencyCode: string;
   onBack: () => void;
-  currencySymbol?: string;
-  currencyCode?: string;
-  availableBalance?: number;
+  onSave: (goal: Goal) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }
 
-const ICONS = [
-  { name: 'plane', icon: Plane },
-  { name: 'shield', icon: Shield },
-  { name: 'gift', icon: Gift },
-  { name: 'car', icon: Car },
-  { name: 'home', icon: Home },
-  { name: 'save', icon: Save },
-];
-
-const COLORS = ['indigo', 'emerald', 'purple', 'rose', 'blue', 'amber'];
-
-const FREQUENCY_OPTIONS = [
-  { value: 'weekly', labelEs: 'Semanal', labelEn: 'Weekly', multiplier: 4.33 },
-  { value: 'biweekly', labelEs: 'Quincenal', labelEn: 'Biweekly', multiplier: 2 },
-  { value: 'monthly', labelEs: 'Mensual', labelEn: 'Monthly', multiplier: 1 },
-];
-
-const GoalViewComponent: React.FC<GoalViewProps> = ({
+export const GoalView: React.FC<GoalViewProps> = memo(({
   goal,
-  onSave,
-  onDelete,
+  transactions,
+  currencySymbol,
+  currencyCode,
   onBack,
-  currencySymbol = '$',
-  currencyCode = 'USD',
-  availableBalance = 0
+  onSave,
+  onDelete
 }) => {
   const { t, language } = useI18n();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-
-  // Basic fields
-  const [name, setName] = useState(goal?.name || '');
-  const [target, setTarget] = useState(goal?.targetAmount.toString() || '');
-  const [current, setCurrent] = useState(goal?.currentAmount.toString() || '0');
-  const [icon, setIcon] = useState(goal?.icon || 'save');
-  const [color, setColor] = useState(goal?.color || 'indigo');
-
-  // Savings plan fields
-  const [calculationMode, setCalculationMode] = useState<'time' | 'amount'>(goal?.calculationMode || 'time');
-  const [contributionAmount, setContributionAmount] = useState(goal?.contributionAmount?.toString() || '');
-  const [contributionFrequency, setContributionFrequency] = useState<'weekly' | 'biweekly' | 'monthly'>(goal?.contributionFrequency || 'monthly');
-  const [targetMonths, setTargetMonths] = useState('12');
-  const [autoDeduct, setAutoDeduct] = useState(goal?.autoDeduct ?? true);
-
-  // Calculate target date from months
-  const getTargetDateFromMonths = (months: number): string => {
-    const date = new Date();
-    date.setMonth(date.getMonth() + months);
-    return date.toISOString().split('T')[0];
-  };
+  const [editingGoal, setEditingGoal] = useState<Goal>({ ...goal });
+  const [isSaving, setIsSaving] = useState(false);
+  const [targetMonths, setTargetMonths] = useState<string>('');
+  const [calculationMode, setCalculationMode] = useState<'monthly' | 'targetDate'>(
+    goal.targetDate ? 'targetDate' : 'monthly'
+  );
 
   // Initialize targetMonths from goal's targetDate
   useEffect(() => {
     if (goal?.targetDate) {
-      const targetDate = new Date(goal.targetDate);
+      const targetDate = parseLocalDate(goal.targetDate);
       const now = new Date();
       const diffMonths = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
       setTargetMonths(Math.max(1, diffMonths).toString());
     }
   }, [goal]);
 
-  // Get frequency multiplier (contributions per month)
-  const getFrequencyMultiplier = useCallback((freq: string): number => {
-    return FREQUENCY_OPTIONS.find(f => f.value === freq)?.multiplier || 1;
-  }, []);
+  const progress = useMemo(() => {
+    return Math.min(100, (goal.currentAmount / goal.targetAmount) * 100);
+  }, [goal.currentAmount, goal.targetAmount]);
 
-  // Calculate remaining amount
   const remainingAmount = useMemo(() => {
-    const targetNum = parseFloat(target) || 0;
-    const currentNum = parseFloat(current) || 0;
-    return Math.max(0, targetNum - currentNum);
-  }, [target, current]);
+    return Math.max(0, goal.targetAmount - goal.currentAmount);
+  }, [goal.currentAmount, goal.targetAmount]);
 
-  // Calculate time to reach goal (in months)
-  const calculatedTime = useMemo(() => {
-    const contribution = parseFloat(contributionAmount) || 0;
-    if (contribution <= 0 || remainingAmount <= 0) return null;
+  const estimatedCompletion = useMemo(() => {
+    if (!goal.contributionAmount || goal.contributionAmount <= 0) return null;
 
-    const monthlyContribution = contribution * getFrequencyMultiplier(contributionFrequency);
-    const months = remainingAmount / monthlyContribution;
-    return Math.ceil(months);
-  }, [contributionAmount, contributionFrequency, remainingAmount, getFrequencyMultiplier]);
+    let monthlyContribution = goal.contributionAmount;
+    if (goal.contributionFrequency === 'weekly') monthlyContribution *= 4.33;
+    else if (goal.contributionFrequency === 'biweekly') monthlyContribution *= 2.16;
 
-  // Calculate required contribution to reach goal in target time
-  const calculatedContribution = useMemo(() => {
-    const months = parseInt(targetMonths) || 0;
-    if (months <= 0 || remainingAmount <= 0) return null;
+    const monthsRemaining = Math.ceil(remainingAmount / monthlyContribution);
+    const date = new Date();
+    date.setMonth(date.getMonth() + monthsRemaining);
+    return date;
+  }, [remainingAmount, goal.contributionAmount, goal.contributionFrequency]);
 
-    const multiplier = getFrequencyMultiplier(contributionFrequency);
-    const totalContributions = months * multiplier;
-    return Math.ceil(remainingAmount / totalContributions);
-  }, [targetMonths, contributionFrequency, remainingAmount, getFrequencyMultiplier]);
+  const getTimeRemainingLabel = () => {
+    if (!estimatedCompletion) return null;
+    const now = new Date();
+    const diffMonths = (estimatedCompletion.getFullYear() - now.getFullYear()) * 12 + (estimatedCompletion.getMonth() - now.getMonth());
 
-  // Format time display
-  const formatTime = useCallback((months: number): string => {
-    if (months < 1) return language === 'es' ? 'Menos de 1 mes' : 'Less than 1 month';
+    if (diffMonths <= 0) return language === 'es' ? 'Menos de 1 mes' : 'Less than 1 month';
+    if (diffMonths < 12) return `${diffMonths} ${language === 'es' ? 'meses' : 'months'}`;
 
-    const years = Math.floor(months / 12);
-    const remainingMonths = months % 12;
+    const years = Math.floor(diffMonths / 12);
+    const months = diffMonths % 12;
+    if (months === 0) return `${years} ${language === 'es' ? (years === 1 ? 'año' : 'años') : (years === 1 ? 'year' : 'years')}`;
+    return `${years} ${language === 'es' ? (years === 1 ? 'año' : 'años') : (years === 1 ? 'year' : 'years')} ${language === 'es' ? 'y' : 'and'} ${months} ${language === 'es' ? 'meses' : 'months'}`;
+  };
 
-    if (language === 'es') {
-      if (years === 0) return `${remainingMonths} ${remainingMonths === 1 ? 'mes' : 'meses'}`;
-      if (remainingMonths === 0) return `${years} ${years === 1 ? 'año' : 'años'}`;
-      return `${years} ${years === 1 ? 'año' : 'años'} y ${remainingMonths} ${remainingMonths === 1 ? 'mes' : 'meses'}`;
-    } else {
-      if (years === 0) return `${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'}`;
-      if (remainingMonths === 0) return `${years} ${years === 1 ? 'year' : 'years'}`;
-      return `${years} ${years === 1 ? 'year' : 'years'} and ${remainingMonths} ${remainingMonths === 1 ? 'month' : 'months'}`;
-    }
-  }, [language]);
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      let finalGoal = { ...editingGoal };
 
-  // Check if contribution is feasible with available balance
-  const isFeasible = useMemo(() => {
-    const contribution = parseFloat(contributionAmount) || 0;
-    return contribution <= availableBalance;
-  }, [contributionAmount, availableBalance]);
+      if (calculationMode === 'targetDate' && targetMonths) {
+        const months = parseInt(targetMonths);
+        const date = new Date();
+        date.setMonth(date.getMonth() + months);
+        finalGoal.targetDate = date.toISOString().split('T')[0];
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
+        // Calculate recommended contribution
+        const monthlyNeeded = remainingAmount / months;
+        if (finalGoal.contributionFrequency === 'weekly') finalGoal.contributionAmount = monthlyNeeded / 4.33;
+        else if (finalGoal.contributionFrequency === 'biweekly') finalGoal.contributionAmount = monthlyNeeded / 2.16;
+        else finalGoal.contributionAmount = monthlyNeeded;
+      } else {
+        finalGoal.targetDate = undefined;
+      }
 
-    const finalContribution = calculationMode === 'time'
-      ? parseFloat(contributionAmount) || 0
-      : calculatedContribution || 0;
-
-    const finalTargetDate = calculationMode === 'amount'
-      ? getTargetDateFromMonths(parseInt(targetMonths) || 12)
-      : calculatedTime
-        ? getTargetDateFromMonths(calculatedTime)
-        : undefined;
-
-    onSave({
-      id: goal?.id || Math.random().toString(36).substr(2, 9),
-      name,
-      targetAmount: parseFloat(target) || 0,
-      currentAmount: parseFloat(current) || 0,
-      icon,
-      color,
-      contributionAmount: finalContribution,
-      contributionFrequency,
-      calculationMode,
-      targetDate: finalTargetDate,
-      autoDeduct,
-    });
-    onBack();
-  }, [calculationMode, contributionAmount, calculatedContribution, targetMonths, calculatedTime, goal, name, target, current, icon, color, contributionFrequency, autoDeduct, onSave, onBack, getTargetDateFromMonths]);
-
-  const handleDelete = useCallback(() => {
-    if (goal) {
-      onDelete(goal.id);
-      onBack();
-    }
-  }, [goal, onDelete, onBack]);
-
-  const labels = {
-    es: {
-      editGoal: 'Editar Meta',
-      newGoal: 'Nueva Meta',
-      goalName: 'Nombre de la Meta',
-      goalNamePlaceholder: 'Ej: Viaje a Europa',
-      target: 'Objetivo',
-      saved: 'Ahorrado',
-      icon: 'Icono',
-      color: 'Color',
-      savingsStrategy: 'Estrategia de Ahorro',
-      calculateTime: 'Calcular Tiempo',
-      calculateAmount: 'Calcular Aporte',
-      contribution: 'Aporte por Período',
-      frequency: 'Frecuencia',
-      targetTime: 'Tiempo Objetivo',
-      months: 'meses',
-      autoDeduct: 'Apartar automáticamente',
-      autoDeductDesc: 'Deducir de fondos disponibles cada período',
-      estimatedTime: 'Tiempo Estimado',
-      requiredContribution: 'Aporte Requerido',
-      perPeriod: 'por período',
-      remaining: 'Restante',
-      save: 'Guardar Meta',
-      cancel: 'Cancelar',
-      delete: 'Eliminar',
-      confirmDelete: '¿Eliminar esta meta?',
-      confirmDeleteDesc: 'Esta acción no se puede deshacer.',
-      insufficientFunds: 'Fondos insuficientes',
-      availableBalance: 'Disponible',
-      goalReached: '¡Meta alcanzada!',
-    },
-    en: {
-      editGoal: 'Edit Goal',
-      newGoal: 'New Goal',
-      goalName: 'Goal Name',
-      goalNamePlaceholder: 'Ex: Trip to Europe',
-      target: 'Target',
-      saved: 'Saved',
-      icon: 'Icon',
-      color: 'Color',
-      savingsStrategy: 'Savings Strategy',
-      calculateTime: 'Calculate Time',
-      calculateAmount: 'Calculate Amount',
-      contribution: 'Contribution per Period',
-      frequency: 'Frequency',
-      targetTime: 'Target Time',
-      months: 'months',
-      autoDeduct: 'Auto-deduct',
-      autoDeductDesc: 'Deduct from available funds each period',
-      estimatedTime: 'Estimated Time',
-      requiredContribution: 'Required Contribution',
-      perPeriod: 'per period',
-      remaining: 'Remaining',
-      save: 'Save Goal',
-      cancel: 'Cancel',
-      delete: 'Delete',
-      confirmDelete: 'Delete this goal?',
-      confirmDeleteDesc: 'This action cannot be undone.',
-      insufficientFunds: 'Insufficient funds',
-      availableBalance: 'Available',
-      goalReached: 'Goal reached!',
+      await onSave(finalGoal);
+    } catch (error) {
+      console.error('Error saving goal:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const l = labels[language] || labels.es;
-  const freqLabel = (freq: typeof FREQUENCY_OPTIONS[0]) => language === 'es' ? freq.labelEs : freq.labelEn;
+  const getIconComponent = (iconName: string) => {
+    const icons: Record<string, any> = {
+      'plane': Plane,
+      'shield': Shield,
+      'gift': Gift,
+      'car': Car,
+      'home': Home,
+      'piggy-bank': Clock,
+      'target': Target,
+      'trending-up': TrendingUp
+    };
+    return icons[iconName] || Target;
+  };
+
+  const Icon = getIconComponent(goal.icon || 'target');
 
   return (
-    <div className="fixed inset-0 z-50 bg-white dark:bg-slate-900 flex flex-col">
-      {/* Header sticky */}
-      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 p-4 flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
+      {/* Header */}
+      <div className="p-4 sm:p-6 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+            <ArrowLeft className="w-5 h-5 text-slate-500" />
+          </button>
+          <div>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">{goal.name}</h2>
+            <p className="text-xs text-slate-500">{t.goals?.editGoal || 'Editar Meta'}</p>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onDelete(goal.id)}
+          className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
         >
-          <ArrowLeft className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-        </button>
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-          {goal ? l.editGoal : l.newGoal}
-        </h2>
+          <Trash2 className="w-4 h-4" />
+        </Button>
       </div>
 
-      {/* Main content scrolleable */}
-      <div className="flex-1 overflow-y-auto p-4 pb-28">
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
-          {/* Goal Name */}
-          <div>
-            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">
-              {l.goalName}
-            </label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={l.goalNamePlaceholder}
-              className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-            />
-          </div>
-
-          {/* Target & Saved */}
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-            <div>
-              <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">
-                {l.target} ({currencySymbol})
-              </label>
-              <input
-                type="number"
-                required
-                min="0"
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+        {/* Progress Card */}
+        <div className={`p-6 rounded-3xl bg-gradient-to-br from-${goal.color || 'indigo'}-500 to-${goal.color || 'indigo'}-600 text-white shadow-lg`}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-white/20 rounded-2xl backdrop-blur-md">
+              <Icon className="w-8 h-8" />
             </div>
-            <div>
-              <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">
-                {l.saved} ({currencySymbol})
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={current}
-                onChange={(e) => setCurrent(e.target.value)}
-                className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-              />
+            <div className="text-right">
+              <p className="text-sm font-medium opacity-80">{language === 'es' ? 'Progreso' : 'Progress'}</p>
+              <p className="text-3xl font-black">{progress.toFixed(0)}%</p>
             </div>
           </div>
 
-          {/* Remaining Amount Info */}
-          {remainingAmount > 0 && (
-            <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{l.remaining}</span>
-              <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                {remainingAmount.toLocaleString()} {currencyCode}
-              </span>
+          <div className="space-y-4">
+            <div className="h-3 bg-white/20 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white rounded-full transition-all duration-1000"
+                style={{ width: `${progress}%` }}
+              />
             </div>
-          )}
-
-          {remainingAmount === 0 && parseFloat(target) > 0 && (
-            <div className="bg-emerald-50 dark:bg-emerald-900/30 p-3 rounded-xl flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-500" />
-              <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{l.goalReached}</span>
-            </div>
-          )}
-
-          {/* Savings Strategy Section */}
-          {remainingAmount > 0 && (
-            <>
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
-                <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 sm:mb-3 flex items-center gap-2">
-                  <Calculator className="w-4 h-4" />
-                  {l.savingsStrategy}
-                </label>
-
-                {/* Mode Toggle */}
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                  <button
-                    type="button"
-                    onClick={() => setCalculationMode('time')}
-                    className={`p-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      calculationMode === 'time'
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <Clock className="w-4 h-4" />
-                    {l.calculateTime}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCalculationMode('amount')}
-                    className={`p-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all ${
-                      calculationMode === 'amount'
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    <Wallet className="w-4 h-4" />
-                    {l.calculateAmount}
-                  </button>
-                </div>
-
-                {/* Frequency Selection */}
-                <div className="mb-4">
-                  <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">
-                    {l.frequency}
-                  </label>
-                  <div className="flex gap-2">
-                    {FREQUENCY_OPTIONS.map((freq) => (
-                      <button
-                        key={freq.value}
-                        type="button"
-                        onClick={() => setContributionFrequency(freq.value as any)}
-                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition-all ${
-                          contributionFrequency === freq.value
-                            ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                        }`}
-                      >
-                        {freqLabel(freq)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Mode-specific inputs */}
-                {calculationMode === 'time' ? (
-                  <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">
-                      {l.contribution} ({currencySymbol})
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={contributionAmount}
-                      onChange={(e) => setContributionAmount(e.target.value)}
-                      placeholder="1000"
-                      className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-
-                    {/* Feasibility warning */}
-                    {contributionAmount && !isFeasible && (
-                      <div className="mt-2 flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                        <Info className="w-4 h-4" />
-                        <span className="text-xs font-medium">
-                          {l.insufficientFunds} ({l.availableBalance}: {availableBalance.toLocaleString()} {currencyCode})
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Calculated Time Result */}
-                    {calculatedTime && (
-                      <div className="mt-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800">
-                        <div className="flex items-center gap-2 text-xs font-medium text-indigo-600 dark:text-indigo-400 mb-1">
-                          <Clock className="w-4 h-4" />
-                          {l.estimatedTime}
-                        </div>
-                        <p className="text-lg font-bold text-indigo-900 dark:text-indigo-100">
-                          {formatTime(calculatedTime)}
-                        </p>
-                        <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
-                          <Calendar className="w-3 h-3 inline mr-1" />
-                          {new Date(getTargetDateFromMonths(calculatedTime)).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
-                            month: 'long',
-                            year: 'numeric'
-                          })}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">
-                      {l.targetTime} ({l.months})
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="120"
-                      value={targetMonths}
-                      onChange={(e) => setTargetMonths(e.target.value)}
-                      placeholder="12"
-                      className="block w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 text-sm sm:text-base font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-
-                    {/* Calculated Contribution Result */}
-                    {calculatedContribution && (
-                      <div className="mt-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/30 dark:to-teal-900/30 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800">
-                        <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
-                          <Wallet className="w-4 h-4" />
-                          {l.requiredContribution}
-                        </div>
-                        <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
-                          {calculatedContribution.toLocaleString()} {currencyCode} <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{l.perPeriod}</span>
-                        </p>
-
-                        {/* Feasibility check for calculated amount */}
-                        {calculatedContribution > availableBalance && (
-                          <div className="mt-2 flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                            <Info className="w-4 h-4" />
-                            <span className="text-xs font-medium">
-                              {l.insufficientFunds} ({l.availableBalance}: {availableBalance.toLocaleString()} {currencyCode})
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Auto-deduct Toggle */}
-                <div className="mt-4 flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-xl">
-                  <div>
-                    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">{l.autoDeduct}</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">{l.autoDeductDesc}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setAutoDeduct(!autoDeduct)}
-                    className={`w-12 h-6 rounded-full transition-all ${
-                      autoDeduct ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
-                    }`}
-                  >
-                    <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                      autoDeduct ? 'translate-x-6' : 'translate-x-0.5'
-                    }`} />
-                  </button>
-                </div>
+            <div className="flex justify-between items-end">
+              <div>
+                <p className="text-xs opacity-70 mb-1">{language === 'es' ? 'Ahorrado' : 'Saved'}</p>
+                <p className="text-xl font-bold">{currencySymbol}{goal.currentAmount.toLocaleString()}</p>
               </div>
-            </>
-          )}
-
-          {/* Icon Selection */}
-          <div>
-            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 sm:mb-2 block">
-              {l.icon}
-            </label>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {ICONS.map((item) => (
-                <button
-                  key={item.name}
-                  type="button"
-                  onClick={() => setIcon(item.name)}
-                  className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all ${
-                    icon === item.name
-                      ? 'bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-md'
-                      : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Color Selection */}
-          <div>
-            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 sm:mb-2 block">
-              {l.color}
-            </label>
-            <div className="flex gap-1.5 sm:gap-2">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all ${
-                    color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'
-                  }`}
-                  style={{ backgroundColor: `var(--color-${c}-500, ${c})` }}
-                >
-                  <div className={`w-full h-full rounded-full bg-${c}-500`}></div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </form>
-      </div>
-
-      {/* Footer fixed con acciones siempre visibles */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 flex gap-3">
-        {goal && (
-          <Button
-            type="button"
-            variant="danger"
-            onClick={() => setShowDeleteDialog(true)}
-            className="px-4"
-          >
-            <Trash2 className="w-5 h-5" />
-          </Button>
-        )}
-        <Button type="button" variant="secondary" onClick={onBack} className="flex-1">
-          {l.cancel}
-        </Button>
-        <Button type="submit" onClick={handleSubmit} className="flex-1 shadow-lg shadow-indigo-200 dark:shadow-none">
-          {l.save}
-        </Button>
-      </div>
-
-      {/* Delete Confirmation Dialog */}
-      {showDeleteDialog && (
-        <div className="fixed inset-0 z-[60] grid place-items-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-              {l.confirmDelete}
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
-              {l.confirmDeleteDesc}
-            </p>
-            <div className="flex gap-3">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setShowDeleteDialog(false)}
-                fullWidth
-              >
-                {l.cancel}
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                onClick={() => {
-                  setShowDeleteDialog(false);
-                  handleDelete();
-                }}
-                fullWidth
-              >
-                {l.delete}
-              </Button>
+              <div className="text-right">
+                <p className="text-xs opacity-70 mb-1">{language === 'es' ? 'Meta' : 'Target'}</p>
+                <p className="text-xl font-bold">{currencySymbol}{goal.targetAmount.toLocaleString()}</p>
+              </div>
             </div>
           </div>
         </div>
-      )}
+
+        {/* Info Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2 mb-1">
+              <Clock className="w-4 h-4 text-amber-500" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {language === 'es' ? 'Tiempo Estimado' : 'Estimated Time'}
+              </span>
+            </div>
+            <p className="text-lg font-bold text-slate-800 dark:text-white">
+              {getTimeRemainingLabel() || '---'}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2 mb-1">
+              <Calculator className="w-4 h-4 text-indigo-500" />
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                {language === 'es' ? 'Faltante' : 'Remaining'}
+              </span>
+            </div>
+            <p className="text-lg font-bold text-slate-800 dark:text-white">
+              {currencySymbol}{remainingAmount.toLocaleString()}
+            </p>
+          </div>
+        </div>
+
+        {/* Configuration */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider px-1">
+            {language === 'es' ? 'Configuración de Ahorro' : 'Savings Configuration'}
+          </h3>
+
+          <div className="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+            {/* Amount Input */}
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-50 dark:bg-slate-700 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-slate-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-700 dark:text-white">
+                    {language === 'es' ? 'Monto Objetivo' : 'Target Amount'}
+                  </p>
+                  <p className="text-[10px] text-slate-400">{language === 'es' ? '¿Cuánto quieres juntar?' : 'How much to save?'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-400 font-bold">{currencySymbol}</span>
+                <input
+                  type="number"
+                  value={editingGoal.targetAmount}
+                  onChange={(e) => setEditingGoal({ ...editingGoal, targetAmount: parseFloat(e.target.value) || 0 })}
+                  className="w-24 text-right font-bold text-slate-800 dark:text-white bg-transparent border-b-2 border-slate-100 focus:border-indigo-500 transition-colors focus:outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Strategy Select */}
+            <div className="p-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-indigo-500" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-700 dark:text-white">
+                    {language === 'es' ? 'Estrategia de Aporte' : 'Contribution Strategy'}
+                  </p>
+                  <p className="text-[10px] text-slate-400">{language === 'es' ? '¿Cómo vas a ahorrar?' : 'How will you save?'}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setCalculationMode('monthly')}
+                  className={`p-3 rounded-2xl border text-center transition-all ${calculationMode === 'monthly'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
+                      : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                    }`}
+                >
+                  <p className={`text-xs font-bold ${calculationMode === 'monthly' ? 'text-indigo-600' : 'text-slate-500'}`}>
+                    {language === 'es' ? 'Monto Fijo' : 'Fixed Amount'}
+                  </p>
+                </button>
+                <button
+                  onClick={() => setCalculationMode('targetDate')}
+                  className={`p-3 rounded-2xl border text-center transition-all ${calculationMode === 'targetDate'
+                      ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
+                      : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                    }`}
+                >
+                  <p className={`text-xs font-bold ${calculationMode === 'targetDate' ? 'text-indigo-600' : 'text-slate-500'}`}>
+                    {language === 'es' ? 'Fecha Objetivo' : 'Target Date'}
+                  </p>
+                </button>
+              </div>
+
+              <div className="mt-4">
+                {calculationMode === 'monthly' ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-500">{language === 'es' ? 'Aporte por período' : 'Contribution per period'}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 font-bold">{currencySymbol}</span>
+                        <input
+                          type="number"
+                          value={editingGoal.contributionAmount || 0}
+                          onChange={(e) => setEditingGoal({ ...editingGoal, contributionAmount: parseFloat(e.target.value) || 0 })}
+                          className="w-20 text-right font-bold text-slate-800 dark:text-white bg-transparent border-b-2 border-slate-100 focus:border-indigo-500 transition-colors focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {(['weekly', 'biweekly', 'monthly'] as const).map((freq) => (
+                        <button
+                          key={freq}
+                          onClick={() => setEditingGoal({ ...editingGoal, contributionFrequency: freq })}
+                          className={`flex-1 py-2 px-1 rounded-lg text-[10px] font-bold transition-all ${editingGoal.contributionFrequency === freq
+                              ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200'
+                              : 'bg-slate-50 dark:bg-slate-700 text-slate-500'
+                            }`}
+                        >
+                          {freq === 'weekly' ? (language === 'es' ? 'Semanal' : 'Weekly') :
+                            freq === 'biweekly' ? (language === 'es' ? 'Quincenal' : 'Biweekly') :
+                              (language === 'es' ? 'Mensual' : 'Monthly')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-500">{language === 'es' ? 'Meses sugeridos' : 'Suggested months'}</span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={targetMonths}
+                          onChange={(e) => setTargetMonths(e.target.value)}
+                          className="w-16 text-right font-bold text-slate-800 dark:text-white bg-transparent border-b-2 border-slate-100 focus:border-indigo-500 transition-colors focus:outline-none"
+                        />
+                        <span className="text-xs text-slate-400">{language === 'es' ? 'meses' : 'months'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Auto Deduct Toggle */}
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full transition-all flex items-center justify-center ${editingGoal.autoDeduct ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-slate-100 dark:bg-slate-700'
+                  }`}>
+                  <Save className={`w-5 h-5 ${editingGoal.autoDeduct ? 'text-emerald-600' : 'text-slate-400'}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-700 dark:text-white">
+                    {language === 'es' ? 'Apartado Automático' : 'Auto Deduct'}
+                  </p>
+                  <p className="text-[10px] text-slate-400">{language === 'es' ? 'Efectivizar ahorro al cobrar' : 'Effect savings on income'}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingGoal({ ...editingGoal, autoDeduct: !editingGoal.autoDeduct })}
+                className={`w-12 h-6 rounded-full p-1 transition-all ${editingGoal.autoDeduct ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                  }`}
+              >
+                <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${editingGoal.autoDeduct ? 'translate-x-6' : 'translate-x-0'
+                  }`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <Button
+          fullWidth
+          size="lg"
+          onClick={handleSave}
+          disabled={isSaving}
+          className={`shadow-xl ${isSaving ? 'opacity-70' : ''}`}
+        >
+          {isSaving ? (
+            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            language === 'es' ? 'Guardar Cambios' : 'Save Changes'
+          )}
+        </Button>
+      </div>
     </div>
   );
-};
-
-// Custom comparison function for React.memo
-const arePropsEqual = (prevProps: GoalViewProps, nextProps: GoalViewProps) => {
-  return (
-    prevProps.goal === nextProps.goal &&
-    prevProps.currencySymbol === nextProps.currencySymbol &&
-    prevProps.currencyCode === nextProps.currencyCode &&
-    prevProps.availableBalance === nextProps.availableBalance &&
-    prevProps.onSave === nextProps.onSave &&
-    prevProps.onDelete === nextProps.onDelete &&
-    prevProps.onBack === nextProps.onBack
-  );
-};
-
-export const GoalView = memo(GoalViewComponent, arePropsEqual);
+});

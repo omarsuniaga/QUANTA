@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useMemo, ReactNo
 import { Transaction, DashboardStats, Account, Goal } from '../types';
 import { storageService } from '../services/storageService';
 import { useAuth } from './AuthContext';
-import { useToast } from './ToastContext';
+import { useToast } from './ToastContext'; // Corrected import
+import { parseLocalDate } from '../utils/dateHelpers';
 import { validateDate } from '../utils/validation';
 
 interface TransactionFilters {
@@ -49,6 +50,7 @@ const TransactionsContext = createContext<TransactionsContextType | undefined>(u
 
 export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { error: toastError } = useToast();
   const toast = useToast();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -135,12 +137,12 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     const warnings: string[] = [];
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
     const recent = transactions.filter(t =>
-      t.type === 'expense' && new Date(t.date).getTime() > thirtyDaysAgo
+      t.type === 'expense' && parseLocalDate(t.date).getTime() > thirtyDaysAgo
     );
 
     const counts: Record<string, number> = {};
     recent.forEach(t => {
-      const key = `${t.amount}-${t.description}`;
+      const key = `${t.amount} -${t.description} `;
       counts[key] = (counts[key] || 0) + 1;
     });
 
@@ -180,7 +182,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       if (filters.paymentMethod && t.paymentMethod !== filters.paymentMethod) return false;
 
       return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }).sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
   }, [transactions, filters]);
 
   // Actions
@@ -189,7 +191,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       // Validate date strictly
       const dateError = validateDate(tx.date);
       if (dateError) {
-        toast.error('Error de validación', dateError);
+        toastError('Error de validación', dateError);
         return null;
       }
 
@@ -202,11 +204,12 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       toast.success(
         tx.type === 'income' ? 'Ingreso registrado' : 'Gasto registrado',
-        `${tx.description}: $${tx.amount.toLocaleString()}`
+        `${tx.description}: $${tx.amount.toLocaleString()} `
       );
       return newTx;
-    } catch (error: any) {
-      toast.error('Error al guardar', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error adding transaction:', message);
       return null;
     }
   }, [toast]);
@@ -264,8 +267,9 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
         }
       });
       return true;
-    } catch (error: any) {
-      toast.error('Error al eliminar', error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('Error updating commission:', message);
       return false;
     }
   }, [transactions, toast]);

@@ -3,6 +3,7 @@ import { Search, Filter, Download, Calendar, TrendingUp, TrendingDown, List } fr
 import { Transaction } from '../types';
 import { TransactionList } from './TransactionList';
 import { FilterModal } from './FilterModal';
+import { parseLocalDate } from '../utils/dateHelpers';
 
 interface TransactionsScreenProps {
   transactions: Transaction[];
@@ -54,10 +55,10 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
 
     // Date range filter
     if (filters.dateFrom) {
-      result = result.filter(t => new Date(t.date) >= new Date(filters.dateFrom!));
+      result = result.filter(t => parseLocalDate(t.date) >= parseLocalDate(filters.dateFrom!));
     }
     if (filters.dateTo) {
-      result = result.filter(t => new Date(t.date) <= new Date(filters.dateTo!));
+      result = result.filter(t => parseLocalDate(t.date) <= parseLocalDate(filters.dateTo!));
     }
 
     // Payment method filter

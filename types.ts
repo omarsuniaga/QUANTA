@@ -105,6 +105,8 @@ export interface Transaction {
   category: string;
   description: string; // Maps to "description" in Firestore (concept)
   date: string; // ISO Date/DateTime string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
+  time?: string; // Optional HH:MM string for precise chronological order
+  isPlanned?: boolean; // If true, it's a planned transaction (draft/upcoming)
   
   // Context
   isRecurring: boolean;
@@ -412,6 +414,7 @@ export interface DashboardStats {
   committedSavings: number;
 }
 
+
 // --- CUSTOM CATEGORIES ---
 
 export interface CustomCategory {
@@ -426,4 +429,86 @@ export interface CustomCategory {
   type: 'income' | 'expense' | 'both'; // Category type
   isDefault?: boolean; // System default categories
   order?: number;
+}
+
+// --- UTILITY TYPES FOR TYPE SAFETY ---
+
+/**
+ * Type for creating a new transaction (omits auto-generated fields)
+ */
+export type TransactionInput = Omit<Transaction, 'id' | 'createdAt'>;
+
+/**
+ * Type for updating an existing transaction (all fields optional except what's required)
+ */
+export type TransactionUpdate = Partial<Transaction>;
+
+/**
+ * Transaction filter options
+ */
+export interface TransactionFilters {
+  categories?: string[];
+  type?: 'income' | 'expense' | 'all';
+  dateRange?: { start: string; end: string };
+  dateFrom?: string; // Legacy support
+  dateTo?: string; // Legacy support
+  paymentMethods?: string[];
+  minAmount?: number;
+  maxAmount?: number;
+  searchQuery?: string;
+  // Legacy fields for backward compatibility
+  search?: string;
+  category?: string;
+  paymentMethod?: string;
+}
+
+/**
+ * Modal initial values for transaction forms
+ * Can also include subscription fields when modalMode is 'service'
+ */
+export interface TransactionModalData {
+  category?: string;
+  amount?: number;
+  description?: string;
+  paymentMethod?: string;
+  date?: string;
+  time?: string;
+  bankTransferType?: 'internal' | 'ach' | 'lbtr';
+  notes?: string;
+  isRecurring?: boolean;
+  frequency?: Frequency;
+  // Subscription-specific fields
+  name?: string;
+  chargeDay?: number;
+  reminderDays?: number;
+}
+
+/**
+ * Generic error with message (for type guards)
+ */
+export interface ErrorWithMessage {
+  message: string;
+  code?: string;
+  stack?: string;
+}
+
+/**
+ * Type guard to check if error is Error-like
+ */
+export function isErrorWithMessage(error: unknown): error is ErrorWithMessage {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof (error as Record<string, unknown>).message === 'string'
+  );
+}
+
+/**
+ * Safely extract error message
+ */
+export function getErrorMessage(error: unknown): string {
+  if (isErrorWithMessage(error)) return error.message;
+  if (typeof error === 'string') return error;
+  return 'Unknown error occurred';
 }

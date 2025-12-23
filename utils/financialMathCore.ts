@@ -1,4 +1,5 @@
 import { Transaction, DashboardStats, FinancialHealthMetrics } from '../types';
+import { parseLocalDate } from './dateHelpers';
 
 /**
  * Financial Math Core
@@ -38,7 +39,7 @@ export const calculateBurnRate = (transactions: Transaction[], daysLookback: num
 
   const relevantExpenses = transactions.filter(t => 
     t.type === 'expense' && 
-    new Date(t.date) >= cutoffDate
+    parseLocalDate(t.date) >= cutoffDate
   );
 
   const totalSpent = relevantExpenses.reduce((sum, t) => sum + t.amount, 0);
@@ -138,15 +139,15 @@ export const calculateSpendingTrend = (transactions: Transaction[]): { slope: nu
   // Sort by date ascending
   const sorted = [...transactions]
     .filter(t => t.type === 'expense')
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
 
   if (sorted.length === 0) return { slope: 0, trend: 'stable' };
 
-  const startDate = new Date(sorted[0].date).getTime();
+  const startDate = parseLocalDate(sorted[0].date).getTime();
   
   // Prepare data points (x = days since start, y = daily spending amount)
   const points = sorted.map(t => {
-    const daysDiff = (new Date(t.date).getTime() - startDate) / (1000 * 60 * 60 * 24);
+    const daysDiff = (parseLocalDate(t.date).getTime() - startDate) / (1000 * 60 * 60 * 24);
     return { x: daysDiff, y: t.amount };
   });
 
@@ -259,7 +260,7 @@ export const calculateDailyIncome = (transactions: Transaction[], daysLookback: 
 
   const relevantIncome = transactions.filter(t => 
     t.type === 'income' && 
-    new Date(t.date) >= cutoffDate
+    parseLocalDate(t.date) >= cutoffDate
   );
 
   const totalIncome = relevantIncome.reduce((sum, t) => sum + t.amount, 0);

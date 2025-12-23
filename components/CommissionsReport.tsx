@@ -1,12 +1,11 @@
 import React, { useMemo } from 'react';
+import { useI18n } from '../contexts/I18nContext';
+import { parseLocalDate } from '../utils/dateHelpers';
 import {
     TrendingDown,
     CreditCard,
     Building2,
-    Calendar,
     ArrowLeft,
-    DollarSign,
-    Percent,
     Receipt
 } from 'lucide-react';
 import { Transaction, Account, AppSettings } from '../types';
@@ -25,7 +24,7 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
     onBack
 }) => {
     const currencySymbol = settings.currency.localSymbol;
-    const language = settings.language.startsWith('es') ? 'es' : 'en';
+    const { language } = useI18n();
 
     // YTD Calculations
     const metrics = useMemo(() => {
@@ -33,7 +32,7 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
         const currentYear = now.getFullYear();
 
         const ytdTransactions = transactions.filter(tx => {
-            const txDate = new Date(tx.date);
+            const txDate = parseLocalDate(tx.date);
             return txDate.getFullYear() === currentYear && (tx.commissionAmount || 0) > 0;
         });
 
@@ -67,6 +66,35 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
         return { totalLost, byAccount, byType, count: ytdTransactions.length };
     }, [transactions, accounts]);
 
+    const l = {
+        es: {
+            title: 'Reporte de Comisiones',
+            subtitle: 'Capital perdido en comisiones bancarias (YTD)',
+            totalLost: 'Total perdido este año',
+            calculatedOn: 'Calculado sobre',
+            transactions: 'transacciones',
+            transfers: 'Transferencias',
+            cards: 'Tarjetas',
+            accountDetail: 'Detalle por cuenta',
+            noCommissions: 'No hay comisiones registradas aún este año.',
+            insightTitle: '💡 Recomendación Pro',
+            insight: 'Has perdido un monto considerable en comisiones. Considera consolidar tus transferencias o buscar cuentas con tasas de comisión más bajas.'
+        },
+        en: {
+            title: 'Commissions Report',
+            subtitle: 'Capital lost to banking fees (YTD)',
+            totalLost: 'Total lost this year',
+            calculatedOn: 'Calculated over',
+            transactions: 'transactions',
+            transfers: 'Transfers',
+            cards: 'Cards',
+            accountDetail: 'Breakdown by account',
+            noCommissions: 'No commissions recorded yet this year.',
+            insightTitle: '💡 Pro Insight',
+            insight: 'You have lost a significant amount in fees. Consider consolidating your transfers or looking for accounts with lower commission rates.'
+        }
+    }[language.startsWith('es') ? 'es' : 'en'];
+
     return (
         <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
             {/* Header */}
@@ -79,10 +107,10 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                 </button>
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 dark:text-white">
-                        {language === 'es' ? 'Reporte de Comisiones' : 'Commissions Report'}
+                        {l.title}
                     </h2>
                     <p className="text-xs text-slate-500">
-                        {language === 'es' ? 'Capital perdido en comisiones bancarias (YTD)' : 'Capital lost to banking fees (YTD)'}
+                        {l.subtitle}
                     </p>
                 </div>
             </div>
@@ -95,16 +123,14 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                             <TrendingDown className="w-6 h-6" />
                         </div>
                         <p className="text-sm font-medium opacity-90">
-                            {language === 'es' ? 'Total perdido este año' : 'Total lost this year'}
+                            {l.totalLost}
                         </p>
                     </div>
                     <h1 className="text-4xl font-black mb-1">
                         {currencySymbol}{metrics.totalLost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </h1>
                     <p className="text-xs opacity-75">
-                        {language === 'es'
-                            ? `Calculado sobre ${metrics.count} transacciones`
-                            : `Calculated over ${metrics.count} transactions`}
+                        {l.calculatedOn} {metrics.count} {l.transactions}
                     </p>
                 </div>
 
@@ -114,7 +140,7 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                         <div className="flex items-center gap-2 mb-2">
                             <Building2 className="w-4 h-4 text-blue-500" />
                             <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                {language === 'es' ? 'Transferencias' : 'Transfers'}
+                                {l.transfers}
                             </span>
                         </div>
                         <p className="text-lg font-bold text-slate-800 dark:text-white">
@@ -125,7 +151,7 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                         <div className="flex items-center gap-2 mb-2">
                             <CreditCard className="w-4 h-4 text-purple-500" />
                             <span className="text-[10px] font-bold text-slate-500 uppercase">
-                                {language === 'es' ? 'Tarjetas' : 'Cards'}
+                                {l.cards}
                             </span>
                         </div>
                         <p className="text-lg font-bold text-slate-800 dark:text-white">
@@ -137,7 +163,7 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                 {/* Account List */}
                 <div className="space-y-3">
                     <h3 className="text-xs font-bold text-slate-500 uppercase px-1">
-                        {language === 'es' ? 'Detalle por cuenta' : 'Breakdown by account'}
+                        {l.accountDetail}
                     </h3>
                     {metrics.byAccount.length > 0 ? (
                         metrics.byAccount.map((acc: any, i: number) => (
@@ -157,7 +183,7 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                                         -{currencySymbol}{acc.amount.toLocaleString()}
                                     </p>
                                     <p className="text-[10px] text-slate-400">
-                                        {((acc.amount / metrics.totalLost) * 100).toFixed(1)}% {language === 'es' ? 'del total' : 'of total'}
+                                        {((acc.amount / metrics.totalLost) * 100).toFixed(1)}% {language.startsWith('es') ? 'del total' : 'of total'}
                                     </p>
                                 </div>
                             </div>
@@ -166,7 +192,7 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                         <div className="bg-white dark:bg-slate-800 p-8 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700 text-center">
                             <Receipt className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                             <p className="text-sm text-slate-500">
-                                {language === 'es' ? 'No hay comisiones registradas aún este año.' : 'No commissions recorded yet this year.'}
+                                {l.noCommissions}
                             </p>
                         </div>
                     )}
@@ -176,12 +202,10 @@ const CommissionsReport: React.FC<CommissionsReportProps> = ({
                 {metrics.totalLost > 0 && (
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl p-4">
                         <h4 className="text-xs font-bold text-indigo-700 dark:text-indigo-400 mb-1">
-                            {language === 'es' ? '💡 Recomendación Pro' : '💡 Pro Insight'}
+                            {l.insightTitle}
                         </h4>
                         <p className="text-[11px] text-indigo-600 dark:text-indigo-300 leading-relaxed">
-                            {language === 'es'
-                                ? `Haz perdido un monto considerable en comisiones. Considera consolidar tus transferencias o buscar cuentas con tasas de comisión más bajas.`
-                                : `You have lost a significant amount in fees. Consider consolidating your transfers or looking for accounts with lower commission rates.`}
+                            {l.insight}
                         </p>
                     </div>
                 )}

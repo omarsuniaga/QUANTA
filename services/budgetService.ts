@@ -1,4 +1,5 @@
 import { Budget, BudgetAlert, Transaction } from '../types';
+import { parseLocalDate } from '../utils/dateHelpers';
 
 /**
  * Budget Service
@@ -72,7 +73,7 @@ export class BudgetService {
 
     return transactions
       .filter(t => {
-        const transDate = new Date(t.date);
+        const transDate = parseLocalDate(t.date);
         return (
           t.type === 'expense' &&
           t.category === category &&
@@ -397,7 +398,7 @@ export class BudgetService {
     threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
     
     const recentTransactions = transactions.filter(t => {
-      const date = new Date(t.date);
+      const date = parseLocalDate(t.date);
       return t.type === 'expense' && date >= threeMonthsAgo;
     });
 
@@ -504,7 +505,7 @@ export class BudgetService {
       
       const monthTotal = transactions
         .filter(t => {
-          const date = new Date(t.date);
+          const date = parseLocalDate(t.date);
           return (
             t.category.toLowerCase() === category.toLowerCase() &&
             date >= monthStart &&

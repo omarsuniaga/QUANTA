@@ -19,6 +19,7 @@ import { BudgetService } from '../services/budgetService';
 import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
 import { DynamicIcon, getColorClasses } from './IconPicker';
+import { parseLocalDate } from '../utils/dateHelpers';
 
 interface BudgetsScreenProps {
   budgets: Budget[];
@@ -156,14 +157,14 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
     return transactions.filter(tx => {
       if (tx.type !== 'expense' || tx.category !== budget.category) return false;
 
-      const txDate = new Date(tx.date);
+      const txDate = parseLocalDate(tx.date); // Ensure txDate is defined here
 
       if (budget.period === 'monthly') {
         return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
       } else {
         return txDate.getFullYear() === currentYear;
       }
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }).sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
   };
 
   // Toggle budget expansion
@@ -503,7 +504,7 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                                     {tx.description || (language === 'es' ? 'Sin descripción' : 'No description')}
                                   </p>
                                   <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">
-                                    {new Date(tx.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                                    {parseLocalDate(tx.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
                                       day: 'numeric',
                                       month: 'short',
                                       year: 'numeric'

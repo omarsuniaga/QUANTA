@@ -27,7 +27,7 @@ export const hasValidApiKey = (): boolean => {
 };
 
 // Helper to generate cache keys
-const generateCacheKey = (prefix: string, data: any): string => {
+const generateCacheKey = (prefix: string, data: Record<string, unknown>): string => {
   const hash = JSON.stringify(data).slice(0, 100);
   return `${prefix}_${hash}`;
 };
@@ -51,14 +51,15 @@ export const geminiService = {
       return (text && text.length > 0) 
         ? { success: true, message: '✅ API Key válida y funcional' }
         : { success: false, message: 'La API key no generó una respuesta válida' };
-    } catch (error: any) {
-      console.error("API Key test error:", error);
-      const isRateLimit = error.message?.includes('429') || error.message?.includes('RESOURCE_EXHAUSTED');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('AI call failed:', message);
+      const isRateLimit = message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
       return { 
         success: false, 
         message: isRateLimit 
           ? '⚠️ API Key válida pero has excedido el límite de peticiones.' 
-          : `❌ Error: ${error.message || 'API Key inválida'}` 
+          : `❌ Error: ${message || 'API Key inválida'}` 
       };
     }
   },
@@ -128,8 +129,9 @@ export const geminiService = {
         },
         { cacheDurationMs: 60 * 1000, priority: 'high' }
       );
-    } catch (error) {
-      console.error("Gemini Parse Error:", error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error("Gemini Parse Error:", message);
       return localCategory ? { category: localCategory, amount: estimatedAmount } : null;
     }
   },
@@ -156,14 +158,14 @@ export const geminiService = {
     );
 
     // 2. Prepare Context for AI
-    const contextData = {
+    const contextData: Record<string, unknown> = {
       ...metrics,
       currentBalance: stats.balance,
       activeGoals: goals.map(g => `${g.name}: ${Math.round((g.currentAmount/g.targetAmount)*100)}% complete`),
       topCategories: transactions
         .filter(t => t.type === 'expense')
         .slice(0, 20)
-        .reduce((acc: any, t) => {
+        .reduce((acc: Record<string, number>, t) => {
           acc[t.category] = (acc[t.category] || 0) + t.amount;
           return acc;
         }, {})
@@ -220,8 +222,9 @@ export const geminiService = {
         },
         { cacheDurationMs: 30 * 60 * 1000, priority: 'normal' }
       );
-    } catch (error: any) {
-      console.error("Gemini Insight Error:", error);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      console.warn('Gemini API call failed:', message);
       return [];
     }
   },

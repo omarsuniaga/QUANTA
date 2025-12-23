@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
+import {
   Zap, Plus, ChevronRight, TrendingDown, Receipt, CheckCircle2, Sparkles
 } from 'lucide-react';
 import { Transaction } from '../types';
 import { useTransactions, useSettings, useI18n } from '../contexts';
 import { storageService } from '../services/storageService';
+import { parseLocalDate, getTodayDateString } from '../utils/dateHelpers';
 
 interface QuickExpenseWidgetProps {
   onOpenFullScreen: () => void;
@@ -14,7 +15,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   const { transactions, addTransaction } = useTransactions();
   const { currencySymbol, currencyCode } = useSettings();
   const { language } = useI18n();
-  
+
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('express');
@@ -29,10 +30,10 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
       let custom = [];
       try {
         custom = await storageService.getCategories();
-      } catch {}
+      } catch { }
       // Filter only expense categories created by user
       const expenseCategories = custom.filter(c => c.type === 'expense');
-      
+
       // If user has no categories, add a default "Express" option
       if (expenseCategories.length === 0) {
         expenseCategories.push({
@@ -43,7 +44,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
           color: 'amber'
         });
       }
-      
+
       setCategories(expenseCategories);
       // Set first category as default
       if (expenseCategories.length > 0) {
@@ -55,7 +56,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
 
   // Get today's expenses
   const todayExpenses = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     return transactions
       .filter(tx => tx.type === 'expense' && tx.date && tx.date.startsWith(today))
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
@@ -63,7 +64,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   }, [transactions]);
 
   const todayTotal = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayDateString();
     return transactions
       .filter(tx => tx.type === 'expense' && tx.date && tx.date.startsWith(today))
       .reduce((sum, tx) => sum + tx.amount, 0);
@@ -72,27 +73,27 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   // Smart suggestion based on spending patterns and proportions
   const generateSmartSuggestion = useMemo(() => {
     if (!category || transactions.length < 5) return null;
-    
+
     // Find most common descriptions for this category
-    const categoryTransactions = transactions.filter(t => 
+    const categoryTransactions = transactions.filter(t =>
       t.type === 'expense' && t.category === category && t.description
     );
-    
+
     if (categoryTransactions.length === 0) return null;
-    
+
     // Group by description and count
     const descriptionMap = categoryTransactions.reduce((acc, t) => {
       const desc = t.description.trim();
       acc[desc] = (acc[desc] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    
+
     // Get top 3 most common
     const topDescriptions = Object.entries(descriptionMap)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([desc]) => desc);
-    
+
     return topDescriptions.length > 0 ? topDescriptions[0] : null;
   }, [category, transactions]);
 
@@ -127,14 +128,15 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
     if (!amount || parseFloat(amount) <= 0 || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       await addTransaction({
         amount: parseFloat(amount),
         type: 'expense',
         category: category || 'express',
         description: description.trim() || 'Gasto rápido',
         date: today,
-        paymentMethod: 'cash'
+        paymentMethod: 'cash',
+        isRecurring: false
       });
       setAmount('');
       setDescription('');

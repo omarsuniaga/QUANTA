@@ -6,7 +6,9 @@ import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { FinancialHealthCard } from './FinancialHealthCard';
 import { SurplusDistributionView } from './SurplusDistributionView';
 import { getFinancialHealth } from '../utils/financialHealth';
+import { storageService } from '../services/storageService';
 import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
+import { parseLocalDate } from '../utils/dateHelpers';
 import { ModalWrapper } from './ModalWrapper';
 
 interface IncomeScreenProps {
@@ -68,7 +70,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   const thisMonthIncome = useMemo(() => {
     return incomeTransactions
       .filter(t => {
-        const date = new Date(t.date);
+        const date = parseLocalDate(t.date);
         return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
       })
       .reduce((sum, t) => sum + t.amount, 0);
@@ -79,7 +81,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const recentIncomes = incomeTransactions.filter(t => new Date(t.date) >= sixMonthsAgo);
+    const recentIncomes = incomeTransactions.filter(t => parseLocalDate(t.date) >= sixMonthsAgo);
     const monthsCount = Math.min(6, new Date().getMonth() + 1);
 
     return recentIncomes.reduce((sum, t) => sum + t.amount, 0) / (monthsCount || 1);
@@ -101,7 +103,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = parseLocalDate(dateStr);
     const locale = language === 'es' ? 'es-ES' : 'en-US';
     return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
   };
@@ -249,8 +251,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
                 {/* Dropdown Menu */}
                 {activeMenu === income.id && (
                   <>
-                    <div 
-                      className="fixed inset-0 z-40" 
+                    <div
+                      className="fixed inset-0 z-40"
                       onClick={() => setActiveMenu(null)}
                     />
                     <div className="absolute right-3 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden min-w-[140px]">
@@ -266,8 +268,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
                       </button>
                       <button
                         onClick={() => {
-                          setDeleteConfirm({ 
-                            id: income.id, 
+                          setDeleteConfirm({
+                            id: income.id,
                             name: income.description,
                             type: 'fixed'
                           });
@@ -349,8 +351,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
                 {/* Dropdown Menu */}
                 {activeMenu === income.id && (
                   <>
-                    <div 
-                      className="fixed inset-0 z-40" 
+                    <div
+                      className="fixed inset-0 z-40"
                       onClick={() => setActiveMenu(null)}
                     />
                     <div className="absolute right-3 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden min-w-[140px]">
@@ -366,8 +368,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
                       </button>
                       <button
                         onClick={() => {
-                          setDeleteConfirm({ 
-                            id: income.id, 
+                          setDeleteConfirm({
+                            id: income.id,
                             name: income.description,
                             type: 'extra'
                           });
@@ -416,13 +418,13 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
               </div>
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">
-              {language === 'es' 
-                ? `¿Eliminar ingreso ${deleteConfirm.type === 'fixed' ? 'fijo' : 'extra'}?` 
+              {language === 'es'
+                ? `¿Eliminar ingreso ${deleteConfirm.type === 'fixed' ? 'fijo' : 'extra'}?`
                 : `Delete ${deleteConfirm.type === 'fixed' ? 'fixed' : 'extra'} income?`}
             </h3>
             <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-2">
-              {language === 'es' 
-                ? '¿Estás seguro de que deseas eliminar este ingreso?' 
+              {language === 'es'
+                ? '¿Estás seguro de que deseas eliminar este ingreso?'
                 : 'Are you sure you want to delete this income?'}
             </p>
             <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center mb-6 bg-slate-100 dark:bg-slate-700/50 rounded-lg py-2 px-3">

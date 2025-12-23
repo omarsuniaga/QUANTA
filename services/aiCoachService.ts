@@ -14,6 +14,8 @@ import {
   ChallengeTemplate,
   FinancialHealthMetrics
 } from '../types';
+import { storageService } from './storageService';
+import { parseLocalDate } from '../utils/dateHelpers';
 import { hasValidApiKey } from './geminiService';
 import { geminiRateLimiter } from './apiRateLimiter';
 import { 
@@ -158,7 +160,7 @@ export const aiCoachService = {
     // Prepare data
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    const recentTx = transactions.filter(t => parseLocalDate(t.date) >= thirtyDaysAgo);
     const expenses = recentTx.filter(t => t.type === 'expense');
     const categorySpending: Record<string, number> = {};
     expenses.forEach(t => categorySpending[t.category] = (categorySpending[t.category] || 0) + t.amount);
@@ -400,7 +402,7 @@ Genera JSON:
   ): Promise<FinancialStrategy[]> {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    const recentTx = transactions.filter(t => parseLocalDate(t.date) >= thirtyDaysAgo);
     
     const totalIncome = recentTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
     const expenses = recentTx.filter(t => t.type === 'expense');

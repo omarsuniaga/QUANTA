@@ -1,0 +1,349 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user is the owner of the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate positive amount
+    function isValidAmount(amount) {
+      return amount is number && amount > 0;
+    }
+
+    // Validate non-negative amount (for currentAmount in goals)
+    function isValidNonNegativeAmount(amount) {
+      return amount is number && amount >= 0;
+    }
+
+    // Validate date format (YYYY-MM-DD or ISO string)
+    function isValidDate(date) {
+      return date is string && (
+        date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') ||
+        date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.*$')
+      );
+    }
+
+    // Validate monetary amount object
+    function isValidMonetaryAmount(amount) {
+      return amount is map && 
+             amount.value is number && 
+             amount.currency is string;
+    }
+
+    // Validate transaction type
+    function isValidTransactionType(type) {
+      return type in ['income', 'expense'];
+    }
+
+    // Validate frequency
+    function isValidFrequency(frequency) {
+      return frequency in ['weekly', 'biweekly', 'monthly', 'yearly'];
+    }
+
+    // Validate that document size is reasonable (< 1MB)
+    function isValidSize() {
+      return request.resource.size < 1000000; // 1MB
+    }
+
+    // Validate email format (basic)
+    function isValidEmail(email) {
+      return email is string && email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    }
+
+    // ============================================
+    // USER PROFILE
+    // ============================================
+
+    match /users/{userId} {
+      // Allow read if user is the owner
+      allow read: if isOwner(userId);
+
+      // Allow create only on user creation (self-registration)
+      allow create: if isAuthenticated() &&
+                     request.auth.uid == userId &&
+                     isValidEmail(request.resource.data.email) &&
+                     request.resource.data.status == 'active';
+
+      // Allow limited updates (only safe fields)
+      allow update: if isOwner(userId) &&
+                     // Only allow updating these fields
+                     request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['lastLoginAt', 'displayName', 'photoURL', 'name']) &&
+                     // User ID and email cannot be changed
+                     request.resource.data.uid == resource.data.uid &&
+                     request.resource.data.email == resource.data.email;
+
+      // Prevent user deletion (soft delete by updating status instead)
+      allow delete: if false;
+
+      // ============================================
+      // TRANSACTIONS SUBCOLLECTION
+      // ============================================
+
+      match /transactions/{transactionId} {
+        // Anyone can read their own transactions
+        allow read: if isOwner(userId);
+
+        // Create transaction with validation
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       (isValidAmount(request.resource.data.amount) || isValidMonetaryAmount(request.resource.data.amount)) &&
+                       isValidDate(request.resource.data.date) &&
+                       isValidTransactionType(request.resource.data.type) &&
+                       request.resource.data.keys().hasAll(['amount', 'type', 'category', 'description', 'date', 'createdAt']);
+
+        // Update transaction with validation
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       (isValidAmount(request.resource.data.amount) || isValidMonetaryAmount(request.resource.data.amount)) &&
+                       // createdAt cannot be changed if it already exists
+                       (!exists(/databases/$(database)/documents/users/$(userId)/transactions/$(transactionId)) || 
+                        request.resource.data.createdAt == resource.data.createdAt);
+
+        // Allow delete
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // GOALS SUBCOLLECTION
+      // ============================================
+
+      match /goals/{goalId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.targetAmount) &&
+                       isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+                       request.resource.data.currentAmount <= request.resource.data.targetAmount &&
+                       request.resource.data.keys().hasAll(['id', 'name', 'targetAmount', 'currentAmount']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.targetAmount) &&
+                       isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+                       // ID cannot be changed
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // SETTINGS SUBCOLLECTION
+      // ============================================
+
+      match /settings/{settingId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize();
+
+        allow update: if isOwner(userId) &&
+                       isValidSize();
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // ACCOUNTS SUBCOLLECTION
+      // ============================================
+
+      match /accounts/{accountId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidNonNegativeAmount(request.resource.data.balance) &&
+                       request.resource.data.keys().hasAll(['id', 'name', 'balance', 'type']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidNonNegativeAmount(request.resource.data.balance);
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // BUDGETS SUBCOLLECTION
+      // ============================================
+
+      match /budgets/{budgetId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.limit) &&
+                       request.resource.data.keys().hasAll(['id', 'category', 'limit']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.limit) &&
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // SUBSCRIPTIONS SUBCOLLECTION
+      // ============================================
+
+      match /subscriptions/{subscriptionId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       isValidAmount(request.resource.data.amount) &&
+                       request.resource.data.keys().hasAll(['id', 'name', 'amount']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // QUICK ACTIONS SUBCOLLECTION
+      // ============================================
+
+      match /quickActions/{actionId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize();
+      }
+
+      // ============================================
+      // PROMOS SUBCOLLECTION
+      // ============================================
+
+      match /promos/{promoId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize();
+      }
+
+      // ============================================
+      // CUSTOM CATEGORIES SUBCOLLECTION
+      // ============================================
+
+      match /categories/{categoryId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId) && isValidSize();
+      }
+
+      // ============================================
+      // NOTIFICATIONS SUBCOLLECTION
+      // ============================================
+
+      match /notifications/{notificationId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                       isValidSize() &&
+                       request.resource.data.keys().hasAll(['id', 'type', 'message', 'createdAt']);
+
+        allow update: if isOwner(userId) &&
+                       isValidSize() &&
+                       request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwner(userId);
+      }
+
+      // ============================================
+      // AUDIT LOGS SUBCOLLECTION
+      // ============================================
+      match /audit_logs/{logId} {
+        allow read, write: if isOwner(userId) && isValidSize();
+      }
+    }
+
+    // ============================================
+    // GOALS COLLECTION (Root-level - Phase 2.1)
+    // ============================================
+    // Goals created from surplus distribution plans are stored at root level
+    // Each goal belongs to a specific user (userId field)
+    //
+    // IMPORTANT: serverTimestamp() fields (createdAt, deletedAt) are NOT available
+    // in request.resource.data during rule validation. They are processed AFTER
+    // validation succeeds. Therefore, we cannot include them in hasAll() checks.
+
+    match /goals/{goalId} {
+      // Helper function: Validate new goal creation
+      function isValidGoalCreate() {
+        return isAuthenticated() &&
+               // userId MUST match authenticated user (security check)
+               request.resource.data.userId == request.auth.uid &&
+               // Required fields (excluding serverTimestamp fields)
+               request.resource.data.keys().hasAll([
+                 'userId', 'name', 'targetAmount', 'currentAmount', 'status', 'source'
+               ]) &&
+               // Amounts validation
+               isValidAmount(request.resource.data.targetAmount) &&
+               isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+               request.resource.data.currentAmount <= request.resource.data.targetAmount &&
+               // Status must be 'active' or 'completed' on creation
+               request.resource.data.status in ['active', 'completed'] &&
+               // Source validation (manual or surplus_plan)
+               request.resource.data.source is string &&
+               // Size check
+               isValidSize();
+      }
+
+      // Helper function: Validate goal update
+      function isValidGoalUpdate() {
+        return isAuthenticated() &&
+               // Must be owner
+               request.auth.uid == resource.data.userId &&
+               // Cannot change userId
+               request.resource.data.userId == resource.data.userId &&
+               // Cannot change createdAt if it exists
+               (!request.resource.data.keys().hasAny(['createdAt']) || 
+                request.resource.data.createdAt == resource.data.createdAt) &&
+               // Amounts validation
+               isValidAmount(request.resource.data.targetAmount) &&
+               isValidNonNegativeAmount(request.resource.data.currentAmount) &&
+               // Valid status transitions (active, completed, deleted for soft-delete)
+               request.resource.data.status in ['active', 'deleted', 'completed'] &&
+               // If status is 'deleted', deletedAt can be set (serverTimestamp)
+               // We don't validate deletedAt presence since it's a serverTimestamp
+               // Size check
+               isValidSize();
+      }
+
+      // READ: User can only read their own goals
+      // Supports queries with userId filter
+      allow read: if isAuthenticated() && 
+                    resource.data.userId == request.auth.uid;
+
+      // CREATE: User can only create goals for themselves
+      allow create: if isValidGoalCreate();
+
+      // UPDATE: User can only update their own goals
+      // Allows updating status to 'deleted' (soft-delete) with deletedAt timestamp
+      allow update: if isValidGoalUpdate();
+
+      // DELETE: Physical deletion blocked - use soft-delete instead
+      // Set status='deleted' and deletedAt via update
+      allow delete: if false;
+    }
+
+    // ============================================
+    // DENY ALL OTHER ACCESS
+    // ============================================
+
+    // Explicitly deny access to any other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

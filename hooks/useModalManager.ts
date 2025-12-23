@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
-import { Goal, Promo, Budget, Transaction } from '../types';
+import { Goal, Promo, Budget, Transaction, TransactionModalData } from '../types';
 
 export interface ModalState {
   show: boolean;
   mode?: 'income' | 'expense' | 'service';
-  initialValues?: any;
-  editingItem?: any;
+  initialValues?: TransactionModalData;
+  editingItem?: Transaction;
 }
 
 /**
@@ -41,7 +41,7 @@ export function useModalManager() {
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
 
   // Action Modal handlers
-  const openActionModal = useCallback((mode: 'income' | 'expense' | 'service', initialValues?: any, transactionToEdit?: Transaction) => {
+  const openActionModal = useCallback((mode: 'income' | 'expense' | 'service', initialValues?: TransactionModalData, transactionToEdit?: Transaction) => {
     setModalMode(mode);
     setModalInitialValues(initialValues);
     setTransactionToEdit(transactionToEdit || null);

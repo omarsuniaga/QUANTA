@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  X, Plus, Trash2, Edit3, Calendar, Search, Filter, 
+import {
+  X, Plus, Trash2, Edit3, Calendar, Search, Filter,
   ChevronDown, ChevronLeft, ChevronRight, Zap, Receipt,
   Clock, TrendingDown, CheckCircle2
 } from 'lucide-react';
 import { Transaction, CustomCategory } from '../types';
 import { useTransactions, useSettings, useI18n } from '../contexts';
 import { storageService } from '../services/storageService';
+import { parseLocalDate, getTodayDateString } from '../utils/dateHelpers';
 
 interface QuickExpenseScreenProps {
   isOpen: boolean;
@@ -17,49 +18,49 @@ type DateFilter = 'today' | 'week' | 'month' | 'custom';
 
 export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, onClose }) => {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransactions();
-  const { settings, currencySymbol, currencyCode } = useSettings();
+  const { settings, budgets, currencySymbol, currencyCode } = useSettings();
   const { t, language } = useI18n();
-  
+
   // Form state
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  
+
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editDate, setEditDate] = useState('');
-  
+
   // Filter state
   const [dateFilter, setDateFilter] = useState<DateFilter>('month');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Custom categories state
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
-  
+
   // Load custom categories
   useEffect(() => {
     storageService.getCategories().then(setCustomCategories).catch(console.error);
   }, []);
 
-  // Get expense categories from settings
+  // Get expense categories from budgets
   const expenseCategories = useMemo(() => {
-    return settings?.categories?.filter(c => c.type === 'expense') || [];
-  }, [settings?.categories]);
+    return budgets?.filter(b => b.isActive) || [];
+  }, [budgets]);
 
   // Filter quick expenses (category = 'express' or gastos rápidos)
   const quickExpenses = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     let filtered = transactions.filter(tx => tx.type === 'expense');
-    
+
     // Apply date filter
     if (dateFilter === 'today') {
       const todayStr = today.toISOString().split('T')[0];
@@ -67,27 +68,27 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
     } else if (dateFilter === 'week') {
       const weekAgo = new Date(today);
       weekAgo.setDate(weekAgo.getDate() - 7);
-      filtered = filtered.filter(tx => new Date(tx.date) >= weekAgo);
+      filtered = filtered.filter(tx => parseLocalDate(tx.date) >= weekAgo);
     } else if (dateFilter === 'month') {
       const monthAgo = new Date(today);
       monthAgo.setMonth(monthAgo.getMonth() - 1);
-      filtered = filtered.filter(tx => new Date(tx.date) >= monthAgo);
+      filtered = filtered.filter(tx => parseLocalDate(tx.date) >= monthAgo);
     } else if (dateFilter === 'custom' && customFrom && customTo) {
       filtered = filtered.filter(tx => tx.date >= customFrom && tx.date <= customTo);
     }
-    
+
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(tx => 
+      filtered = filtered.filter(tx =>
         tx.description.toLowerCase().includes(query) ||
         tx.category.toLowerCase().includes(query)
       );
     }
-    
+
     // Sort by date descending, then by createdAt (time) descending
     return filtered.sort((a, b) => {
-      const dateCompare = new Date(b.date).getTime() - new Date(a.date).getTime();
+      const dateCompare = parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime();
       if (dateCompare !== 0) return dateCompare;
       // Same date, sort by createdAt (time)
       return (b.createdAt || 0) - (a.createdAt || 0);
@@ -116,46 +117,45 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
   // Helper to get category display name
   const getCategoryName = (categoryId: string): string => {
     if (categoryId === 'express') return 'Express';
-    
-    // First try expense categories from settings
-    const cat = expenseCategories.find(c => c.id === categoryId);
+
+    // First try expense categories from budgets
+    const cat = expenseCategories.find(c => c.id === categoryId || c.category === categoryId);
     if (cat) {
-      return typeof cat.name === 'object' ? (cat.name[language] || cat.name.es || cat.name.en) : cat.name;
+      return cat.name;
     }
-    
+
     // Try custom categories (by id or key)
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat) {
       return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
-    
-    // Fallback: try to find in all categories from settings
-    const allCat = settings?.categories?.find(c => c.id === categoryId);
+
+    // Fallback: try to find in all budgets
+    const allCat = budgets?.find(c => c.id === categoryId || c.category === categoryId);
     if (allCat) {
-      return typeof allCat.name === 'object' ? (allCat.name[language] || allCat.name.es || allCat.name.en) : allCat.name;
+      return allCat.name;
     }
-    
+
     // Try translation system for default categories
     const translated = (t.categories as Record<string, string>)[categoryId];
     if (translated && translated !== categoryId) return translated;
-    
+
     // If no translation found, it's likely an ID - use generic name
     return language === 'es' ? 'Otra categoría' : 'Other category';
   };
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr + 'T12:00:00');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const date = parseLocalDate(dateStr);
+    const today = parseLocalDate(getTodayDateString());
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     if (dateStr === today.toISOString().split('T')[0]) {
       return language === 'es' ? 'Hoy' : 'Today';
     } else if (dateStr === yesterday.toISOString().split('T')[0]) {
       return language === 'es' ? 'Ayer' : 'Yesterday';
     }
-    
+
     // Format as DD/MM/AAAA
     const day = date.getDate().toString().padStart(2, '0');
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -174,20 +174,21 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0) return;
-    
+    if (!amount || parseFloat(amount) <= 0 || isSubmitting) return;
+
     setIsSubmitting(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getTodayDateString();
       await addTransaction({
         amount: parseFloat(amount),
         type: 'expense',
-        category: 'express',
+        category: 'express', // Assuming 'express' is the default category for quick expenses
         description: description.trim() || 'Gasto rápido',
         date: today,
+        isRecurring: false,
         paymentMethod: 'cash'
       });
-      
+
       setAmount('');
       setDescription('');
       setShowSuccess(true);
@@ -217,14 +218,14 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
 
   const saveEdit = async () => {
     if (!editingId || !editAmount) return;
-    
+
     await updateTransaction(editingId, {
       amount: parseFloat(editAmount),
       description: editDescription.trim() || 'Gasto rápido',
       category: editCategory,
       date: editDate
     });
-    
+
     cancelEdit();
   };
 
@@ -306,32 +307,30 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
             <button
               key={filter}
               onClick={() => setDateFilter(filter)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                dateFilter === filter
-                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-              }`}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${dateFilter === filter
+                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                }`}
             >
               {filter === 'today' && (language === 'es' ? 'Hoy' : 'Today')}
               {filter === 'week' && (language === 'es' ? 'Esta semana' : 'This week')}
               {filter === 'month' && (language === 'es' ? 'Este mes' : 'This month')}
             </button>
           ))}
-          
+
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 ${
-              dateFilter === 'custom'
-                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
-                : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-            }`}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1 ${dateFilter === 'custom'
+              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+              }`}
           >
             <Calendar className="w-3 h-3" />
             {language === 'es' ? 'Personalizado' : 'Custom'}
           </button>
 
           <div className="flex-1" />
-          
+
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -452,8 +451,8 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
                             >
                               <option value="express">Express</option>
                               {expenseCategories.map(cat => (
-                                <option key={cat.id} value={cat.id}>
-                                  {typeof cat.name === 'object' ? (cat.name[language] || cat.name.es || cat.name.en) : cat.name}
+                                <option key={cat.id} value={cat.category}>
+                                  {cat.name}
                                 </option>
                               ))}
                             </select>

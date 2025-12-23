@@ -112,14 +112,23 @@ export async function syncBatchWithRetry<T, R>(
  * Helper para verificar si un error es retryable
  * (network errors, timeouts, 5xx, etc.)
  */
-export function isRetryableError(error: any): boolean {
+export function isRetryableError(error: unknown): boolean {
+  // Type guard para verificar si es un error-like object
+  const isErrorLike = (err: unknown): err is { message?: string; status?: number; code?: string } => {
+    return typeof err === 'object' && err !== null;
+  };
+
+  if (!isErrorLike(error)) {
+    return false;
+  }
+
   // Network errors
   if (error.message?.includes('network') || error.message?.includes('fetch')) {
     return true;
   }
 
   // HTTP 5xx errors
-  if (error.status >= 500 && error.status < 600) {
+  if (typeof error.status === 'number' && error.status >= 500 && error.status < 600) {
     return true;
   }
 
@@ -150,10 +159,11 @@ export async function firebaseSyncWithRetry<T>(
       useBackoff: true,
       ...options
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Si el error no es retryable, lanzarlo inmediatamente
     if (!isRetryableError(error)) {
-      console.error('[SyncRetry] Error no retryable:', error.message);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[SyncRetry] Error no retryable:', errorMessage);
       throw error;
     }
     throw error;

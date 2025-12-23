@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react';
 import { X, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, Clock, Wallet, TrendingUp, Info } from 'lucide-react';
-import { Goal } from '../types';
+import { Goal, Transaction, Account } from '../types';
+import { parseLocalDate, dateToString } from '../utils/dateHelpers';
 import { Button } from './Button';
 import { useI18n } from '../contexts/I18nContext';
 import { ModalWrapper } from './ModalWrapper';
@@ -70,16 +71,17 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   const getTargetDateFromMonths = (months: number): string => {
     const date = new Date();
     date.setMonth(date.getMonth() + months);
-    return date.toISOString().split('T')[0];
+    return dateToString(date);
   };
 
   // Initialize targetMonths from goal's targetDate
   useEffect(() => {
     if (goal?.targetDate) {
-      const targetDate = new Date(goal.targetDate);
+      // Calculate based on target date
+      const targetDate = parseLocalDate(goal.targetDate);
       const now = new Date();
-      const diffMonths = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
-      setTargetMonths(Math.max(1, diffMonths).toString());
+      const monthsRemaining = Math.max(1, (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth()));
+      setTargetMonths(monthsRemaining.toString());
     }
   }, [goal]);
 
@@ -407,7 +409,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                         </p>
                         <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">
                           <Calendar className="w-3 h-3 inline mr-1" />
-                          {new Date(getTargetDateFromMonths(calculatedTime)).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                          {parseLocalDate(getTargetDateFromMonths(calculatedTime)).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
                             month: 'long',
                             year: 'numeric'
                           })}

@@ -21,6 +21,7 @@ import {
   Sparkles,
   PiggyBank
 } from 'lucide-react';
+import { parseLocalDate } from '../utils/dateHelpers';
 import { Transaction, DashboardStats, Goal, SavingsChallenge } from '../types';
 import { aiCoachService, CHALLENGE_TEMPLATES } from '../services/aiCoachService';
 import { Button } from './Button';
@@ -84,8 +85,8 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
   };
 
   const updateChallengeProgress = (challenge: SavingsChallenge, txs: Transaction[]): SavingsChallenge => {
-    const startDate = new Date(challenge.startDate);
-    const endDate = new Date(challenge.endDate);
+    const startDate = parseLocalDate(challenge.startDate);
+    const endDate = parseLocalDate(challenge.endDate);
     const today = new Date();
 
     if (today > endDate) {
@@ -96,7 +97,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
     // Calculate progress based on challenge type
     let progress = 0;
     const relevantTxs = txs.filter(t => {
-      const txDate = new Date(t.date);
+      const txDate = parseLocalDate(t.date);
       return txDate >= startDate && txDate <= today && t.type === 'expense';
     });
 
@@ -118,7 +119,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
       case 'save_amount':
         // Track actual savings (income - expenses during period)
         const periodIncome = txs
-          .filter(t => new Date(t.date) >= startDate && new Date(t.date) <= today && t.type === 'income')
+          .filter(t => parseLocalDate(t.date) >= startDate && parseLocalDate(t.date) <= today && t.type === 'income')
           .reduce((sum, t) => sum + t.amount, 0);
         const periodExpense = relevantTxs.reduce((sum, t) => sum + t.amount, 0);
         progress = Math.max(0, periodIncome - periodExpense);
@@ -247,7 +248,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
               .map(challenge => {
                 const Icon = getIconComponent(challenge.icon);
                 const progress = (challenge.currentProgress / challenge.targetProgress) * 100;
-                const daysLeft = Math.max(0, Math.ceil((new Date(challenge.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+                const daysLeft = Math.max(0, Math.ceil((parseLocalDate(challenge.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
                 return (
                   <div
@@ -261,7 +262,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
                       <div className="flex-1">
                         <h3 className="font-bold text-slate-800 dark:text-white">{challenge.title}</h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{challenge.description}</p>
-                        
+
                         {/* Progress Bar */}
                         <div className="mt-4">
                           <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
@@ -407,7 +408,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
                     const today = new Date();
                     const endDate = new Date(today);
                     endDate.setDate(endDate.getDate() + template.duration);
-                    
+
                     setSelectedChallenge({
                       id: `${template.id}_${Date.now()}`,
                       type: template.type,
@@ -427,13 +428,12 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
                       reward: template.reward
                     });
                   }}
-                  className={`p-4 rounded-xl border text-center transition-all ${
-                    isActive
+                  className={`p-4 rounded-xl border text-center transition-all ${isActive
                       ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 opacity-50'
                       : isCompleted
-                      ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
-                      : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
-                  }`}
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                        : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
+                    }`}
                 >
                   <div className={`w-10 h-10 rounded-lg bg-${template.color}-100 dark:bg-${template.color}-900/30 flex items-center justify-center mx-auto mb-2`}>
                     {isCompleted ? (

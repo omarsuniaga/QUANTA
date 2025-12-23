@@ -69,16 +69,16 @@ const getUserRef = (uid: string) => db!.collection('users').doc(uid);
 /**
  * Recursively removes undefined values from an object, which Firestore doesn't like.
  */
-const cleanForFirebase = (obj: any): any => {
+const cleanForFirebase = <T>(obj: T): T => {
   if (Array.isArray(obj)) {
-    return obj.map(cleanForFirebase).filter(v => v !== undefined);
+    return obj.map(cleanForFirebase).filter(v => v !== undefined) as T;
   } else if (obj !== null && typeof obj === 'object') {
-    return Object.entries(obj).reduce((acc: any, [key, value]) => {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
       if (value !== undefined) {
         acc[key] = cleanForFirebase(value);
       }
       return acc;
-    }, {});
+    }, {} as Record<string, unknown>) as T;
   }
   return obj;
 };
@@ -410,8 +410,10 @@ export const storageService = {
           // C. Log Audit
           this._logAudit(uid, 'transaction_add', t);
         });
-      } catch(e: any) {
-        console.error("Atomic transaction in Firebase failed:", e.message, e.stack);
+      } catch(e: unknown) {
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        const stack = e instanceof Error ? e.stack : undefined;
+        console.error("Atomic transaction in Firebase failed:", message, stack);
       }
     }
 
@@ -576,8 +578,9 @@ export const storageService = {
           
           this._logAudit(uid, 'transaction_update', t);
         });
-      } catch (e: any) {
-        console.error("Update transaction in Firebase failed:", e.message);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        console.error("Update transaction in Firebase failed:", message);
       }
     }
 
@@ -638,8 +641,9 @@ export const storageService = {
           
           this._logAudit(uid, 'transaction_delete', t);
         });
-      } catch (e: any) {
-        console.error("Delete transaction in Firebase failed:", e.message);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        console.error("Delete transaction in Firebase failed:", message);
       }
     }
 
@@ -685,8 +689,9 @@ export const storageService = {
       try {
         await batch.commit();
         this._logAudit(uid, 'account_update');
-      } catch(e: any) { 
-        console.error("Save accounts to Firebase failed:", e.message); 
+      } catch(e: unknown) { 
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        console.error("Save accounts to Firebase failed:", message); 
       }
     }
   },
@@ -872,8 +877,9 @@ export const storageService = {
       });
       try {
         await batch.commit();
-      } catch(e: any) { 
-        console.error("Save quick actions to Firebase failed:", e.message); 
+      } catch(e: unknown) { 
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        console.error("Save quick actions to Firebase failed:", message); 
       }
     }
   },
@@ -937,8 +943,9 @@ export const storageService = {
         const updatedSubs = localSubs.map(s => s.id === localId ? { ...s, id: docRef.id } : s);
         saveToLocal(LS_KEYS.SUBSCRIPTIONS, updatedSubs);
         return { id: docRef.id, ...sub };
-      } catch(e: any) {
-        console.error("Add subscription to Firebase failed:", e.message);
+      } catch(e: unknown) {
+        const message = e instanceof Error ? e.message : 'Unknown error';
+        console.error("Add subscription to Firebase failed:", message);
       }
     }
     

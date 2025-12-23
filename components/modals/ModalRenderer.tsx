@@ -1,4 +1,5 @@
 import React from 'react';
+import { TransactionModalData, TransactionFilters, Transaction } from '../../types';
 import { ActionModal } from '../ActionModal';
 import { FilterModal } from '../FilterModal';
 import { NotificationPermissionPrompt } from '../NotificationPermissionPrompt';
@@ -11,8 +12,8 @@ interface ModalRendererProps {
   notificationPrompt: { show: boolean };
 
   // Handlers
-  onSaveFromModal: (data: any, modalMode: 'income' | 'expense' | 'service', transactionToEdit: any) => Promise<void>;
-  onApplyFilters: (filters: any) => void;
+  onSaveFromModal: (data: TransactionModalData, modalMode: 'income' | 'expense' | 'service', transactionToEdit: Transaction | null) => Promise<void>;
+  onApplyFilters: (filters: TransactionFilters) => void;
   onCloseModals: {
     action: () => void;
     filter: () => void;
@@ -20,7 +21,7 @@ interface ModalRendererProps {
   };
 
   // Data
-  filters: any;
+  filters: TransactionFilters;
   currencySymbol: string;
   currencyCode: string;
   availableBalance: number;

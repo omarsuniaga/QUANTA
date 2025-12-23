@@ -3,6 +3,7 @@ import { Goal, Promo } from '../types';
 import { GOAL_ICONS } from '../constants';
 import { Plane, ShoppingBag, Gift, Star, Coffee, Music, Plus, Edit2, Info, X, Calendar, Clock, AlertTriangle, CheckCircle2, Wallet, TrendingUp, Play, Trash2 } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
+import { parseLocalDate } from '../utils/dateHelpers';
 
 // --- INFO CONTENT BY LANGUAGE ---
 const INFO_CONTENT = {
@@ -66,7 +67,7 @@ interface InfoModalProps {
 const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, type }) => {
   const { language } = useI18n();
   const content = INFO_CONTENT[type][language];
-  
+
   // Lock body scroll when modal is open
   useEffect(() => {
     if (isOpen) {
@@ -80,21 +81,21 @@ const InfoModal: React.FC<InfoModalProps> = ({ isOpen, onClose, type }) => {
   }, [isOpen]);
 
   if (!isOpen) return null;
-  
+
   return (
-    <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" 
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto"
       onClick={onClose}
     >
-      <div 
-        className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-xl my-auto" 
+      <div
+        className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-xl my-auto"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex justify-between items-start mb-4">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400">
             <Info className="w-5 h-5" />
           </div>
-          <button 
+          <button
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
           >
@@ -133,11 +134,11 @@ interface GoalsWidgetProps {
 const hasContributionInCurrentPeriod = (goal: Goal): boolean => {
   if (!goal.contributionHistory || goal.contributionHistory.length === 0) return false;
   if (!goal.contributionFrequency) return false;
-  
+
   const now = new Date();
   const lastContrib = goal.contributionHistory[goal.contributionHistory.length - 1];
-  const lastDate = new Date(lastContrib.date);
-  
+  const lastDate = parseLocalDate(lastContrib.date);
+
   // Calculate the start of the current period
   let periodStart = new Date(now);
   switch (goal.contributionFrequency) {
@@ -157,7 +158,7 @@ const hasContributionInCurrentPeriod = (goal: Goal): boolean => {
       periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
       break;
   }
-  
+
   return lastDate >= periodStart;
 };
 
@@ -166,97 +167,97 @@ const calculateTimeRemaining = (goal: Goal): { months: number; text: string; tex
   if (goal.currentAmount >= goal.targetAmount) {
     return { months: 0, text: 'Goal reached!', textEs: '¡Meta alcanzada!' };
   }
-  
+
   const remaining = goal.targetAmount - goal.currentAmount;
-  
+
   // If has contribution amount, calculate based on that
   if (goal.contributionAmount && goal.contributionAmount > 0) {
     let periodsNeeded = remaining / goal.contributionAmount;
     let months = 0;
-    
+
     switch (goal.contributionFrequency) {
       case 'weekly': months = periodsNeeded / 4.33; break;
       case 'biweekly': months = periodsNeeded / 2; break;
-      case 'monthly': 
+      case 'monthly':
       default: months = periodsNeeded; break;
     }
-    
+
     if (months < 1) {
       const weeks = Math.ceil(months * 4.33);
-      return { 
-        months, 
-        text: `~${weeks} week${weeks > 1 ? 's' : ''} remaining`, 
-        textEs: `~${weeks} semana${weeks > 1 ? 's' : ''} restante${weeks > 1 ? 's' : ''}` 
+      return {
+        months,
+        text: `~${weeks} week${weeks > 1 ? 's' : ''} remaining`,
+        textEs: `~${weeks} semana${weeks > 1 ? 's' : ''} restante${weeks > 1 ? 's' : ''}`
       };
     } else if (months < 12) {
       const m = Math.ceil(months);
-      return { 
-        months, 
-        text: `~${m} month${m > 1 ? 's' : ''} remaining`, 
-        textEs: `~${m} mes${m > 1 ? 'es' : ''} restante${m > 1 ? 's' : ''}` 
+      return {
+        months,
+        text: `~${m} month${m > 1 ? 's' : ''} remaining`,
+        textEs: `~${m} mes${m > 1 ? 'es' : ''} restante${m > 1 ? 's' : ''}`
       };
     } else {
       const years = Math.floor(months / 12);
       const remainingMonths = Math.ceil(months % 12);
       if (remainingMonths > 0) {
-        return { 
-          months, 
+        return {
+          months,
           text: `~${years}y ${remainingMonths}m remaining`,
           textEs: `~${years}a ${remainingMonths}m restantes`
         };
       }
-      return { 
-        months, 
+      return {
+        months,
         text: `~${years} year${years > 1 ? 's' : ''} remaining`,
         textEs: `~${years} año${years > 1 ? 's' : ''} restante${years > 1 ? 's' : ''}`
       };
     }
   }
-  
+
   // If has target date
   if (goal.targetDate) {
-    const targetDate = new Date(goal.targetDate);
+    const targetDate = parseLocalDate(goal.targetDate);
     const now = new Date();
     const diffMs = targetDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays <= 0) {
       return { months: 0, text: 'Deadline passed', textEs: 'Fecha límite pasada' };
     } else if (diffDays < 30) {
-      return { 
-        months: diffDays / 30, 
+      return {
+        months: diffDays / 30,
         text: `${diffDays} day${diffDays > 1 ? 's' : ''} left`,
         textEs: `${diffDays} día${diffDays > 1 ? 's' : ''} restante${diffDays > 1 ? 's' : ''}`
       };
     } else {
       const months = Math.ceil(diffDays / 30);
-      return { 
-        months, 
+      return {
+        months,
         text: `${months} month${months > 1 ? 's' : ''} left`,
         textEs: `${months} mes${months > 1 ? 'es' : ''} restante${months > 1 ? 's' : ''}`
       };
     }
   }
-  
+
   return { months: -1, text: 'No plan set', textEs: 'Sin plan definido' };
 };
 
 // Get next contribution date
 const getNextContributionDate = (goal: Goal): Date | null => {
   if (!goal.contributionAmount || !goal.contributionFrequency) return null;
-  
+
   const now = new Date();
   let nextDate: Date;
-  
+
   if (goal.nextContributionDate) {
-    nextDate = new Date(goal.nextContributionDate);
+    nextDate = parseLocalDate(goal.nextContributionDate);
     if (nextDate > now) return nextDate;
   }
-  
+
   // Calculate from last contribution or from now
-  const baseDate = goal.lastContributionDate ? new Date(goal.lastContributionDate) : now;
+  const baseDate = goal.lastContributionDate ? parseLocalDate(goal.lastContributionDate) : now;
   nextDate = new Date(baseDate);
-  
+
   switch (goal.contributionFrequency) {
     case 'weekly':
       nextDate.setDate(nextDate.getDate() + 7);
@@ -269,7 +270,7 @@ const getNextContributionDate = (goal: Goal): Date | null => {
       nextDate.setMonth(nextDate.getMonth() + 1);
       break;
   }
-  
+
   // If next date is in the past, calculate from now
   while (nextDate <= now) {
     switch (goal.contributionFrequency) {
@@ -285,7 +286,7 @@ const getNextContributionDate = (goal: Goal): Date | null => {
         break;
     }
   }
-  
+
   return nextDate;
 };
 
@@ -293,7 +294,7 @@ const getNextContributionDate = (goal: Goal): Date | null => {
 const isContributionDue = (goal: Goal): boolean => {
   const nextDate = getNextContributionDate(goal);
   if (!nextDate) return false;
-  
+
   const now = new Date();
   const diffDays = Math.ceil((nextDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   return diffDays <= 3; // Due within 3 days
@@ -325,20 +326,20 @@ const getContributionsNeeded = (goal: Goal): number | null => {
   return Math.ceil(remaining / goal.contributionAmount);
 };
 
-export const GoalsWidget: React.FC<GoalsWidgetProps> = ({ 
-  goals, 
-  onAddContribution, 
-  onEditGoal, 
-  onAddGoal, 
+export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
+  goals,
+  onAddContribution,
+  onEditGoal,
+  onAddGoal,
   onDeleteContribution,
-  currencySymbol = '$', 
+  currencySymbol = '$',
   currencyCode = 'USD',
   availableBalance = 0
 }) => {
   const { language } = useI18n();
   const [showInfo, setShowInfo] = useState(false);
   const [showContribConfirm, setShowContribConfirm] = useState<string | null>(null);
-  const mainGoal = goals[0]; 
+  const mainGoal = goals[0];
 
   const totalSaved = goals.reduce((sum, g) => sum + g.currentAmount, 0);
 
@@ -384,7 +385,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
   const handleContribute = (e: React.MouseEvent, goal: Goal) => {
     e.stopPropagation();
     if (!goal.contributionAmount || availableBalance < goal.contributionAmount) return;
-    
+
     // Check if already contributed in this period
     if (hasContributionInCurrentPeriod(goal)) {
       setShowContribConfirm(goal.id);
@@ -411,9 +412,9 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
 
   return (
     <div className="mt-4 sm:mt-6">
-      <InfoModal 
-        isOpen={showInfo} 
-        onClose={() => setShowInfo(false)} 
+      <InfoModal
+        isOpen={showInfo}
+        onClose={() => setShowInfo(false)}
         type="goals"
       />
       <div className="flex justify-between items-end mb-3 px-1">
@@ -422,7 +423,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
             <p className="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{l.totalSaved}</p>
             <p className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">{totalSaved.toLocaleString()} {currencyCode}</p>
           </div>
-          <button 
+          <button
             onClick={() => setShowInfo(true)}
             className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
             aria-label="Info about Goals"
@@ -430,7 +431,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
             <Info className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           </button>
         </div>
-        <button 
+        <button
           onClick={onAddGoal}
           className="text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 bg-indigo-50 dark:bg-indigo-900/30 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-colors flex items-center gap-1"
         >
@@ -453,12 +454,12 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
           const contributionsNeeded = getContributionsNeeded(mainGoal);
 
           return (
-            <div 
+            <div
               onClick={() => onEditGoal(mainGoal)}
               className="bg-white dark:bg-slate-800 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-100 dark:border-slate-700 relative overflow-hidden group cursor-pointer active:scale-[0.99] transition-all sm:col-span-2 lg:col-span-1"
             >
               <div className={`absolute top-0 right-0 w-20 h-20 sm:w-24 sm:h-24 bg-${mainGoal.color || 'indigo'}-50 dark:bg-${mainGoal.color || 'indigo'}-900/20 rounded-full -mr-6 -mt-6 sm:-mr-8 sm:-mt-8 transition-transform group-hover:scale-110`}></div>
-              
+
               <div className="relative z-10">
                 {/* Header */}
                 <div className="flex justify-between items-start mb-2">
@@ -466,12 +467,12 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                     <h3 className="font-bold text-slate-800 dark:text-white text-base sm:text-lg">{mainGoal.name}</h3>
                     <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">{l.mainGoal}</p>
                   </div>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); onEditGoal(mainGoal); }}
                     className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center bg-${mainGoal.color || 'indigo'}-100 dark:bg-${mainGoal.color || 'indigo'}-900/40 text-${mainGoal.color || 'indigo'}-600 dark:text-${mainGoal.color || 'indigo'}-400 hover:bg-${mainGoal.color || 'indigo'}-200 dark:hover:bg-${mainGoal.color || 'indigo'}-900/60 transition-colors`}
                   >
-                    {mainGoal.icon && GOAL_ICONS[mainGoal.icon] 
-                      ? React.createElement(GOAL_ICONS[mainGoal.icon], { className: "w-3.5 h-3.5 sm:w-4 sm:h-4" }) 
+                    {mainGoal.icon && GOAL_ICONS[mainGoal.icon]
+                      ? React.createElement(GOAL_ICONS[mainGoal.icon], { className: "w-3.5 h-3.5 sm:w-4 sm:h-4" })
                       : <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     }
                   </button>
@@ -484,12 +485,12 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                     <span className="text-slate-400 dark:text-slate-500">{l.target}: {mainGoal.targetAmount.toLocaleString()} {currencyCode}</span>
                   </div>
                   <div className="h-2 sm:h-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={`h-full ${isCompleted ? 'bg-emerald-500' : `bg-${mainGoal.color || 'indigo'}-500`} rounded-full transition-all duration-1000 ease-out`}
                       style={{ width: `${progress}%` }}
                     ></div>
                   </div>
-                  
+
                   {/* Info Row */}
                   <div className="flex justify-between items-center mt-2">
                     {isCompleted ? (
@@ -502,7 +503,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                         {l.remaining}: <span className="text-slate-600 dark:text-slate-400 font-bold">{(mainGoal.targetAmount - mainGoal.currentAmount).toLocaleString()} {currencyCode}</span>
                       </p>
                     )}
-                    
+
                     {/* Time remaining */}
                     {!isCompleted && timeInfo.months >= 0 && (
                       <div className="flex items-center gap-1 text-slate-400 dark:text-slate-500">
@@ -534,7 +535,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                           <span className="text-[9px] sm:text-[10px] font-medium">{l.lastContribution}:</span>
                           <span className="font-bold text-slate-700 dark:text-slate-200">{mainGoal.contributionHistory[mainGoal.contributionHistory.length - 1].amount.toLocaleString()} {currencyCode}</span>
                           <span className="text-slate-400 dark:text-slate-500">·</span>
-                          <span>{new Date(mainGoal.contributionHistory[mainGoal.contributionHistory.length - 1].date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
+                          <span>{parseLocalDate(mainGoal.contributionHistory[mainGoal.contributionHistory.length - 1].date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
                         </div>
                       ) : (
                         <div className="text-slate-400 dark:text-slate-500">{l.configurePlan}</div>
@@ -577,7 +578,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                         ))}
                       </div>
                     )}
-                    
+
                     {/* Contribution amount and action */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
@@ -653,7 +654,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                             const actualIndex = mainGoal.contributionHistory!.length - 1 - idx;
                             return (
                               <div key={idx} className="flex justify-between items-center text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 group">
-                                <span>{new Date(c.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
+                                <span>{parseLocalDate(c.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
                                 <div className="flex items-center gap-2">
                                   <span className="font-bold text-slate-700 dark:text-slate-200">{c.amount.toLocaleString()} {currencyCode}</span>
                                   {onDeleteContribution && (
@@ -696,8 +697,8 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
           const progress = Math.min(100, (goal.currentAmount / goal.targetAmount) * 100);
           const isCompleted = goal.currentAmount >= goal.targetAmount;
           return (
-            <div 
-              key={goal.id} 
+            <div
+              key={goal.id}
               onClick={() => onEditGoal(goal)}
               className="min-w-[120px] bg-white dark:bg-slate-800 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col justify-between cursor-pointer active:scale-95 transition-transform"
             >
@@ -719,8 +720,8 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
             </div>
           );
         })}
-        
-        <button 
+
+        <button
           onClick={onAddGoal}
           className="min-w-[40px] flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-600 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
         >
@@ -745,23 +746,23 @@ const PROMO_ICONS: Record<string, any> = {
 export const PromoCarousel: React.FC<PromoCarouselProps> = ({ promos, onEditPromo, onAddPromo }) => {
   const [showInfo, setShowInfo] = useState(false);
   const { language } = useI18n();
-  
+
   const labels = useMemo(() => ({
     title: language === 'es' ? 'Ideas y Planes' : 'Ideas & Plans',
     infoAriaLabel: language === 'es' ? 'Información sobre Ideas y Planes' : 'Info about Ideas & Plans',
   }), [language]);
-  
+
   return (
     <div className="mt-6 sm:mt-8 mb-16 sm:mb-24">
-      <InfoModal 
-        isOpen={showInfo} 
-        onClose={() => setShowInfo(false)} 
+      <InfoModal
+        isOpen={showInfo}
+        onClose={() => setShowInfo(false)}
         type="ideas"
       />
       <div className="flex justify-between items-center px-1 mb-3 sm:mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-white">{labels.title}</h3>
-          <button 
+          <button
             onClick={() => setShowInfo(true)}
             className="w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-600 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
             aria-label={labels.infoAriaLabel}
@@ -777,8 +778,8 @@ export const PromoCarousel: React.FC<PromoCarouselProps> = ({ promos, onEditProm
         {promos.map(promo => {
           const Icon = PROMO_ICONS[promo.icon] || Star;
           return (
-            <div 
-              key={promo.id} 
+            <div
+              key={promo.id}
               onClick={() => onEditPromo(promo)}
               className="min-w-[160px] sm:min-w-[200px] bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center gap-2 sm:gap-3 transition-transform hover:scale-[1.02] cursor-pointer active:scale-95"
             >

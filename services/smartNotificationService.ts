@@ -16,6 +16,7 @@ import { Transaction, Goal, Subscription, DashboardStats, Budget, FinancialPlan,
 import { pushNotificationService } from './pushNotificationService';
 import { notificationService } from './notificationService';
 import { storageService } from './storageService';
+import { parseLocalDate } from '../utils/dateHelpers';
 import { CATEGORY_TO_GROUP } from '../constants/financialPlans';
 import { calculateBurnRate } from '../utils/financialMathCore';
 
@@ -545,9 +546,9 @@ class SmartNotificationService {
       let nextContribDate: Date;
       
       if (goal.nextContributionDate) {
-        nextContribDate = new Date(goal.nextContributionDate);
+        nextContribDate = parseLocalDate(goal.nextContributionDate);
       } else if (goal.lastContributionDate) {
-        nextContribDate = new Date(goal.lastContributionDate);
+        nextContribDate = parseLocalDate(goal.lastContributionDate);
         switch (goal.contributionFrequency) {
           case 'weekly': nextContribDate.setDate(nextContribDate.getDate() + 7); break;
           case 'biweekly': nextContribDate.setDate(nextContribDate.getDate() + 14); break;
@@ -738,7 +739,7 @@ class SmartNotificationService {
 
     const recentExpenses = transactions.filter(t => 
       t.type === 'expense' && 
-      new Date(t.date) >= oneMonthAgo
+      parseLocalDate(t.date) >= oneMonthAgo
     );
 
     if (recentExpenses.length < 10) return null; // No hay suficientes datos
@@ -747,7 +748,7 @@ class SmartNotificationService {
     
     // Revisar el gasto más reciente
     const latestExpense = recentExpenses
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+      .sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime())[0];
     
     if (!latestExpense || latestExpense.amount < avgExpense * 3) return null;
 
@@ -830,7 +831,7 @@ class SmartNotificationService {
     // Calculate current allocations
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    const recentTx = transactions.filter(t => parseLocalDate(t.date) >= thirtyDaysAgo);
     
     const allocations = {
       needs: 0,
@@ -1071,7 +1072,7 @@ class SmartNotificationService {
 
     for (const expense of recurringExpenses) {
       // Calculate next due date based on the original date
-      const chargeDay = new Date(expense.date).getDate();
+      const chargeDay = parseLocalDate(expense.date).getDate();
       const nextDueDate = new Date(today.getFullYear(), today.getMonth(), chargeDay);
       nextDueDate.setHours(0, 0, 0, 0);
 
@@ -1266,8 +1267,8 @@ class SmartNotificationService {
       !n.dismissed
     ).sort((a, b) => {
       // Sort by due date (earliest first)
-      const dateA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
-      const dateB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+      const dateA = a.dueDate ? parseLocalDate(a.dueDate).getTime() : 0;
+      const dateB = b.dueDate ? parseLocalDate(b.dueDate).getTime() : 0;
       return dateA - dateB;
     });
   }

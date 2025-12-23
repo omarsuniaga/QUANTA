@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Budget, Transaction } from '../types';
 import { BudgetService } from '../services/budgetService';
+import { parseLocalDate } from '../utils/dateHelpers';
 
 /**
  * useBudgetPeriod - Single Source of Truth for Budget Calculations
@@ -67,7 +68,7 @@ export const useBudgetPeriod = (
 
     // 3. Filter transactions for this period
     const periodTransactions = transactions.filter(t => {
-      const txDate = new Date(t.date);
+      const txDate = parseLocalDate(t.date);
       if (period === 'monthly') {
         return txDate.getFullYear() === year && txDate.getMonth() === month;
       } else {
