@@ -224,5 +224,79 @@ export const geminiService = {
       console.error("Gemini Insight Error:", error);
       return [];
     }
+  },
+
+  /**
+   * Fetches banking commissions for a specific bank in the Dominican Republic (2025).
+   */
+  async fetchBankCommissions(bankName: string): Promise<{
+    transferCommissionPercentage: number;
+    cardCommissionPercentage: number;
+    achFeeFixed: number;
+    lbtrFeeFixed: number;
+    disclaimer: string;
+  } | null> {
+    const apiKey = getApiKey();
+    if (!apiKey || !bankName) return null;
+
+    const cacheKey = `ai_bank_fees_${bankName.toLowerCase().replace(/\s+/g, '_')}`;
+    
+    // 1. Check Development/Session Cache
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        sessionStorage.removeItem(cacheKey);
+      }
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    try {
+      return await geminiRateLimiter.execute(
+        cacheKey,
+        async () => {
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: `Retrieve current (2025) banking fees for "${bankName}" in the Dominican Republic.
+            Context: The user is setting up this bank in their financial app.
+            
+            Find:
+            1. Transfer Commission Percentage (MUST include the 0.15% DGII tax plus any bank-specific fee).
+            2. Card Payment Commission Percentage (Merchant/User usage fee).
+            3. ACH Transfer Fixed Fee (RD$ amount).
+            4. LBTR Transfer Fixed Fee (RD$ amount).
+            
+            Return JSON only.`,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  transferCommissionPercentage: { type: Type.NUMBER },
+                  cardCommissionPercentage: { type: Type.NUMBER },
+                  achFeeFixed: { type: Type.NUMBER },
+                  lbtrFeeFixed: { type: Type.NUMBER },
+                  disclaimer: { type: Type.STRING }
+                },
+                required: ['transferCommissionPercentage', 'cardCommissionPercentage', 'achFeeFixed', 'lbtrFeeFixed']
+              }
+            }
+          });
+
+          const result = JSON.parse(response.text || 'null');
+          if (result) {
+            result.disclaimer = "Fees are estimated based on 2025 public bank tariffs.";
+            sessionStorage.setItem(cacheKey, JSON.stringify(result));
+          }
+          return result;
+        },
+        { cacheDurationMs: 24 * 60 * 60 * 1000, priority: 'high' }
+      );
+    } catch (error) {
+      console.error("Gemini Bank Fees Error:", error);
+      return null;
+    }
   }
 };

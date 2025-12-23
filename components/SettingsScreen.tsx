@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { AppSettings, QuickAction, Account, PlanId } from '../types';
 import { Button } from './Button';
 import { FINANCIAL_PLANS } from '../constants/financialPlans';
-import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity, HelpCircle, Building2, Wallet, Banknote, Edit2, ShieldCheck, PieChart as PieChartIcon, TrendingUp } from 'lucide-react';
+import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity, HelpCircle, Building2, Wallet, Banknote, Edit2, ShieldCheck, PieChart as PieChartIcon, TrendingUp, Percent } from 'lucide-react';
 import { storageService } from '../services/storageService';
+import { geminiService } from '../services/geminiService';
 import { useI18n } from '../contexts';
 import { GeminiApiKeySettings } from './GeminiApiKeySettings';
 import { APIUsageMonitor } from './APIUsageMonitor';
 import { AVAILABLE_CURRENCIES, CurrencyOption } from '../constants';
+import { ModalWrapper } from './ModalWrapper';
+import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
 
 // Common financial institutions
 const FINANCIAL_INSTITUTIONS = [
@@ -57,22 +60,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   // Get current currency from settings
   const currentCurrency = AVAILABLE_CURRENCIES.find(c => c.code === settings.currency.localCode) || AVAILABLE_CURRENCIES[0];
 
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState<any>(null);
+
   // Filter currencies by search
   const filteredCurrencies = AVAILABLE_CURRENCIES.filter(c => {
     const search = currencySearch.toLowerCase();
     const name = language === 'es' ? c.nameEs : c.name;
-    return c.code.toLowerCase().includes(search) || 
-           name.toLowerCase().includes(search) ||
-           c.symbol.toLowerCase().includes(search);
+    return c.code.toLowerCase().includes(search) ||
+      name.toLowerCase().includes(search) ||
+      c.symbol.toLowerCase().includes(search);
   });
 
   // Filter institutions by search
-  const filteredInstitutions = FINANCIAL_INSTITUTIONS.filter(inst => 
+  const filteredInstitutions = FINANCIAL_INSTITUTIONS.filter(inst =>
     inst.name.toLowerCase().includes(institutionSearch.toLowerCase())
   );
 
   // Calculate total balance across all accounts
-  const totalBalance = accounts.reduce((sum, acc) => 
+  const totalBalance = accounts.reduce((sum, acc) =>
     acc.isExcludedFromTotal ? sum : sum + acc.balance, 0
   );
 
@@ -125,7 +131,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       ...settings,
       aiConfig: { ...settings.aiConfig, userGeminiApiKey: apiKey }
     });
-    
+
     // También guardar en localStorage para que aiCoachService pueda acceder
     if (apiKey && apiKey.trim() !== '') {
       localStorage.setItem('gemini_api_key', apiKey);
@@ -246,8 +252,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         key={mode}
                         onClick={() => onUpdateSettings({ ...settings, theme: mode })}
                         className={`py-1.5 sm:py-2 px-2 sm:px-3 text-[10px] sm:text-xs font-bold rounded-lg transition-all capitalize ${settings.theme === mode
-                            ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                            : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                          ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                           }`}
                       >
                         {mode === 'system' ? t.settings.system : mode === 'light' ? t.settings.light : t.settings.dark}
@@ -275,8 +281,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <button
                     onClick={() => setLanguage('es')}
                     className={`py-1.5 sm:py-2 px-2 sm:px-3 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${language === 'es'
-                        ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                      ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                       }`}
                   >
                     {t.settings.spanish}
@@ -284,8 +290,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <button
                     onClick={() => setLanguage('en')}
                     className={`py-1.5 sm:py-2 px-2 sm:px-3 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${language === 'en'
-                        ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                      ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                       }`}
                   >
                     {t.settings.english}
@@ -387,11 +393,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         ...settings,
                         aiConfig: { ...settings.aiConfig, selectedPlanId: plan.id as PlanId }
                       })}
-                      className={`flex flex-col p-3 rounded-xl border-2 transition-all text-left ${
-                        isSelected 
-                          ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' 
-                          : 'border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
-                      }`}
+                      className={`flex flex-col p-3 rounded-xl border-2 transition-all text-left ${isSelected
+                        ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                        : 'border-slate-100 dark:border-slate-700 hover:border-slate-200 dark:hover:border-slate-600'
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-bold text-sm text-slate-800 dark:text-white">{plan.name}</span>
@@ -435,7 +440,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     currentApiKey={settings.aiConfig.userGeminiApiKey || ''}
                     onSave={handleSaveApiKey}
                   />
-                  
+
                   {/* API Usage Monitor */}
                   <APIUsageMonitor />
                 </div>
@@ -476,7 +481,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <h3 className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase mb-1">
                 {language === 'es' ? 'Configuración Rápida' : 'Quick Settings'}
               </h3>
-              
+
               {/* Goals Management Button */}
               {onOpenGoalsManagement && (
                 <button
@@ -499,7 +504,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />
                 </button>
               )}
-              
+
               {/* Notification Settings Button */}
               {onOpenNotificationPrefs && (
                 <button
@@ -614,7 +619,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <div className="bg-emerald-50 dark:bg-emerald-900/30 p-3 sm:p-4 rounded-lg sm:rounded-xl text-emerald-800 dark:text-emerald-400 text-xs sm:text-sm flex items-start gap-2">
               <Building2 className="w-4 h-4 mt-0.5 shrink-0" />
               <span>
-                {language === 'es' 
+                {language === 'es'
                   ? 'Registra tus cuentas bancarias, efectivo y billeteras digitales. El balance se actualiza automáticamente con tus transacciones.'
                   : 'Register your bank accounts, cash and digital wallets. Balance updates automatically with your transactions.'}
               </span>
@@ -623,23 +628,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             {/* Accounts List */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {accounts.map((acc) => (
-                <div key={acc.id} className={`bg-white dark:bg-slate-800 p-4 rounded-2xl border-2 ${
-                  acc.balance < 0 
-                    ? 'border-rose-200 dark:border-rose-800' 
-                    : 'border-slate-100 dark:border-slate-700'
-                } shadow-sm hover:shadow-md transition-shadow`}>
+                <div key={acc.id} className={`bg-white dark:bg-slate-800 p-4 rounded-2xl border-2 ${acc.balance < 0
+                  ? 'border-rose-200 dark:border-rose-800'
+                  : 'border-slate-100 dark:border-slate-700'
+                  } shadow-sm hover:shadow-md transition-shadow`}>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl ${
-                        acc.type === 'cash' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                      <div className={`p-2.5 rounded-xl ${acc.type === 'cash' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
                         acc.type === 'bank' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' :
-                        acc.type === 'card' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
-                        'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
-                      }`}>
-                        {acc.type === 'cash' ? <Banknote className="w-5 h-5" /> : 
-                         acc.type === 'bank' ? <Building2 className="w-5 h-5" /> : 
-                         acc.type === 'card' ? <CreditCard className="w-5 h-5" /> : 
-                         <Wallet className="w-5 h-5" />}
+                          acc.type === 'card' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
+                            'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                        }`}>
+                        {acc.type === 'cash' ? <Banknote className="w-5 h-5" /> :
+                          acc.type === 'bank' ? <Building2 className="w-5 h-5" /> :
+                            acc.type === 'card' ? <CreditCard className="w-5 h-5" /> :
+                              <Wallet className="w-5 h-5" />}
                       </div>
                       <div>
                         <p className="font-bold text-sm text-slate-800 dark:text-white">{acc.name}</p>
@@ -663,7 +666,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* Balance */}
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                     <span className="text-[10px] font-bold text-slate-400 uppercase">{language === 'es' ? 'Balance' : 'Balance'}</span>
@@ -787,7 +790,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
                 {language === 'es' ? 'Seleccionar Moneda' : 'Select Currency'}
               </h2>
-              <button 
+              <button
                 onClick={() => { setShowCurrencyPicker(false); setCurrencySearch(''); }}
                 className="bg-slate-50 dark:bg-slate-800 p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               >
@@ -819,11 +822,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     <button
                       key={currency.code}
                       onClick={() => handleSelectCurrency(currency)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
-                        isSelected 
-                          ? 'bg-indigo-50 dark:bg-indigo-900/30 border-2 border-indigo-500' 
-                          : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'
-                      }`}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${isSelected
+                        ? 'bg-indigo-50 dark:bg-indigo-900/30 border-2 border-indigo-500'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'
+                        }`}
                     >
                       <span className="text-2xl">{currency.flag}</span>
                       <div className="flex-1 text-left">
@@ -861,7 +863,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Accounts Help Modal */}
       {showAccountsHelp && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAccountsHelp(false)}>
-          <div 
+          <div
             className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-700"
             onClick={e => e.stopPropagation()}
           >
@@ -892,7 +894,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     {language === 'es' ? 'Registra tus balances reales' : 'Track your real balances'}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es' 
+                    {language === 'es'
                       ? 'Ingresa el monto actual de cada cuenta bancaria, efectivo o billetera digital.'
                       : 'Enter the current amount in each bank account, cash or digital wallet.'}
                   </p>
@@ -908,7 +910,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     {language === 'es' ? 'Actualización automática' : 'Automatic updates'}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es' 
+                    {language === 'es'
                       ? 'Cuando registras ingresos o gastos, puedes seleccionar de qué cuenta provienen y el balance se actualiza.'
                       : 'When you record income or expenses, you can select which account they come from and the balance updates.'}
                   </p>
@@ -924,7 +926,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     {language === 'es' ? 'Alertas de saldo bajo' : 'Low balance alerts'}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es' 
+                    {language === 'es'
                       ? 'Recibe notificaciones cuando el balance de una cuenta sea insuficiente para cubrir pagos próximos.'
                       : 'Receive notifications when an account balance is insufficient to cover upcoming payments.'}
                   </p>
@@ -940,7 +942,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     {language === 'es' ? 'Tarjetas de crédito' : 'Credit cards'}
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es' 
+                    {language === 'es'
                       ? 'Puedes registrar tarjetas con balance negativo para controlar tu deuda.'
                       : 'You can register cards with negative balance to track your debt.'}
                   </p>
@@ -959,256 +961,392 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       )}
 
       {/* Add Account Modal */}
-      {showAddAccount && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" onClick={() => setShowAddAccount(false)}>
-          <div 
-            className="bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 w-full sm:max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">
-                {language === 'es' ? 'Agregar Cuenta Bancaria' : 'Add Bank Account'}
-              </h3>
-              <button
-                onClick={() => setShowAddAccount(false)}
-                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
+      <ModalWrapper isOpen={showAddAccount} onClose={() => setShowAddAccount(false)} alignment="center">
+        <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+          {/* Header */}
+          <div className="flex justify-between items-center p-6 pb-2">
+            <div className="flex items-center gap-3 px-3 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-900/30 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+              <Building2 className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wide">
+                {language === 'es' ? 'Agregar Cuenta' : 'Add Account'}
+              </span>
             </div>
+            <button onClick={() => setShowAddAccount(false)} className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-400 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 pt-2">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              {language === 'es' ? 'Selecciona tu banco o tipo de cuenta para comenzar.' : 'Select your bank or account type to get started.'}
+            </p>
 
             {/* Institution Search */}
-            <div className="mb-4">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
-                {language === 'es' ? 'Selecciona tu banco' : 'Select your bank'}
-              </label>
-              <div className="relative mb-2">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder={language === 'es' ? 'Buscar institución...' : 'Search institution...'}
-                  value={institutionSearch}
-                  onChange={(e) => setInstitutionSearch(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
-              
-              <div className="max-h-48 overflow-y-auto space-y-1 bg-slate-50 dark:bg-slate-700/50 rounded-xl p-2">
-                {filteredInstitutions.map((inst) => (
-                  <button
-                    key={inst.name}
-                    onClick={() => {
-                      const newAcc: Account = {
-                        id: Math.random().toString(36).substr(2, 9),
-                        name: inst.name === 'Otro' ? '' : inst.name,
-                        institution: inst.name === 'Otro' ? '' : inst.name,
-                        type: inst.type === 'all' ? 'bank' : inst.type as Account['type'],
-                        balance: 0,
-                        currency: settings.currency.localCode,
-                        updatedAt: Date.now()
-                      };
-                      setEditingAccount(newAcc);
-                      setShowAddAccount(false);
-                      setInstitutionSearch('');
-                    }}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white dark:hover:bg-slate-600 transition-colors text-left"
-                  >
-                    <div className={`p-2 rounded-lg ${
-                      inst.type === 'bank' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' :
-                      inst.type === 'card' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
-                      inst.type === 'wallet' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' :
-                      'bg-slate-100 dark:bg-slate-600 text-slate-600 dark:text-slate-400'
+            <div className="relative mb-6">
+              <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={language === 'es' ? 'Buscar banco, tarjeta o billetera...' : 'Search bank, card or wallet...'}
+                value={institutionSearch}
+                onChange={(e) => setInstitutionSearch(e.target.value)}
+                className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl pl-12 pr-4 py-3.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-all shadow-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 max-h-[40vh] overflow-y-auto pr-2 custom-scrollbar">
+              {filteredInstitutions.map((inst) => (
+                <button
+                  key={inst.name}
+                  onClick={() => {
+                    const newAcc: Account = {
+                      id: Math.random().toString(36).substr(2, 9),
+                      name: inst.name === 'Otro' ? '' : inst.name,
+                      institution: inst.name === 'Otro' ? '' : inst.name,
+                      type: inst.type === 'all' ? 'bank' : inst.type as Account['type'],
+                      balance: 0,
+                      currency: settings.currency.localCode,
+                      updatedAt: Date.now()
+                    };
+                    setEditingAccount(newAcc);
+                    setShowAddAccount(false);
+                    setInstitutionSearch('');
+                  }}
+                  className="group flex items-center gap-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 border border-slate-100 dark:border-slate-700 hover:border-indigo-200 dark:hover:border-indigo-800 transition-all text-left"
+                >
+                  <div className={`p-2.5 rounded-xl shadow-sm group-hover:scale-110 transition-transform ${inst.type === 'bank' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600' :
+                    inst.type === 'card' ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600' :
+                      inst.type === 'wallet' ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-600' :
+                        'bg-slate-200 dark:bg-slate-600 text-slate-600'
                     }`}>
-                      {inst.type === 'bank' ? <Building2 className="w-4 h-4" /> :
-                       inst.type === 'card' ? <CreditCard className="w-4 h-4" /> :
-                       inst.type === 'wallet' ? <Wallet className="w-4 h-4" /> :
-                       <Plus className="w-4 h-4" />}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-sm text-slate-800 dark:text-white">{inst.name}</p>
-                      {inst.country !== 'ALL' && (
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                          {inst.country === 'DO' ? '🇩🇴 Rep. Dominicana' : '🌎 Internacional'}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                    {inst.type === 'bank' ? <Building2 className="w-5 h-5" /> :
+                      inst.type === 'card' ? <CreditCard className="w-5 h-5" /> :
+                        inst.type === 'wallet' ? <Wallet className="w-5 h-5" /> :
+                          <Plus className="w-5 h-5" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800 dark:text-white group-hover:text-indigo-700 dark:group-hover:text-indigo-300 transition-colors">
+                      {inst.name === 'Otro' ? (language === 'es' ? 'Nueva institución personalizada' : 'New custom institution') : inst.name}
+                    </p>
+                    {inst.country !== 'ALL' && (
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5 opacity-80">
+                        {inst.country === 'DO' ? '🇩🇴 República Dominicana' : '🌎 Internacional'}
+                      </p>
+                    )}
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      )}
+      </ModalWrapper>
 
       {/* Edit Account Modal */}
-      {editingAccount && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 overflow-hidden" 
-          onClick={() => setEditingAccount(null)}
-          style={{ touchAction: 'none' }}
-        >
-          <div 
-            className="bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-5 sm:p-6 pb-0 flex-shrink-0">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white">
-                {accounts.find(a => a.id === editingAccount.id) 
-                  ? (language === 'es' ? 'Editar Cuenta' : 'Edit Account')
-                  : (language === 'es' ? 'Nueva Cuenta' : 'New Account')}
-              </h3>
-              <button
-                onClick={() => setEditingAccount(null)}
-                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
+      {/* Edit Account Modal */}
+      <ModalWrapper isOpen={!!editingAccount} onClose={() => setEditingAccount(null)} alignment="center">
+        {editingAccount && (
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+            {/* Dynamic Header */}
+            {(() => {
+              const typeConfig = {
+                bank: { color: 'blue', icon: Building2, label: language === 'es' ? 'Banco' : 'Bank' },
+                card: { color: 'purple', icon: CreditCard, label: language === 'es' ? 'Tarjeta' : 'Card' },
+                wallet: { color: 'amber', icon: Wallet, label: language === 'es' ? 'Billetera' : 'Wallet' },
+                cash: { color: 'emerald', icon: Banknote, label: language === 'es' ? 'Efectivo' : 'Cash' },
+                other: { color: 'slate', icon: Plus, label: language === 'es' ? 'Otros' : 'Other' }
+              }[editingAccount.type as keyof typeof typeConfig] || { color: 'slate', icon: Plus, label: 'Otros' };
 
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 pt-4 space-y-4">
-              {/* Account Name */}
+              const headColorClasses = {
+                blue: 'text-blue-600 bg-blue-50 border-blue-100 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400',
+                purple: 'text-purple-600 bg-purple-50 border-purple-100 dark:bg-purple-900/30 dark:border-purple-800 dark:text-purple-400',
+                amber: 'text-amber-600 bg-amber-50 border-amber-100 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-400',
+                emerald: 'text-emerald-600 bg-emerald-50 border-emerald-100 dark:bg-emerald-900/30 dark:border-emerald-800 dark:text-emerald-400',
+                slate: 'text-slate-600 bg-slate-50 border-slate-100 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+              }[typeConfig.color as keyof typeof headColorClasses];
+
+              return (
+                <div className="flex justify-between items-center p-6 pb-2">
+                  <div className={`flex items-center gap-2.5 px-3 py-1.5 rounded-full border ${headColorClasses}`}>
+                    <typeConfig.icon className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest">{typeConfig.label}</span>
+                  </div>
+                  <button onClick={() => setEditingAccount(null)} className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full text-slate-400 transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              );
+            })()}
+
+            <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-6 max-h-[80vh]">
               <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
-                  {language === 'es' ? 'Nombre de la cuenta' : 'Account name'}
-                </label>
-                <input
-                  type="text"
-                  value={editingAccount.name}
-                  onChange={(e) => setEditingAccount({ ...editingAccount, name: e.target.value })}
-                  placeholder={language === 'es' ? 'Ej: Cuenta de Ahorros' : 'Ex: Savings Account'}
-                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
+                <h2 className="text-xl font-black text-slate-800 dark:text-white">
+                  {accounts.find(a => a.id === editingAccount.id)
+                    ? (language === 'es' ? 'Configurar Cuenta' : 'Configure Account')
+                    : (language === 'es' ? 'Personalizar Nueva Cuenta' : 'Customize New Account')}
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {language === 'es' ? 'Ajusta los detalles y preferencias de esta institución.' : 'Adjust details and preferences for this institution.'}
+                </p>
               </div>
 
-              {/* Institution */}
-              <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
-                  {language === 'es' ? 'Institución' : 'Institution'}
-                </label>
-                <input
-                  type="text"
-                  value={editingAccount.institution || ''}
-                  onChange={(e) => setEditingAccount({ ...editingAccount, institution: e.target.value })}
-                  placeholder={language === 'es' ? 'Ej: Banco Popular' : 'Ex: Chase Bank'}
-                  className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
-              </div>
+              {/* General Info Section */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">
+                      {language === 'es' ? 'Nombre Visual' : 'Display Name'}
+                    </label>
+                    <input
+                      type="text"
+                      value={editingAccount.name}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, name: e.target.value })}
+                      placeholder={language === 'es' ? 'Ej: Nómina Popular' : 'Ex: Popular Payroll'}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">
+                      {language === 'es' ? 'Institución' : 'Institution'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={editingAccount.institution || ''}
+                        onChange={(e) => setEditingAccount({ ...editingAccount, institution: e.target.value })}
+                        placeholder={language === 'es' ? 'Banco o Entidad' : 'Bank or Entity'}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-2xl px-4 py-3 text-sm font-bold text-slate-900 dark:text-white focus:border-indigo-500 focus:bg-white dark:focus:bg-slate-900 outline-none transition-all"
+                      />
+                      <Building2 className="w-4 h-4 text-slate-300 absolute right-4 top-1/2 -translate-y-1/2" />
+                    </div>
+                  </div>
+                </div>
 
-              {/* Account Type */}
-              <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
-                  {language === 'es' ? 'Tipo de cuenta' : 'Account type'}
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { type: 'cash', icon: Banknote, label: 'Efectivo', color: 'green' },
-                    { type: 'bank', icon: Building2, label: 'Banco', color: 'blue' },
-                    { type: 'card', icon: CreditCard, label: 'Tarjeta', color: 'purple' },
-                    { type: 'wallet', icon: Wallet, label: 'Billetera', color: 'amber' },
-                  ].map(({ type, icon: Icon, label, color }) => (
-                    <button
-                      key={type}
-                      onClick={() => setEditingAccount({ ...editingAccount, type: type as Account['type'] })}
-                      className={`p-3 rounded-xl border-2 transition-all ${
-                        editingAccount.type === type
-                          ? `border-${color}-500 bg-${color}-50 dark:bg-${color}-900/30`
-                          : 'border-slate-200 dark:border-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      <Icon className={`w-5 h-5 mx-auto mb-1 ${
-                        editingAccount.type === type ? `text-${color}-600` : 'text-slate-400'
-                      }`} />
-                      <p className={`text-[10px] font-medium ${
-                        editingAccount.type === type ? `text-${color}-600` : 'text-slate-500'
-                      }`}>{label}</p>
-                    </button>
-                  ))}
+                {/* Account Type Grid */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">
+                    {language === 'es' ? 'Categoría de Cuenta' : 'Account Category'}
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { type: 'cash', icon: Banknote, label: 'Efectivo', color: 'emerald' },
+                      { type: 'bank', icon: Building2, label: 'Banco', color: 'blue' },
+                      { type: 'card', icon: CreditCard, label: 'Tarjeta', color: 'purple' },
+                      { type: 'wallet', icon: Wallet, label: 'Billetera', color: 'amber' },
+                    ].map(({ type, icon: Icon, label, color }) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setEditingAccount({ ...editingAccount, type: type as Account['type'] })}
+                        className={`flex flex-col items-center gap-1.5 p-2.5 rounded-2xl border-2 transition-all group ${editingAccount.type === type
+                          ? `border-${color}-500 bg-${color}-50 dark:bg-${color}-900/20 shadow-sm`
+                          : 'border-slate-50 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700'
+                          }`}
+                      >
+                        <Icon className={`w-5 h-5 ${editingAccount.type === type ? `text-${color}-600` : 'text-slate-400 group-hover:text-slate-600'
+                          }`} />
+                        <span className={`text-[9px] font-black uppercase ${editingAccount.type === type ? `text-${color}-700` : 'text-slate-400 group-hover:text-slate-600'
+                          }`}>{label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Balance */}
-              <div>
-                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 block">
-                  {language === 'es' ? 'Balance actual' : 'Current balance'}
+              {/* Balance Section */}
+              <div className="bg-slate-900 dark:bg-slate-800 rounded-3xl p-6 text-white shadow-xl">
+                <label className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2 block">
+                  {language === 'es' ? 'Balance Actual Disponible' : 'Current Available Balance'}
                 </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
-                    {settings.currency.localSymbol}
-                  </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl font-black opacity-40">{settings.currency.localSymbol}</span>
                   <input
                     type="number"
                     step="0.01"
                     value={editingAccount.balance}
                     onChange={(e) => setEditingAccount({ ...editingAccount, balance: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl pl-12 pr-4 py-3 text-lg font-bold text-slate-800 dark:text-white text-right focus:ring-2 focus:ring-indigo-500 outline-none"
+                    className="flex-1 bg-transparent text-4xl font-black outline-none placeholder-white/20"
+                    placeholder="0.00"
                   />
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  {language === 'es' 
-                    ? 'Ingresa el balance actual de esta cuenta. Puede ser negativo para deudas.'
-                    : 'Enter the current balance. Can be negative for debts.'}
-                </p>
-              </div>
-
-              {/* Exclude from total */}
-              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl">
-                <div>
-                  <p className="text-sm font-medium text-slate-800 dark:text-white">
-                    {language === 'es' ? 'Excluir del total' : 'Exclude from total'}
-                  </p>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                    {language === 'es' 
-                      ? 'Esta cuenta no se sumará al balance total'
-                      : 'This account won\'t be added to total balance'}
+                <div className="mt-4 pt-4 border-t border-white/10 flex items-center gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                  <p className="text-[10px] opacity-60 italic leading-tight">
+                    {language === 'es'
+                      ? 'Usa montos negativos para representar deudas o sobregiros.'
+                      : 'Use negative amounts to represent debts or overdrafts.'}
                   </p>
                 </div>
+              </div>
+
+              {/* Commission Settings - Highly Enhanced */}
+              {(editingAccount.type === 'bank' || editingAccount.type === 'card') && (
+                <div className="bg-slate-50 dark:bg-slate-800/80 rounded-3xl p-5 border border-slate-100 dark:border-slate-700 space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
+                        <Percent className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <h4 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest">
+                        {language === 'es' ? 'Impuestos y Mensajería' : 'Taxes & Fees'}
+                      </h4>
+                    </div>
+                    {editingAccount.institution && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!editingAccount.institution) return;
+                          setAiLoading(true);
+                          setAiSuggestion(null);
+                          const result = await geminiService.fetchBankCommissions(editingAccount.institution);
+                          setAiLoading(false);
+                          if (result) setAiSuggestion(result);
+                        }}
+                        disabled={aiLoading}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 dark:shadow-none disabled:opacity-50"
+                      >
+                        {aiLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        {language === 'es' ? 'CONSULTAR IA' : 'ASK AI'}
+                      </button>
+                    )}
+                  </div>
+
+                  {aiSuggestion && (
+                    <div className="p-3 bg-indigo-600 rounded-2xl text-white space-y-3 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="flex items-start gap-3">
+                        <Zap className="w-5 h-5 text-amber-300 mt-1 shrink-0" />
+                        <div className="flex-1">
+                          <p className="text-[11px] font-bold leading-relaxed">
+                            {language === 'es'
+                              ? `Encontramos los datos para ${editingAccount.institution}: ${aiSuggestion.transferCommissionPercentage}% DGII, RD$ ${aiSuggestion.achFeeFixed} ACH.`
+                              : `Found data for ${editingAccount.institution}: ${aiSuggestion.transferCommissionPercentage}% DGII, RD$ ${aiSuggestion.achFeeFixed} ACH.`}
+                          </p>
+                          <p className="text-[9px] opacity-70 mt-1 italic leading-tight">
+                            {aiSuggestion.disclaimer}
+                          </p>
+                        </div>
+                        <button onClick={() => setAiSuggestion(null)} className="p-1 hover:bg-white/20 rounded-lg">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAccount({
+                            ...editingAccount,
+                            transferCommissionPercentage: aiSuggestion.transferCommissionPercentage,
+                            cardCommissionPercentage: aiSuggestion.cardCommissionPercentage,
+                            achFeeFixed: aiSuggestion.achFeeFixed,
+                            lbtrFeeFixed: aiSuggestion.lbtrFeeFixed
+                          });
+                          setAiSuggestion(null);
+                        }}
+                        className="w-full py-2 bg-white text-indigo-700 rounded-xl text-[11px] font-black shadow-sm hover:bg-indigo-50 transition-colors uppercase"
+                      >
+                        {language === 'es' ? 'Aplicar Configuración' : 'Apply Configuration'}
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">
+                        % DGII/Transferencia
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editingAccount.transferCommissionPercentage || 0}
+                          onChange={(e) => setEditingAccount({ ...editingAccount, transferCommissionPercentage: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-white dark:bg-slate-700 border-2 border-slate-100 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm font-black text-slate-900 dark:text-white focus:border-indigo-500 outline-none"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</span>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest px-1">
+                        RD$ ACH (Fijo)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editingAccount.achFeeFixed || 0}
+                          onChange={(e) => setEditingAccount({ ...editingAccount, achFeeFixed: parseFloat(e.target.value) || 0 })}
+                          className="w-full bg-white dark:bg-slate-700 border-2 border-slate-100 dark:border-slate-600 rounded-2xl px-4 py-2.5 text-sm font-black text-slate-900 dark:text-white focus:border-indigo-500 outline-none"
+                        />
+                        <Building2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Advanced Settings */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-rose-50 dark:bg-rose-900/20 rounded-xl">
+                      <Monitor className="w-4 h-4 text-rose-500" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800 dark:text-white">
+                        {language === 'es' ? 'Excluir del Patrimonio' : 'Exclude from Net Worth'}
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        {language === 'es' ? 'No sumar este balance al total general.' : 'Do not add this balance to the total sum.'}
+                      </p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editingAccount.isExcludedFromTotal}
+                    onChange={(e) => setEditingAccount({ ...editingAccount, isExcludedFromTotal: e.target.checked })}
+                    className="w-5 h-5 rounded-lg text-rose-600 focus:ring-rose-500 border-slate-300 pointer-events-auto"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-6 pb-4">
+                {accounts.find(a => a.id === editingAccount.id) && (
+                  <button
+                    onClick={async () => {
+                      if (confirm(language === 'es' ? '¿Estás seguro de eliminar esta cuenta?' : 'Are you sure you want to delete this account?')) {
+                        await storageService.deleteAccount(editingAccount.id);
+                        setAccounts(accounts.filter(a => a.id !== editingAccount.id));
+                        setEditingAccount(null);
+                      }
+                    }}
+                    className="p-3.5 bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-2xl hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors"
+                  >
+                    <Trash2 className="w-6 h-6" />
+                  </button>
+                )}
                 <button
-                  onClick={() => setEditingAccount({ ...editingAccount, isExcludedFromTotal: !editingAccount.isExcludedFromTotal })}
-                  className={`w-12 h-6 rounded-full transition-colors relative ${
-                    editingAccount.isExcludedFromTotal ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-600'
-                  }`}
+                  onClick={async () => {
+                    if (!editingAccount.name) return;
+                    const existingAcc = accounts.find(a => a.id === editingAccount.id);
+                    let updatedAccounts;
+                    if (existingAcc) {
+                      updatedAccounts = accounts.map(a => a.id === editingAccount.id ? editingAccount : a);
+                    } else {
+                      updatedAccounts = [...accounts, editingAccount];
+                    }
+                    await storageService.saveAccounts(updatedAccounts);
+                    setAccounts(updatedAccounts);
+                    setEditingAccount(null);
+                  }}
+                  disabled={!editingAccount.name}
+                  className="flex-1 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 dark:shadow-none transition-all disabled:opacity-50 uppercase tracking-widest text-xs"
                 >
-                  <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${
-                    editingAccount.isExcludedFromTotal ? 'left-7' : 'left-1'
-                  }`} />
+                  {language === 'es' ? 'Guardar Cambios' : 'Save Changes'}
                 </button>
               </div>
             </div>
-
-            {/* Actions */}
-            <div className="flex gap-3 p-5 sm:p-6 pt-4 flex-shrink-0 border-t border-slate-100 dark:border-slate-700">
-              <button
-                onClick={() => setEditingAccount(null)}
-                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-              >
-                {language === 'es' ? 'Cancelar' : 'Cancel'}
-              </button>
-              <button
-                onClick={() => {
-                  if (!editingAccount.name.trim()) return;
-                  
-                  const existingIndex = accounts.findIndex(a => a.id === editingAccount.id);
-                  let updated: Account[];
-                  
-                  if (existingIndex >= 0) {
-                    updated = accounts.map(a => a.id === editingAccount.id ? { ...editingAccount, updatedAt: Date.now() } : a);
-                  } else {
-                    updated = [...accounts, { ...editingAccount, updatedAt: Date.now() }];
-                  }
-                  
-                  setAccounts(updated);
-                  storageService.saveAccounts(updated);
-                  setEditingAccount(null);
-                }}
-                disabled={!editingAccount.name.trim()}
-                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {language === 'es' ? 'Guardar' : 'Save'}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </ModalWrapper>
     </div>
   );
 };

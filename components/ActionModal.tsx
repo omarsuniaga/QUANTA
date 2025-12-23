@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
-import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil, Calculator as CalcIcon, Clock } from 'lucide-react';
+import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
+import { X, Calendar, DollarSign, Tag, AlignLeft, ArrowUpRight, ArrowDownRight, Zap, Bell, Check, Search, Camera, Smile, Meh, Frown, Music, Briefcase, CreditCard, Users, Plus, RefreshCw, Settings, Pencil, Calculator as CalcIcon, Clock, ArrowRightLeft, ShieldCheck } from 'lucide-react';
 import { Category, TransactionType, Frequency, PaymentMethod, Mood, Account, CustomCategory } from '../types';
 import { Button } from './Button';
 import { storageService } from '../services/storageService';
@@ -21,11 +21,28 @@ interface ActionModalProps {
     paymentMethod?: string;
     date?: string;
     time?: string;
+    bankTransferType?: 'internal' | 'ach' | 'lbtr';
   };
   currencySymbol?: string;
 }
 
 const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSave, initialValues, currencySymbol = '$' }) => {
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mode) {
+      // Pequeno delay para permitir que la animación del modal comience
+      const timer = setTimeout(() => {
+        amountRef.current?.focus();
+        // Opcionalmente seleccionar el texto actual si existe
+        if (amountRef.current?.value && amountRef.current.value !== '0') {
+          amountRef.current.select();
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [mode]);
+
   // Common Fields
   const [amount, setAmount] = useState(initialValues?.amount?.toString() || '');
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
@@ -49,6 +66,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   const [date, setDate] = useState(dateTime.date);
   const [time, setTime] = useState(dateTime.time);
   const [paymentMethodId, setPaymentMethodId] = useState<string>(initialValues?.paymentMethod || '');
+  const [bankTransferType, setBankTransferType] = useState<'internal' | 'ach' | 'lbtr'>(initialValues?.bankTransferType || 'internal');
 
   // Recurring Logic (Shared state, logic differs by mode)
   const [isRecurring, setIsRecurring] = useState(false); // Default to false
@@ -152,6 +170,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       category,
       paymentMethodId: paymentMethodId || null,
       paymentMethodType: paymentType,
+      bankTransferType: paymentType === 'bank' ? bankTransferType : undefined,
       // Mantener paymentMethod para backward compatibility
       paymentMethod: paymentMethodId,
     };
@@ -181,7 +200,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       });
     }
     onClose();
-  }, [mode, amount, concept, category, paymentMethodId, accounts, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose]);
+  }, [mode, amount, concept, category, paymentMethodId, accounts, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose, bankTransferType]);
 
   // UI Config
   const config = {
@@ -222,8 +241,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
     <ModalWrapper isOpen={true} onClose={onClose} alignment="center">
       {/* Modal Box */}
       <div className="relative bg-white dark:bg-slate-900 w-[95%] max-w-md lg:max-w-lg max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden">
-
-
         {/* Header */}
         <div className="flex justify-between items-center p-4 sm:p-6 pb-2">
           <div className={`flex items-center gap-2 sm:gap-3 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border ${colorClasses[config.color] || colorClasses['slate']}`}>
@@ -236,20 +253,18 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2 pb-24">
-
           <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 pb-4">
-
             {/* Amount Field */}
             <div className="text-center py-1 sm:py-2">
               <div className="flex items-center justify-center gap-2">
                 <span className="text-slate-300 dark:text-slate-600 text-2xl sm:text-3xl font-bold">{currencySymbol}</span>
                 <input
+                  ref={amountRef}
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0"
                   required
-                  autoFocus
                   step="0.01"
                   className="w-40 sm:w-48 text-center text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-700 outline-none bg-transparent"
                 />
@@ -369,7 +384,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                 {showNewCategoryForm && (
                   <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3 animate-in slide-in-from-top-2 fade-in">
                     <div className="flex gap-3">
-                      {/* Icon/Color Picker Button */}
                       <button
                         type="button"
                         onClick={() => setShowIconPicker(true)}
@@ -430,7 +444,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                   </div>
                 )}
 
-                {/* Category Chips */}
                 <div className="flex flex-wrap gap-2">
                   {customCategories
                     .filter(cat => cat.type === 'expense' || cat.type === 'both')
@@ -511,7 +524,34 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                   </div>
                 </div>
 
-                {/* Recurring Options for Income/Expense */}
+                {/* Bank Transfer Type Selector */}
+                {mode !== 'income' && paymentMethodId && accounts.find(a => a.id === paymentMethodId)?.type === 'bank' && (
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 animate-in slide-in-from-top-1 fade-in">
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">Tipo de Transferencia</label>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'internal', label: 'Interna', icon: ArrowRightLeft },
+                        { id: 'ach', label: 'ACH', icon: Zap },
+                        { id: 'lbtr', label: 'LBTR', icon: ShieldCheck }
+                      ].map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setBankTransferType(t.id as any)}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all border ${bankTransferType === t.id
+                            ? 'bg-indigo-600 border-indigo-600 text-white'
+                            : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-400'
+                            }`}
+                        >
+                          <t.icon className="w-3.5 h-3.5" />
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recurring Options for Income */}
                 {mode === 'income' && (
                   <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
                     <div className="flex items-center gap-3 mb-2">
@@ -586,7 +626,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                         {customCategories
                           .filter(cat => cat.type === 'income' || cat.type === 'both')
                           .map(cat => {
-                            const colorClasses = getColorClasses(cat.color);
+                            const colorClassesArr = getColorClasses(cat.color);
                             const isSelected = category === cat.id;
                             const catName = language.startsWith('es') ? cat.name.es : cat.name.en;
                             return (
@@ -595,7 +635,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
                                 type="button"
                                 onClick={() => setCategory(cat.id)}
                                 className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${isSelected
-                                  ? `${colorClasses.bg} ${colorClasses.text} border-transparent shadow-md ring-2 ${colorClasses.ring}`
+                                  ? `${colorClassesArr.bg} ${colorClassesArr.text} border-transparent shadow-md ring-2 ${colorClassesArr.ring}`
                                   : 'bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-500'
                                   }`}
                               >

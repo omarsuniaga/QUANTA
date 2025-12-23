@@ -267,7 +267,30 @@ export const storageService = {
   async addTransaction(transaction: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction> {
     const settings = await this.getSettings(); 
     const localId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const uid = getUserId();
     
+    // 0. Calculate Commissions
+    let commissionAmount = 0;
+    const accounts = await this.getAccounts();
+    const account = accounts.find(a => a.id === transaction.paymentMethodId);
+    
+    if (account) {
+      if (transaction.paymentMethodType === 'bank') {
+        // Percentage-based (e.g., 0.15% DGII)
+        if (account.transferCommissionPercentage) {
+          commissionAmount = (transaction.amount * account.transferCommissionPercentage) / 100;
+        }
+        // Fixed fees (ACH/LBTR)
+        if (transaction.bankTransferType === 'ach' && account.achFeeFixed) {
+          commissionAmount += account.achFeeFixed;
+        } else if (transaction.bankTransferType === 'lbtr' && account.lbtrFeeFixed) {
+          commissionAmount += account.lbtrFeeFixed;
+        }
+      } else if (transaction.paymentMethodType === 'card' && account.cardCommissionPercentage) {
+        commissionAmount = (transaction.amount * account.cardCommissionPercentage) / 100;
+      }
+    }
+
     // Construct Monetary Structure
     const monetaryAmount: MonetaryAmount = {
       value: transaction.amount,
@@ -277,12 +300,11 @@ export const storageService = {
       baseCurrency: settings.currency?.baseCode || 'USD'
     };
 
-    // Ensure date includes time - if only date provided, add current time
+    // Ensure date includes time
     let fullDate = transaction.date;
     if (fullDate && !fullDate.includes('T')) {
-      // Date without time - add current time
       const now = new Date();
-      const timeStr = now.toTimeString().slice(0, 8); // HH:MM:SS
+      const timeStr = now.toTimeString().slice(0, 8);
       fullDate = `${fullDate}T${timeStr}`;
     }
 
@@ -293,10 +315,11 @@ export const storageService = {
       description: transaction.description || '',
       date: fullDate,
       amount: transaction.amount,
+      commissionAmount,
       notes: transaction.notes || '',
       paymentMethodId: transaction.paymentMethodId,
       paymentMethodType: transaction.paymentMethodType,
-      paymentMethod: transaction.paymentMethod, // Backward compatibility
+      paymentMethod: transaction.paymentMethod,
       isRecurring: !!transaction.isRecurring,
       frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : undefined,
       gigType: transaction.gigType,
@@ -307,15 +330,12 @@ export const storageService = {
       createdAt: Date.now()
     };
 
-    // 1. Always save to localStorage first
-    const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
-    localTxs.push(newTransaction);
-    saveToLocal(LS_KEYS.TRANSACTIONS, localTxs);
-    
-    // 2. Try to sync to Firebase if available
+    // 1. ATOMIC FIREBASE UPDATE (Transaction + Balance)
     if (canUseFirebase()) {
-      const uid = getUserId();
       try {
+        const txRef = getUserRef(uid).collection('transactions').doc();
+        newTransaction.id = txRef.id;
+
         const newTxPayload = {
           type: transaction.type,
           category: transaction.category,
@@ -323,7 +343,8 @@ export const storageService = {
           date: fullDate,
           notes: transaction.notes || '',
           amount: monetaryAmount,
-          paymentMethodId: transaction.paymentMethodId || transaction.paymentMethod, // Usar el nuevo campo o fallback
+          commissionAmount,
+          paymentMethodId: transaction.paymentMethodId,
           paymentMethodType: transaction.paymentMethodType || null,
           isRecurring: !!transaction.isRecurring,
           frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : null,
@@ -334,136 +355,217 @@ export const storageService = {
           createdAt: Date.now()
         };
 
-        const docRef = await getUserRef(uid).collection('transactions').add(newTxPayload);
-        
-        // Update local with Firebase ID
-        newTransaction.id = docRef.id;
-        const updatedLocalTxs = localTxs.map(t => t.id === localId ? newTransaction : t);
-        saveToLocal(LS_KEYS.TRANSACTIONS, updatedLocalTxs);
-        
-        // Update Account Balance
-        const accountIdToUpdate = transaction.paymentMethodId || transaction.paymentMethod;
-        if (accountIdToUpdate && accountIdToUpdate !== 'cash') {
-          await this._updateAccountBalance(uid, accountIdToUpdate, transaction.amount, transaction.type === 'income');
-        }
+        await db!.runTransaction(async (t) => {
+          // A. Create Transaction
+          t.set(txRef, newTxPayload);
+
+          // B. Update Account Balance (Net Amount: Amount + Commission for Expense, Amount - Commission for Income)
+          if (transaction.paymentMethodId && transaction.paymentMethodId !== 'cash') {
+            const accRef = getUserRef(uid).collection('accounts').doc(transaction.paymentMethodId);
+            const accDoc = await t.get(accRef);
+            if (accDoc.exists) {
+              const accData = accDoc.data() as Account;
+              const netAmount = (transaction.type === 'income') 
+                ? transaction.amount - commissionAmount 
+                : transaction.amount + commissionAmount;
+              
+              const newBalance = (transaction.type === 'income') 
+                ? accData.balance + netAmount 
+                : accData.balance - netAmount;
+
+              t.update(accRef, { balance: newBalance, updatedAt: Date.now() });
+              
+              // C. Sync Local Account Balance Immediately
+              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+              const updatedAccs = localAccs.map(a => a.id === transaction.paymentMethodId ? { ...a, balance: newBalance, updatedAt: Date.now() } : a);
+              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
+            }
+          }
+        });
       } catch(e) {
-        console.warn("Failed to save transaction to Firebase (saved locally)", e);
+        console.warn("Atomic transaction in Firebase failed", e);
       }
     }
+
+    // 2. Sync local transactions
+    const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
+    localTxs.push(newTransaction);
+    saveToLocal(LS_KEYS.TRANSACTIONS, localTxs);
 
     return newTransaction;
   },
 
   async updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
     const settings = await this.getSettings();
+    const uid = getUserId();
 
     // 0. Get original transaction to handle balance updates
     const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
     const originalTx = localTxs.find(t => t.id === id);
+    if (!originalTx) return;
 
-    // 1. Update in localStorage first
+    // 1. Calculate New Commissions if amount or type changed
+    let newCommissionAmount = updates.commissionAmount !== undefined ? updates.commissionAmount : originalTx.commissionAmount || 0;
+    
+    if (updates.amount !== undefined || updates.paymentMethodId !== undefined || updates.paymentMethodType !== undefined || updates.bankTransferType !== undefined) {
+      const accounts = await this.getAccounts();
+      const accountId = updates.paymentMethodId || originalTx.paymentMethodId;
+      const account = accounts.find(a => a.id === accountId);
+      const amount = updates.amount !== undefined ? updates.amount : originalTx.amount;
+      const type = updates.paymentMethodType || originalTx.paymentMethodType;
+
+      if (account) {
+        if (type === 'bank') {
+          // Percentage
+          if (account.transferCommissionPercentage) {
+            newCommissionAmount = (amount * account.transferCommissionPercentage) / 100;
+          }
+          // Fixed fees
+          const transferType = updates.bankTransferType || originalTx.bankTransferType;
+          if (transferType === 'ach' && account.achFeeFixed) {
+            newCommissionAmount += account.achFeeFixed;
+          } else if (transferType === 'lbtr' && account.lbtrFeeFixed) {
+            newCommissionAmount += account.lbtrFeeFixed;
+          }
+        } else if (type === 'card' && account.cardCommissionPercentage) {
+          newCommissionAmount = (amount * account.cardCommissionPercentage) / 100;
+        } else {
+          newCommissionAmount = 0;
+        }
+      }
+    }
+
+    // 2. ATOMIC FIREBASE UPDATE (Transaction + Balance Adjustment)
+    if (canUseFirebase()) {
+      try {
+        await db!.runTransaction(async (t) => {
+          const txRef = getUserRef(uid).collection('transactions').doc(id);
+          const oldAccountId = originalTx.paymentMethodId;
+          const newAccountId = updates.paymentMethodId !== undefined ? updates.paymentMethodId : oldAccountId;
+          
+          // Revert Old Balance
+          if (oldAccountId && oldAccountId !== 'cash') {
+            const oldAccRef = getUserRef(uid).collection('accounts').doc(oldAccountId);
+            const oldAccDoc = await t.get(oldAccRef);
+            if (oldAccDoc.exists) {
+              const oldAccData = oldAccDoc.data() as Account;
+              const oldNetAmount = (originalTx.type === 'income') 
+                ? originalTx.amount - (originalTx.commissionAmount || 0)
+                : originalTx.amount + (originalTx.commissionAmount || 0);
+              
+              const revertedBalance = (originalTx.type === 'income')
+                ? oldAccData.balance - oldNetAmount
+                : oldAccData.balance + oldNetAmount;
+              
+              t.update(oldAccRef, { balance: revertedBalance, updatedAt: Date.now() });
+              
+              // Sync Local (temporary, will be overwritten by final update if same account)
+              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+              const updatedAccs = localAccs.map(a => a.id === oldAccountId ? { ...a, balance: revertedBalance } : a);
+              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
+            }
+          }
+
+          // Apply New Balance
+          if (newAccountId && newAccountId !== 'cash') {
+            const newAccRef = getUserRef(uid).collection('accounts').doc(newAccountId);
+            const newAccDoc = await t.get(newAccRef);
+            if (newAccDoc.exists) {
+              const newAccData = newAccDoc.data() as Account;
+              const type = updates.type || originalTx.type;
+              const amount = updates.amount !== undefined ? updates.amount : originalTx.amount;
+              const netAmount = (type === 'income')
+                ? amount - newCommissionAmount
+                : amount + newCommissionAmount;
+              
+              const newBalance = (type === 'income')
+                ? newAccData.balance + netAmount
+                : newAccData.balance - netAmount;
+
+              t.update(newAccRef, { balance: newBalance, updatedAt: Date.now() });
+
+              // Sync Local
+              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+              const updatedAccs = localAccs.map(a => a.id === newAccountId ? { ...a, balance: newBalance } : a);
+              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
+            }
+          }
+
+          // Update Transaction
+          const updatePayload: any = { ...updates, commissionAmount: newCommissionAmount };
+          if (updates.amount !== undefined) {
+            updatePayload.amount = {
+              value: updates.amount,
+              currency: settings.currency?.localCode || 'USD',
+              exchangeRate: settings.currency?.rateToBase || 1,
+              valueInBase: updates.amount * (settings.currency?.rateToBase || 1),
+              baseCurrency: settings.currency?.baseCode || 'USD'
+            };
+          }
+          t.update(txRef, updatePayload);
+        });
+      } catch (e) {
+        console.warn("Update transaction in Firebase failed", e);
+      }
+    }
+
+    // 3. Update in localStorage
     const updatedLocalTxs = localTxs.map(t => {
       if (t.id === id) {
-        return { ...t, ...updates };
+        return { ...t, ...updates, commissionAmount: newCommissionAmount };
       }
       return t;
     });
     saveToLocal(LS_KEYS.TRANSACTIONS, updatedLocalTxs);
-
-    // 2. Handle account balance updates if payment method or amount changed
-    if (canUseFirebase() && originalTx) {
-      const uid = getUserId();
-
-      // Determinar si cambió el método de pago o el monto
-      const oldAccountId = originalTx.paymentMethodId || originalTx.paymentMethod;
-      const newAccountId = updates.paymentMethodId !== undefined ? updates.paymentMethodId : oldAccountId;
-      const oldAmount = originalTx.amount;
-      const newAmount = updates.amount !== undefined ? updates.amount : oldAmount;
-      const oldType = originalTx.type;
-      const newType = updates.type !== undefined ? updates.type : oldType;
-
-      // Revertir el balance anterior (si existía una cuenta asociada)
-      if (oldAccountId && oldAccountId !== 'cash') {
-        // Revertir: si era ingreso, restar; si era gasto, sumar
-        await this._updateAccountBalance(uid, oldAccountId, oldAmount, oldType !== 'income');
-      }
-
-      // Aplicar el nuevo balance (si hay una cuenta asociada)
-      if (newAccountId && newAccountId !== 'cash') {
-        await this._updateAccountBalance(uid, newAccountId, newAmount, newType === 'income');
-      }
-    }
-
-    // 3. Try to sync to Firebase if available
-    if (canUseFirebase()) {
-      const uid = getUserId();
-      // Construct update payload
-      const updatePayload: any = {};
-
-      if (updates.type) updatePayload.type = updates.type;
-      if (updates.category) updatePayload.category = updates.category;
-      if (updates.description) updatePayload.description = updates.description;
-      if (updates.date) updatePayload.date = updates.date;
-      if (updates.notes !== undefined) updatePayload.notes = updates.notes;
-      if (updates.paymentMethodId !== undefined) updatePayload.paymentMethodId = updates.paymentMethodId;
-      if (updates.paymentMethodType !== undefined) updatePayload.paymentMethodType = updates.paymentMethodType;
-      if (updates.paymentMethod !== undefined) updatePayload.paymentMethodId = updates.paymentMethod; // Backward compat
-      if (updates.isRecurring !== undefined) updatePayload.isRecurring = updates.isRecurring;
-      if (updates.frequency) updatePayload.frequency = updates.frequency;
-      if (updates.gigType) updatePayload.gigType = updates.gigType;
-      if (updates.mood) updatePayload.mood = updates.mood;
-      if (updates.receiptUrl) updatePayload.receiptUrl = updates.receiptUrl;
-      if (updates.sharedWith) updatePayload.sharedWith = updates.sharedWith;
-
-      // Update amount if provided
-      if (updates.amount !== undefined) {
-        const monetaryAmount: MonetaryAmount = {
-          value: updates.amount,
-          currency: settings.currency?.localCode || 'USD',
-          exchangeRate: settings.currency?.rateToBase || 1,
-          valueInBase: updates.amount * (settings.currency?.rateToBase || 1),
-          baseCurrency: settings.currency?.baseCode || 'USD'
-        };
-        updatePayload.amount = monetaryAmount;
-      }
-
-      try {
-        await getUserRef(uid).collection('transactions').doc(id).update(updatePayload);
-      } catch(e) {
-        console.warn("Update transaction in Firebase failed (saved locally)", e);
-      }
-    }
   },
 
   async deleteTransaction(id: string): Promise<void> {
-    // 0. Get transaction to revert balance
+    const uid = getUserId();
     const localTxs = getFromLocal<Transaction[]>(LS_KEYS.TRANSACTIONS, []);
     const txToDelete = localTxs.find(t => t.id === id);
+    if (!txToDelete) return;
 
-    // 1. Delete from localStorage first
+    // 1. ATOMIC FIREBASE DELETE (Transaction + Balance Reversal)
+    if (canUseFirebase()) {
+      try {
+        await db!.runTransaction(async (t) => {
+          const txRef = getUserRef(uid).collection('transactions').doc(id);
+          const accountId = txToDelete.paymentMethodId;
+
+          // Revert Balance
+          if (accountId && accountId !== 'cash') {
+            const accRef = getUserRef(uid).collection('accounts').doc(accountId);
+            const accDoc = await t.get(accRef);
+            if (accDoc.exists) {
+              const accData = accDoc.data() as Account;
+              const netAmount = (txToDelete.type === 'income')
+                ? txToDelete.amount - (txToDelete.commissionAmount || 0)
+                : txToDelete.amount + (txToDelete.commissionAmount || 0);
+              
+              const revertedBalance = (txToDelete.type === 'income')
+                ? accData.balance - netAmount
+                : accData.balance + netAmount;
+
+              t.update(accRef, { balance: revertedBalance, updatedAt: Date.now() });
+
+              // Sync Local Account Balance
+              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+              const updatedAccs = localAccs.map(a => a.id === accountId ? { ...a, balance: revertedBalance } : a);
+              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
+            }
+          }
+
+          // Delete Transaction
+          t.delete(txRef);
+        });
+      } catch (e) {
+        console.warn("Delete transaction in Firebase failed", e);
+      }
+    }
+
+    // 2. Delete from localStorage
     const filteredTxs = localTxs.filter(t => t.id !== id);
     saveToLocal(LS_KEYS.TRANSACTIONS, filteredTxs);
-
-    // 2. Revert account balance if transaction had a payment method
-    if (canUseFirebase() && txToDelete) {
-      const uid = getUserId();
-      const accountId = txToDelete.paymentMethodId || txToDelete.paymentMethod;
-
-      // Revertir el balance: si era ingreso, restar; si era gasto, sumar
-      if (accountId && accountId !== 'cash') {
-        await this._updateAccountBalance(uid, accountId, txToDelete.amount, txToDelete.type !== 'income');
-      }
-    }
-
-    // 3. Try to delete from Firebase if available
-    if (canUseFirebase()) {
-      const uid = getUserId();
-      try {
-        await getUserRef(uid).collection('transactions').doc(id).delete();
-      } catch (e) {
-        console.warn("Delete transaction from Firebase failed (deleted locally)", e);
-      }
-    }
   },
 
   // --- ACCOUNTS ---
@@ -536,6 +638,11 @@ export const storageService = {
         const data = doc.data() as Account;
         const newBalance = isIncome ? data.balance + amount : data.balance - amount;
         t.update(accRef, { balance: newBalance, updatedAt: Date.now() });
+
+        // Sync Local Storage Immediately
+        const localAccounts = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+        const updatedAccounts = localAccounts.map(a => a.id === accountId ? { ...a, balance: newBalance, updatedAt: Date.now() } : a);
+        saveToLocal(LS_KEYS.ACCOUNTS, updatedAccounts);
       });
     } catch(e) { console.warn("Balance update failed", e); }
   },

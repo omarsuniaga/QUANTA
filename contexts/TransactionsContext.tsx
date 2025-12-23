@@ -91,19 +91,14 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Calculate stats with real balance from accounts
   const stats: DashboardStats = useMemo(() => {
-    let totalIncome = 0; // Suma total de todos los ingresos registrados
-    let newIncome = 0; // Ingresos que NO están ya reflejados en el balance de cuentas
-    let expense = 0;
+    let totalIncome = 0;
+    let totalExpense = 0;
 
     transactions.forEach(t => {
       if (t.type === 'income') {
         totalIncome += t.amount;
-        // Solo sumar al newIncome si NO está ya incluido en el balance de las cuentas
-        if (!t.isIncludedInAccountBalance) {
-          newIncome += t.amount;
-        }
       } else {
-        expense += t.amount;
+        totalExpense += t.amount;
       }
     });
 
@@ -114,20 +109,24 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     const committedSavings = goals.reduce((sum, goal) => sum + (goal.currentAmount || 0), 0);
 
     // Balance disponible:
-    // Opción 1 (si hay cuentas): realBalance + newIncome - expense - committedSavings
-    // Opción 2 (si no hay cuentas): totalIncome - expense - committedSavings
-    const hasAccounts = accounts.length > 0;
-    const availableBalance = hasAccounts
-      ? realBalance + newIncome - expense - committedSavings
-      : totalIncome - expense - committedSavings;
+    // Con la nueva integridad financiera, el "Disponible Hoy" es el balance real de las cuentas
+    // menos lo comprometido en ahorros. Los ingresos/gastos bancarios ya están en realBalance.
+    // Los ingresos/gastos en EFECTIVO (no vinculados a cuenta) se calculan aparte si no hay cuentas.
+
+    let availableBalance = realBalance - committedSavings;
+
+    // Si no hay cuentas, usamos el cálculo histórico
+    if (accounts.length === 0) {
+      availableBalance = totalIncome - totalExpense - committedSavings;
+    }
 
     return {
       totalIncome,
-      totalExpense: expense,
-      balance: totalIncome - expense, // Balance histórico (todos los ingresos - gastos)
-      realBalance, // Patrimonio real de las cuentas
-      availableBalance, // Disponible para gastar (sin duplicar)
-      committedSavings // Total en metas
+      totalExpense,
+      balance: totalIncome - totalExpense,
+      realBalance,
+      availableBalance,
+      committedSavings
     };
   }, [transactions, accounts, goals]);
 
@@ -196,6 +195,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
       const newTx = await storageService.addTransaction(tx);
       setTransactions(prev => [...prev, newTx]);
+
+      // Refresh accounts to get updated balances
+      const updatedAccs = await storageService.getAccounts();
+      setAccounts(updatedAccs);
+
       toast.success(
         tx.type === 'income' ? 'Ingreso registrado' : 'Gasto registrado',
         `${tx.description}: $${tx.amount.toLocaleString()}`
@@ -222,6 +226,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       setTransactions(prev =>
         prev.map(t => t.id === id ? { ...t, ...updates } : t)
       );
+
+      // Refresh accounts to get updated balances
+      const updatedAccs = await storageService.getAccounts();
+      setAccounts(updatedAccs);
+
       toast.success('Transacción actualizada');
       return true;
     } catch (error: any) {
@@ -237,6 +246,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
     try {
       await storageService.deleteTransaction(id);
       setTransactions(prev => prev.filter(t => t.id !== id));
+
+      // Refresh accounts to get updated balances
+      const updatedAccs = await storageService.getAccounts();
+      setAccounts(updatedAccs);
+
       setLastDeleted(txToDelete);
 
       toast.addToast({

@@ -31,7 +31,7 @@ const TAILWIND_COLORS: Record<string, string> = {
   yellow: '#eab308',
   gray: '#6b7280',
 };
-import { Wallet, ArrowUpRight, ArrowDownRight, BellRing, TrendingUp, HelpCircle, Smile, Frown, Zap, Trophy, PieChart as PieChartIcon, Filter, Info, X } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownRight, BellRing, TrendingUp, HelpCircle, Smile, Frown, Zap, Trophy, PieChart as PieChartIcon, Filter, Info, X, TrendingDown } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 import { storageService } from '../services/storageService';
 import { InsightCard } from './InsightCard';
@@ -41,6 +41,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 import { BudgetInfoModal, SurplusInfoModal } from './Dashboard_InfoModals';
+import CommissionsReport from './CommissionsReport';
 
 interface DashboardProps {
   stats: DashboardStats;
@@ -64,6 +65,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
   const [showProjectionInfo, setShowProjectionInfo] = useState(false);
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
   const [showSurplusInfo, setShowSurplusInfo] = useState(false);
+  const [showCommissionsReport, setShowCommissionsReport] = useState(false);
 
   // Load subscriptions and custom categories on mount
   // Optimized: Only reload when transactions length changes significantly
@@ -102,6 +104,17 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     `${symbol} ${amount.toLocaleString('en-US')}`,
     [symbol]
   );
+
+  if (showCommissionsReport) {
+    return (
+      <CommissionsReport
+        transactions={transactions}
+        accounts={accounts}
+        settings={settings}
+        onBack={() => setShowCommissionsReport(false)}
+      />
+    );
+  }
 
   // --- ORACLE: CASH FLOW PREDICTION ---
   // Must be calculated first as dashboardInfo depends on it
@@ -600,6 +613,29 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
         </div>
       </div>
 
+      {/* Banking Commission Quick Access */}
+      <div className="px-4 mb-4">
+        <button
+          onClick={() => setShowCommissionsReport(true)}
+          className="w-full bg-white dark:bg-slate-800 p-4 rounded-2xl border border-rose-100 dark:border-rose-900/30 flex items-center justify-between shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-rose-50 dark:bg-rose-900/20 rounded-xl">
+              <TrendingDown className="w-5 h-5 text-rose-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+                {language === 'es' ? 'Fuga de Capital' : 'Capital Leakage'}
+              </p>
+              <h4 className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                {language === 'es' ? 'Ver comisiones bancarias' : 'View banking fees'}
+              </h4>
+            </div>
+          </div>
+          <ArrowUpRight className="w-4 h-4 text-slate-300" />
+        </button>
+      </div>
+
       {/* SPENDING RANKINGS & PIE CHART */}
       <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-700">
         <div className="flex items-center justify-between gap-2 mb-4 sm:mb-6">
@@ -717,12 +753,11 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
                 data={barData}
                 barGap={4}
                 margin={{ left: -20, right: 0 }}
-                onClick={(data) => {
+                onClick={(data: any) => {
                   if (data && data.activePayload && data.activePayload[0]) {
                     onFilter('date', data.activePayload[0].payload.key);
                   }
                 }}
-                cursor="pointer"
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />

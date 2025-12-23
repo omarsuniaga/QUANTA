@@ -83,6 +83,12 @@ export interface Account {
   isExcludedFromTotal?: boolean;
   updatedAt?: number;
   lastReconciled?: string; // Last time balance was verified
+  
+  // Banking Commissions Configuration
+  transferCommissionPercentage?: number; // % for bank transfers
+  cardCommissionPercentage?: number;     // % for card payments
+  achFeeFixed?: number;                  // Fixed fee for ACH
+  lbtrFeeFixed?: number;                 // Fixed fee for LBTR
 }
 
 export interface Transaction {
@@ -119,6 +125,10 @@ export interface Transaction {
   incomeType?: 'salary' | 'extra'; // Salary = regular monthly/biweekly, Extra = additional income
   isIncludedInAccountBalance?: boolean; // If true, this income is already reflected in account balances (don't add to available)
   
+  // Commissions
+  commissionAmount?: number; // Total amount deducted due to bank/card commissions
+  bankTransferType?: 'internal' | 'ach' | 'lbtr'; // For bank accounts
+
   // Sharing
   sharedWith?: string[]; 
   
