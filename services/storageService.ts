@@ -66,6 +66,23 @@ const getUserId = () => {
 // Helper for references
 const getUserRef = (uid: string) => db!.collection('users').doc(uid);
 
+/**
+ * Recursively removes undefined values from an object, which Firestore doesn't like.
+ */
+const cleanForFirebase = (obj: any): any => {
+  if (Array.isArray(obj)) {
+    return obj.map(cleanForFirebase).filter(v => v !== undefined);
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc: any, [key, value]) => {
+      if (value !== undefined) {
+        acc[key] = cleanForFirebase(value);
+      }
+      return acc;
+    }, {});
+  }
+  return obj;
+};
+
 // Default Settings Object
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
@@ -336,7 +353,7 @@ export const storageService = {
         const txRef = getUserRef(uid).collection('transactions').doc();
         newTransaction.id = txRef.id;
 
-        const newTxPayload = {
+        const newTxPayload = cleanForFirebase({
           type: transaction.type,
           category: transaction.category,
           description: transaction.description,
@@ -346,6 +363,9 @@ export const storageService = {
           commissionAmount,
           paymentMethodId: transaction.paymentMethodId,
           paymentMethodType: transaction.paymentMethodType || null,
+          bankTransferType: transaction.bankTransferType || null,
+          incomeType: transaction.incomeType || null,
+          isIncludedInAccountBalance: transaction.isIncludedInAccountBalance || false,
           isRecurring: !!transaction.isRecurring,
           frequency: transaction.isRecurring ? (transaction.frequency || 'monthly') : null,
           gigType: transaction.gigType || null,
@@ -353,14 +373,16 @@ export const storageService = {
           receiptUrl: transaction.receiptUrl || null,
           sharedWith: transaction.sharedWith || [],
           createdAt: Date.now()
-        };
+        });
 
         await db!.runTransaction(async (t) => {
           // A. Create Transaction
           t.set(txRef, newTxPayload);
 
-          // B. Update Account Balance (Net Amount: Amount + Commission for Expense, Amount - Commission for Income)
-          if (transaction.paymentMethodId && transaction.paymentMethodId !== 'cash') {
+          // B. Update Account Balance
+          const shouldUpdateBalance = transaction.type === 'expense' || (transaction.type === 'income' && !transaction.isIncludedInAccountBalance);
+          
+          if (shouldUpdateBalance && transaction.paymentMethodId && transaction.paymentMethodId !== 'cash') {
             const accRef = getUserRef(uid).collection('accounts').doc(transaction.paymentMethodId);
             const accDoc = await t.get(accRef);
             if (accDoc.exists) {
@@ -375,15 +397,18 @@ export const storageService = {
 
               t.update(accRef, { balance: newBalance, updatedAt: Date.now() });
               
-              // C. Sync Local Account Balance Immediately
+              // Local Sync
               const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
               const updatedAccs = localAccs.map(a => a.id === transaction.paymentMethodId ? { ...a, balance: newBalance, updatedAt: Date.now() } : a);
               saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
             }
           }
+
+          // C. Log Audit
+          this._logAudit(uid, 'transaction_add', t);
         });
-      } catch(e) {
-        console.warn("Atomic transaction in Firebase failed", e);
+      } catch(e: any) {
+        console.error("Atomic transaction in Firebase failed:", e.message, e.stack);
       }
     }
 
@@ -502,10 +527,12 @@ export const storageService = {
               baseCurrency: settings.currency?.baseCode || 'USD'
             };
           }
-          t.update(txRef, updatePayload);
+          t.update(txRef, cleanForFirebase(updatePayload));
+          
+          this._logAudit(uid, 'transaction_update', t);
         });
-      } catch (e) {
-        console.warn("Update transaction in Firebase failed", e);
+      } catch (e: any) {
+        console.error("Update transaction in Firebase failed:", e.message);
       }
     }
 
@@ -557,9 +584,11 @@ export const storageService = {
 
           // Delete Transaction
           t.delete(txRef);
+          
+          this._logAudit(uid, 'transaction_delete', t);
         });
-      } catch (e) {
-        console.warn("Delete transaction in Firebase failed", e);
+      } catch (e: any) {
+        console.error("Delete transaction in Firebase failed:", e.message);
       }
     }
 
@@ -600,12 +629,13 @@ export const storageService = {
       const batch = db!.batch();
       accounts.forEach(acc => {
         const ref = getUserRef(uid).collection('accounts').doc(acc.id);
-        batch.set(ref, { ...acc, updatedAt: Date.now() });
+        batch.set(ref, cleanForFirebase({ ...acc, updatedAt: Date.now() }));
       });
       try {
         await batch.commit();
-      } catch(e) { 
-        console.warn("Save accounts to Firebase failed (saved locally)", e); 
+        this._logAudit(uid, 'account_update');
+      } catch(e: any) { 
+        console.error("Save accounts to Firebase failed:", e.message); 
       }
     }
   },
@@ -747,10 +777,10 @@ export const storageService = {
     if (canUseFirebase()) {
       const uid = getUserId();
       try {
-        await getUserRef(uid).collection('settings').doc('config').set(settings);
+        await getUserRef(uid).collection('settings').doc('config').set(cleanForFirebase(settings));
         this._logAudit(uid, 'settings_update');
-      } catch(e) { 
-        console.warn("Save settings to Firebase failed (saved locally)", e); 
+      } catch(e: any) { 
+        console.error("Save settings to Firebase failed:", e.message); 
       }
     }
   },
@@ -787,12 +817,12 @@ export const storageService = {
       const batch = db!.batch();
       actions.forEach(qa => {
         const ref = getUserRef(uid).collection('quickActions').doc(qa.id);
-        batch.set(ref, qa);
+        batch.set(ref, cleanForFirebase(qa));
       });
       try {
         await batch.commit();
-      } catch(e) { 
-        console.warn("Save quick actions to Firebase failed (saved locally)", e); 
+      } catch(e: any) { 
+        console.error("Save quick actions to Firebase failed:", e.message); 
       }
     }
   },
@@ -838,17 +868,17 @@ export const storageService = {
     // 2. Try to sync to Firebase if available
     if (canUseFirebase()) {
       const uid = getUserId();
-      const newSubPayload = {
+      const newSubPayload = cleanForFirebase({
         name: sub.name,
         amount: sub.amount,
         chargeDay: sub.chargeDay,
         frequency: sub.frequency,
-        autoPaymentAccount: sub.paymentMethod,
+        autoPaymentAccount: sub.paymentMethod || null,
         reminderDays: sub.reminderDays,
         category: sub.category,
         lastPaidDate: sub.lastPaidDate || null,
         isActive: true
-      };
+      });
       
       try {
         const docRef = await getUserRef(uid).collection('subscriptions').add(newSubPayload);
@@ -856,8 +886,8 @@ export const storageService = {
         const updatedSubs = localSubs.map(s => s.id === localId ? { ...s, id: docRef.id } : s);
         saveToLocal(LS_KEYS.SUBSCRIPTIONS, updatedSubs);
         return { id: docRef.id, ...sub };
-      } catch(e) {
-        console.warn("Add subscription to Firebase failed (saved locally)", e);
+      } catch(e: any) {
+        console.error("Add subscription to Firebase failed:", e.message);
       }
     }
     
@@ -1341,28 +1371,33 @@ export const storageService = {
 
   // --- AUDIT LOGGING ---
   
-  async _logAudit(uid: string, event: AuditLog['event']) {
+  async _logAudit(uid: string, event: AuditLog['event'], t?: firebase.firestore.Transaction) {
     try {
       // Don't log if offline or blocked to prevent noise
-      if (!navigator.onLine) return;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       
-      const ipResponse = await fetch('https://api.ipify.org?format=json').catch(() => ({ json: () => ({ ip: 'unknown' }) }));
-      const { ip } = await ipResponse.json();
-
-      const log: Omit<AuditLog, 'id'> = {
+      const ip = 'hidden'; // Avoid slow fetch in atomic transactions
+      
+      const log = cleanForFirebase({
         userId: uid,
         event,
         timestamp: Date.now(),
         ipAddress: ip,
-        userAgent: navigator.userAgent,
-        deviceType: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-        platform: navigator.platform,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Node',
+        deviceType: (typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent)) ? 'mobile' : 'desktop',
+        platform: typeof navigator !== 'undefined' ? navigator.platform : 'unknown',
         appVersion: '1.0.0'
-      };
+      });
       
-      await getUserRef(uid).collection('audit_logs').add(log);
+      const logRef = getUserRef(uid).collection('audit_logs').doc();
+      
+      if (t) {
+        t.set(logRef, log);
+      } else {
+        await logRef.set(log);
+      }
     } catch (e) {
-      console.warn("Audit log failed (Permissions?)", e);
+      console.warn("Audit log failed", e);
     }
   },
 

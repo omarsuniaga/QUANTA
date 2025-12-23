@@ -48,7 +48,7 @@ export interface MonetaryAmount {
 export interface AuditLog {
   id?: string;
   userId: string;
-  event: 'login' | 'logout' | 'settings_update' | 'data_export' | 'settings_change';
+  event: 'login' | 'logout' | 'settings_update' | 'data_export' | 'settings_change' | 'transaction_add' | 'transaction_update' | 'transaction_delete' | 'account_update' | 'goal_update';
   timestamp: number;
   ipAddress: string;
   userAgent: string;

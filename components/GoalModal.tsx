@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react';
 import { X, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, Clock, Wallet, TrendingUp, Info } from 'lucide-react';
 import { Goal } from '../types';
 import { Button } from './Button';
@@ -42,6 +42,15 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   availableBalance = 0
 }) => {
   const { t, language } = useI18n();
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      nameRef.current?.focus();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
 
   // Basic fields
   const [name, setName] = useState(goal?.name || '');
@@ -248,6 +257,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
               {l.goalName}
             </label>
             <input
+              ref={nameRef}
               type="text"
               required
               value={name}

@@ -41,60 +41,44 @@ export const ModalWrapper: React.FC<ModalWrapperProps> = ({
   isOpen,
   onClose,
   children,
-  alignment = 'center',
-  closeOnBackdropClick = true,
 }) => {
   // Bloquear scroll del body cuando el modal está abierto
   useEffect(() => {
     if (isOpen) {
-      // Guardar posición de scroll actual
-      const scrollY = window.scrollY;
-
-      // Bloquear scroll
-      document.body.style.position = 'fixed';
-      document.body.style.top = `-${scrollY}px`;
-      document.body.style.width = '100%';
+      const originalStyle = window.getComputedStyle(document.body).overflow;
       document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
 
       return () => {
-        // Restaurar scroll al cerrar
-        document.body.style.position = '';
-        document.body.style.top = '';
-        document.body.style.width = '';
-        document.body.style.overflow = '';
-        window.scrollTo(0, scrollY);
+        document.body.style.overflow = originalStyle;
+        document.documentElement.style.overflow = '';
       };
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Solo cerrar si se hace click en el backdrop, no en el contenido
-    if (closeOnBackdropClick && e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   return (
     <div
       className={`
-        fixed inset-0 z-[9999]
-        bg-black/90 backdrop-blur-sm
+        fixed inset-0 z-[99999]
+        bg-slate-900/60 dark:bg-black/80 backdrop-blur-md
         flex items-center justify-center
-        pointer-events-auto
-        p-4 sm:p-6
-        animate-in fade-in duration-200
+        p-4 sm:p-8
+        animate-in fade-in duration-300
         overflow-y-auto
       `}
-      onClick={onClose}
+    // Removido onClick={onClose} según requerimiento (no cerrar al presionar fuera)
     >
+      {/* Contenedor que maneja el centrado y la animación */}
       <div
-        className="w-full flex items-center justify-center min-h-full py-8"
-        onClick={e => e.stopPropagation()}
+        className="w-full flex items-center justify-center min-h-full py-10 animate-in zoom-in-95 duration-300 pointer-events-none"
       >
-        {children}
+        <div className="w-full max-w-lg pointer-events-auto" onClick={e => e.stopPropagation()}>
+          {children}
+        </div>
       </div>
     </div>
   );
 };
+

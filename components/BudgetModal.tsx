@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Calendar, Plus, RefreshCw, PiggyBank, Calculator as CalcIcon } from 'lucide-react';
 import { Budget, CustomCategory } from '../types';
 import { useI18n } from '../contexts/I18nContext';
@@ -25,6 +25,20 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
   onSave,
 }) => {
   const { t, language } = useI18n();
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const timer = setTimeout(() => {
+        amountRef.current?.focus();
+        if (amountRef.current?.value && amountRef.current.value !== '0') {
+          amountRef.current.select();
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showCalculator, setShowCalculator] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
@@ -203,12 +217,12 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
               <div className="flex items-center justify-center gap-2">
                 <span className="text-slate-300 dark:text-slate-600 text-2xl sm:text-3xl font-bold">{currencySymbol}</span>
                 <input
+                  ref={amountRef}
                   type="number"
                   value={formData.limit}
                   onChange={(e) => handleChange('limit', e.target.value)}
                   placeholder="0"
                   required
-                  autoFocus
                   step="0.01"
                   className="w-40 sm:w-48 text-center text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white placeholder-slate-200 dark:placeholder-slate-700 outline-none bg-transparent"
                 />
@@ -475,7 +489,6 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
           currencySymbol={currencySymbol}
         />
       )}
-      </div>
     </ModalWrapper>
   );
 };

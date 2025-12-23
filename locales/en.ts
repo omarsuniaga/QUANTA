@@ -176,6 +176,7 @@ export const en: TranslationKeys = {
     allMethods: 'All methods',
     clear: 'Clear',
     apply: 'Apply Filters',
+    search: 'Search by description or amount',
   },
 
   // Goals

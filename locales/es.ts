@@ -174,6 +174,7 @@ export const es = {
     allMethods: 'Todos los métodos',
     clear: 'Limpiar',
     apply: 'Aplicar Filtros',
+    search: 'Buscar por descripción o monto',
   },
 
   // Goals

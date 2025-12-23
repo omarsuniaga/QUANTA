@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Plane, ShoppingBag, Gift, Star, Coffee, Music, Trash2 } from 'lucide-react';
 import { Promo } from '../types';
 import { Button } from './Button';
@@ -24,6 +24,15 @@ const COLORS = ['blue', 'purple', 'rose', 'amber', 'emerald', 'indigo'];
 
 export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete, onClose }) => {
   const [title, setTitle] = useState(promo?.title || '');
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      titleRef.current?.focus();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [subtitle, setSubtitle] = useState(promo?.subtitle || '');
   const [icon, setIcon] = useState(promo?.icon || 'Star');
   const [color, setColor] = useState(promo?.color || 'blue');
@@ -64,6 +73,7 @@ export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete,
           <div>
             <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">Título</label>
             <input
+              ref={titleRef}
               type="text"
               required
               value={title}
