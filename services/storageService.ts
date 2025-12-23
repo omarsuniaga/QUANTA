@@ -376,32 +376,35 @@ export const storageService = {
         });
 
         await db!.runTransaction(async (t) => {
-          // A. Create Transaction
+          // A. PRE-READ: All reads must happen first
+          const shouldUpdateBalance = transaction.type === 'expense' || (transaction.type === 'income' && !transaction.isIncludedInAccountBalance);
+          let accDoc = null;
+          let accRef = null;
+
+          if (shouldUpdateBalance && transaction.paymentMethodId && transaction.paymentMethodId !== 'cash') {
+            accRef = getUserRef(uid).collection('accounts').doc(transaction.paymentMethodId);
+            accDoc = await t.get(accRef);
+          }
+
+          // B. WRITES: All writes happen after reads
           t.set(txRef, newTxPayload);
 
-          // B. Update Account Balance
-          const shouldUpdateBalance = transaction.type === 'expense' || (transaction.type === 'income' && !transaction.isIncludedInAccountBalance);
-          
-          if (shouldUpdateBalance && transaction.paymentMethodId && transaction.paymentMethodId !== 'cash') {
-            const accRef = getUserRef(uid).collection('accounts').doc(transaction.paymentMethodId);
-            const accDoc = await t.get(accRef);
-            if (accDoc.exists) {
-              const accData = accDoc.data() as Account;
-              const netAmount = (transaction.type === 'income') 
-                ? transaction.amount - commissionAmount 
-                : transaction.amount + commissionAmount;
-              
-              const newBalance = (transaction.type === 'income') 
-                ? accData.balance + netAmount 
-                : accData.balance - netAmount;
+          if (accDoc?.exists && accRef) {
+            const accData = accDoc.data() as Account;
+            const netAmount = (transaction.type === 'income') 
+              ? transaction.amount - commissionAmount 
+              : transaction.amount + commissionAmount;
+            
+            const newBalance = (transaction.type === 'income') 
+              ? accData.balance + netAmount 
+              : accData.balance - netAmount;
 
-              t.update(accRef, { balance: newBalance, updatedAt: Date.now() });
-              
-              // Local Sync
-              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
-              const updatedAccs = localAccs.map(a => a.id === transaction.paymentMethodId ? { ...a, balance: newBalance, updatedAt: Date.now() } : a);
-              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
-            }
+            t.update(accRef, { balance: newBalance, updatedAt: Date.now() });
+            
+            // Local Sync (Side effect after queueing write)
+            const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+            const updatedAccs = localAccs.map(a => a.id === transaction.paymentMethodId ? { ...a, balance: newBalance, updatedAt: Date.now() } : a);
+            saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
           }
 
           // C. Log Audit
@@ -468,52 +471,94 @@ export const storageService = {
           const oldAccountId = originalTx.paymentMethodId;
           const newAccountId = updates.paymentMethodId !== undefined ? updates.paymentMethodId : oldAccountId;
           
-          // Revert Old Balance
+          // 1. PRE-READ Section
+          let oldAccDoc = null;
+          let oldAccRef = null;
           if (oldAccountId && oldAccountId !== 'cash') {
-            const oldAccRef = getUserRef(uid).collection('accounts').doc(oldAccountId);
-            const oldAccDoc = await t.get(oldAccRef);
-            if (oldAccDoc.exists) {
-              const oldAccData = oldAccDoc.data() as Account;
-              const oldNetAmount = (originalTx.type === 'income') 
-                ? originalTx.amount - (originalTx.commissionAmount || 0)
-                : originalTx.amount + (originalTx.commissionAmount || 0);
-              
-              const revertedBalance = (originalTx.type === 'income')
-                ? oldAccData.balance - oldNetAmount
-                : oldAccData.balance + oldNetAmount;
-              
-              t.update(oldAccRef, { balance: revertedBalance, updatedAt: Date.now() });
-              
-              // Sync Local (temporary, will be overwritten by final update if same account)
-              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
-              const updatedAccs = localAccs.map(a => a.id === oldAccountId ? { ...a, balance: revertedBalance } : a);
-              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
-            }
+            oldAccRef = getUserRef(uid).collection('accounts').doc(oldAccountId);
+            oldAccDoc = await t.get(oldAccRef);
           }
 
-          // Apply New Balance
-          if (newAccountId && newAccountId !== 'cash') {
-            const newAccRef = getUserRef(uid).collection('accounts').doc(newAccountId);
-            const newAccDoc = await t.get(newAccRef);
-            if (newAccDoc.exists) {
-              const newAccData = newAccDoc.data() as Account;
-              const type = updates.type || originalTx.type;
-              const amount = updates.amount !== undefined ? updates.amount : originalTx.amount;
-              const netAmount = (type === 'income')
-                ? amount - newCommissionAmount
-                : amount + newCommissionAmount;
-              
-              const newBalance = (type === 'income')
-                ? newAccData.balance + netAmount
-                : newAccData.balance - netAmount;
+          let newAccDoc = null;
+          let newAccRef = null;
+          if (newAccountId && newAccountId !== 'cash' && newAccountId !== oldAccountId) {
+            newAccRef = getUserRef(uid).collection('accounts').doc(newAccountId);
+            newAccDoc = await t.get(newAccRef);
+          }
 
-              t.update(newAccRef, { balance: newBalance, updatedAt: Date.now() });
+          // 2. WRITES Section
+          
+          // Revert Old Balance
+          if (oldAccDoc?.exists && oldAccRef) {
+            const oldAccData = oldAccDoc.data() as Account;
+            const oldNetAmount = (originalTx.type === 'income') 
+              ? originalTx.amount - (originalTx.commissionAmount || 0)
+              : originalTx.amount + (originalTx.commissionAmount || 0);
+            
+            const revertedBalance = (originalTx.type === 'income')
+              ? oldAccData.balance - oldNetAmount
+              : oldAccData.balance + oldNetAmount;
+            
+            t.update(oldAccRef, { balance: revertedBalance, updatedAt: Date.now() });
+            
+            // Sync Local (temporary)
+            const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+            const updatedAccs = localAccs.map(a => a.id === oldAccountId ? { ...a, balance: revertedBalance } : a);
+            saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
+          }
 
-              // Sync Local
-              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
-              const updatedAccs = localAccs.map(a => a.id === newAccountId ? { ...a, balance: newBalance } : a);
-              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
-            }
+          // Apply New Balance (or update balance on same account if changed)
+          // If it's the same account, we need to read 'revertedBalance' but we just updated the buffer.
+          // In Firestore transactions, if we update then read, it fails.
+          // Actually, if it's the same account, we should handle it in one go to be safe.
+          const isSameAccount = newAccountId === oldAccountId;
+          
+          if (!isSameAccount && newAccDoc?.exists && newAccRef) {
+            const newAccData = newAccDoc.data() as Account;
+            const type = updates.type || originalTx.type;
+            const amount = updates.amount !== undefined ? updates.amount : originalTx.amount;
+            const netAmount = (type === 'income')
+              ? amount - newCommissionAmount
+              : amount + newCommissionAmount;
+            
+            const newBalance = (type === 'income')
+              ? newAccData.balance + netAmount
+              : newAccData.balance - netAmount;
+
+            t.update(newAccRef, { balance: newBalance, updatedAt: Date.now() });
+
+            // Sync Local
+            const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+            const updatedAccs = localAccs.map(a => a.id === newAccountId ? { ...a, balance: newBalance } : a);
+            saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
+          } else if (isSameAccount && oldAccDoc?.exists && oldAccRef) {
+            // Recalculate based on the oldAccData and the net change
+            const oldAccData = oldAccDoc.data() as Account;
+            
+            // Direct calculation of final balance:
+            // Final = Current - Original ప్రభావం + New ప్రభావం
+            const oldNetAmount = (originalTx.type === 'income') 
+              ? originalTx.amount - (originalTx.commissionAmount || 0)
+              : originalTx.amount + (originalTx.commissionAmount || 0);
+            
+            const type = updates.type || originalTx.type;
+            const amount = updates.amount !== undefined ? updates.amount : originalTx.amount;
+            const newNetAmount = (type === 'income')
+              ? amount - newCommissionAmount
+              : amount + newCommissionAmount;
+
+            let finalBalance = oldAccData.balance;
+            // Subtract original effect
+            finalBalance = (originalTx.type === 'income') ? finalBalance - oldNetAmount : finalBalance + oldNetAmount;
+            // Add new effect
+            finalBalance = (type === 'income') ? finalBalance + newNetAmount : finalBalance - newNetAmount;
+
+            t.update(oldAccRef, { balance: finalBalance, updatedAt: Date.now() });
+
+            // Sync Local
+            const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+            const updatedAccs = localAccs.map(a => a.id === oldAccountId ? { ...a, balance: finalBalance } : a);
+            saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
           }
 
           // Update Transaction
@@ -559,27 +604,33 @@ export const storageService = {
           const txRef = getUserRef(uid).collection('transactions').doc(id);
           const accountId = txToDelete.paymentMethodId;
 
-          // Revert Balance
+          // 1. PRE-READ
+          let accDoc = null;
+          let accRef = null;
           if (accountId && accountId !== 'cash') {
-            const accRef = getUserRef(uid).collection('accounts').doc(accountId);
-            const accDoc = await t.get(accRef);
-            if (accDoc.exists) {
-              const accData = accDoc.data() as Account;
-              const netAmount = (txToDelete.type === 'income')
-                ? txToDelete.amount - (txToDelete.commissionAmount || 0)
-                : txToDelete.amount + (txToDelete.commissionAmount || 0);
-              
-              const revertedBalance = (txToDelete.type === 'income')
-                ? accData.balance - netAmount
-                : accData.balance + netAmount;
+            accRef = getUserRef(uid).collection('accounts').doc(accountId);
+            accDoc = await t.get(accRef);
+          }
 
-              t.update(accRef, { balance: revertedBalance, updatedAt: Date.now() });
+          // 2. WRITES
+          
+          // Revert Balance
+          if (accDoc?.exists && accRef) {
+            const accData = accDoc.data() as Account;
+            const netAmount = (txToDelete.type === 'income')
+              ? txToDelete.amount - (txToDelete.commissionAmount || 0)
+              : txToDelete.amount + (txToDelete.commissionAmount || 0);
+            
+            const revertedBalance = (txToDelete.type === 'income')
+              ? accData.balance - netAmount
+              : accData.balance + netAmount;
 
-              // Sync Local Account Balance
-              const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
-              const updatedAccs = localAccs.map(a => a.id === accountId ? { ...a, balance: revertedBalance } : a);
-              saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
-            }
+            t.update(accRef, { balance: revertedBalance, updatedAt: Date.now() });
+
+            // Sync Local Account Balance
+            const localAccs = getFromLocal<Account[]>(LS_KEYS.ACCOUNTS, []);
+            const updatedAccs = localAccs.map(a => a.id === accountId ? { ...a, balance: revertedBalance } : a);
+            saveToLocal(LS_KEYS.ACCOUNTS, updatedAccs);
           }
 
           // Delete Transaction
