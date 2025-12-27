@@ -13,6 +13,7 @@ import {
 import { User, DashboardStats } from '../../types';
 import { TabType } from '../../hooks/useAppNavigation';
 import { NotificationBell } from '../NotificationCenter';
+import { useCurrency } from '../../hooks/useCurrency';
 
 interface TranslationObject {
   nav: {
@@ -33,7 +34,6 @@ interface DesktopSidebarProps {
   stats: DashboardStats;
   isOnline: boolean;
   isDarkMode: boolean;
-  currencySymbol: string;
   activeTab: TabType;
   onNavigateToTab: (tab: TabType) => void;
   onOpenNotificationCenter: () => void;
@@ -54,7 +54,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   stats,
   isOnline,
   isDarkMode,
-  currencySymbol,
   activeTab,
   onNavigateToTab,
   onOpenNotificationCenter,
@@ -62,6 +61,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   onOpenAICoach,
   t,
 }) => {
+  const { formatAmount } = useCurrency();
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 xl:w-72 lg:fixed lg:inset-y-0 lg:left-1/2 lg:-translate-x-[calc(50%+28rem)] xl:-translate-x-[calc(50%+32rem)] bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-40 overflow-y-auto">
       <div className="flex-1 flex flex-col p-6 pb-8">
@@ -80,10 +80,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             <NotificationBell onClick={onOpenNotificationCenter} />
           </div>
           <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-            {currencySymbol}{' '}
-            {(stats.realBalance > 0 ? stats.realBalance : stats.balance).toLocaleString('en-US', {
-              minimumFractionDigits: 2,
-            })}
+            {formatAmount(stats.realBalance || stats.balance || 0)}
           </p>
           <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1">
             {t.dashboard.availableToday}
@@ -99,66 +96,60 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         <nav className="space-y-2">
           <button
             onClick={() => onNavigateToTab('dashboard')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'dashboard'
-                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'dashboard'
+              ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
           >
             <LayoutGrid className="w-5 h-5" />
             {t.nav.dashboard}
           </button>
           <button
             onClick={() => onNavigateToTab('income')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'income'
-                ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'income'
+              ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
           >
             <ArrowUpRight className="w-5 h-5" />
             💰 Ingresos
           </button>
           <button
             onClick={() => onNavigateToTab('expenses')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'expenses'
-                ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'expenses'
+              ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
           >
             <ArrowDownRight className="w-5 h-5" />
             💸 Gastos
           </button>
           <button
             onClick={() => onNavigateToTab('budgets')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'budgets'
-                ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'budgets'
+              ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
           >
             <PiggyBank className="w-5 h-5" />
             💰 Presupuestos
           </button>
           <button
             onClick={() => onNavigateToTab('transactions')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'transactions'
-                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'transactions'
+              ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
           >
             <List className="w-5 h-5" />
             📋 Historial
           </button>
           <button
             onClick={() => onNavigateToTab('settings')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'settings'
-                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
-            }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all ${activeTab === 'settings'
+              ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
           >
             <SettingsIcon className="w-5 h-5" />
             {t.nav.settings}

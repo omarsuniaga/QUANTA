@@ -212,6 +212,85 @@ export const es = {
     improving: 'Mejorando',
     stable: 'Estable',
     declining: 'Declinando',
+    constructiveCriticism: 'Crítica Constructiva',
+    habitAlert: 'Hábito Detectado',
+    coachTools: 'Herramientas del Coach',
+    quickTips: 'Tips Rápidos del Coach',
+    noAnalysis: 'No hay análisis disponible',
+  },
+
+  // Notifications
+  notifications: {
+    servicePayment: {
+      title: 'Pago próximo: {description}',
+      body: {
+        today: 'Hoy - {amount} a pagar',
+        tomorrow: 'Mañana - {amount} a pagar',
+        future: 'En {days} días - {amount} a pagar',
+      },
+    },
+    subscriptionCharge: {
+      title: 'Cobro de suscripción: {name}',
+      body: {
+        today: 'Hoy se cobra {amount}',
+        tomorrow: 'Mañana se cobra {amount}',
+        future: 'En {days} días se cobra {amount}',
+      },
+    },
+    insufficientFunds: {
+      title: 'Alerta: Fondos insuficientes',
+      body: 'Te faltan {deficit} para cubrir tus pagos próximos. Revisa tu presupuesto.',
+    },
+    goalContribution: {
+      title: 'Aporte programado: {name}',
+      body: {
+        today: 'Hoy toca aportar {amount} a tu meta.{warning}',
+        future: 'En {days} días debes aportar {amount}.{warning}',
+        warning: ' ⚠️ Fondos insuficientes',
+      },
+    },
+    goalMilestone: {
+      title: '¡{percent}% de tu meta!',
+      body: 'Has alcanzado el {percent}% de "{name}". ¡Sigue así!',
+    },
+    goalCompleted: {
+      title: '¡Meta completada!',
+      body: '¡Felicidades! Has alcanzado tu meta "{name}". ¡Excelente trabajo!',
+    },
+    budgetWarning: {
+      title: 'Alerta de presupuesto: {category}',
+      body: 'Has usado el {percent}% de tu presupuesto. Te quedan {remaining}.',
+    },
+    budgetExceeded: {
+      title: '¡Presupuesto excedido!',
+      body: 'Has superado tu presupuesto de {category} por {excess}.',
+    },
+    unusualExpense: {
+      title: 'Gasto inusual detectado',
+      body: 'El gasto "{description}" de {amount} es {multiplier}x mayor que tu promedio.',
+    },
+    weeklySummary: {
+      title: 'Tu resumen semanal',
+      body: 'Has ahorrado el {savingsRate}% de tus ingresos esta semana. {activeGoals} metas activas.',
+    },
+    modelAlerts: {
+      essentialist: {
+        title: 'Alerta Esencialista',
+        body: 'Tus gastos esenciales están al {percent}% (Meta: 50%). Intenta reducir fijos.',
+      },
+      auditor: {
+        title: 'Dinero sin Asignar',
+        body: 'Tienes fondos sin propósito asignado. El Auditor requiere que cada moneda tenga un trabajo.',
+      },
+      defensive: {
+        title: 'Modo Defensivo Activado',
+        body: 'Estás gastando en deseos ({percent}%) mientras tienes deuda. Prioriza pagar la deuda.',
+      },
+      velocity: {
+        title: 'Velocidad de Gasto Alta',
+        body: 'A este ritmo ({rate}/día), te quedarás sin fondos el día {date}.',
+      },
+    },
   },
 
   // Savings Planner
@@ -283,6 +362,12 @@ export const es = {
     otherStrategies: 'Otras Estrategias',
     excellentWork: '¡Excelente trabajo!',
     aligned: 'Tu distribución actual está alineada con esta estrategia.',
+    reduceTip: 'Estás gastando {diff}% más de lo recomendado. Intenta reducir {amount} este mes.',
+    increaseTip: 'Estás {diff}% por debajo. Intenta destinar {amount} adicionales.',
+    target: 'Objetivo',
+    actual: 'Actual',
+    compatibility: 'Tu compatibilidad con esta estrategia',
+    empty: 'No hay estrategias disponibles',
   },
 };
 

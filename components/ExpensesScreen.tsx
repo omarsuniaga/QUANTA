@@ -13,17 +13,17 @@ import { parseLocalDate } from '../utils/dateHelpers';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { ModalWrapper } from './ModalWrapper';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
-  currencySymbol?: string;
-  currencyCode?: string;
   budgetPeriodData: BudgetPeriodData;
   onQuickExpense: () => void;
   onRecurringExpense: () => void;
   onPlannedExpense: () => void;
   onEditTransaction?: (transaction: Transaction) => void;
   onDeleteTransaction?: (id: string) => void;
+  onUpdateTransaction?: (id: string, updates: Partial<Transaction>) => Promise<boolean>;
   onPaymentConfirmed?: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => Promise<void>;
 }
 
@@ -40,14 +40,13 @@ interface PendingPayment {
 
 export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   transactions,
-  currencySymbol = '$',
-  currencyCode = 'MXN',
   budgetPeriodData,
   onQuickExpense,
   onRecurringExpense,
   onPlannedExpense,
   onEditTransaction,
   onDeleteTransaction,
+  onUpdateTransaction,
   onPaymentConfirmed
 }) => {
   const { settings } = useSettings();
@@ -94,6 +93,9 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   // Current month expenses total
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
+
+  const { formatAmount, convertAmount } = useCurrency();
+  const formatCurrency = formatAmount;
 
   const thisMonthExpenses = useMemo(() => {
     return expenses
@@ -186,7 +188,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     }
 
     return breakdown;
-  }, [categoryBreakdown, thisMonthExpenses, expenses, currentMonth, currentYear, language, getCategoryName]);
+  }, [categoryBreakdown, thisMonthExpenses, expenses, currentMonth, currentYear, language, getCategoryName, convertAmount]);
 
   // Budget breakdown for info modal
   const budgetBreakdown = useMemo((): AmountBreakdownItem[] => {
@@ -237,6 +239,11 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     return breakdown;
   }, [budgetTotal, spentBudgeted, spentUnbudgeted, budgetRemaining, budgetUsedPercent, language]);
 
+  // Helper to check if same month and year
+  const isSameMonth = (date1: Date, date2: Date) => {
+    return date1.getMonth() === date2.getMonth() && date1.getFullYear() === date2.getFullYear();
+  };
+
   // Get pending recurring payments (upcoming payments that need confirmation)
   const pendingRecurringPayments = useMemo((): PendingPayment[] => {
     const now = new Date();
@@ -253,6 +260,56 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         nextDueDate.setMonth(nextDueDate.getMonth() + 1);
       }
 
+      // PRIMARY CHECK: Explicit lastPaidDate
+      if (expense.lastPaidDate) {
+        const lastPaid = parseLocalDate(expense.lastPaidDate);
+        // If same month as next due date, it's paid
+        if (isSameMonth(lastPaid, nextDueDate)) {
+          return;
+        }
+
+        // Also check proximity (early payment)
+        const diffTime = Math.abs(lastPaid.getTime() - nextDueDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays < 20) return;
+      }
+
+      // 1. Check if already marked as processed (Paid) in actual transactions
+      // Look for a transaction that links to this recurring definition AND is close to due date
+      // We check for payments within +/- 25 days to handle early/late payments (e.g. paying Jan 1st bill on Dec 27th)
+      const isAlreadyPaid = expenses.some(t => {
+        if (!t.relatedRecurringId) return false;
+        if (t.relatedRecurringId !== expense.id) return false;
+
+        const txDate = parseLocalDate(t.date);
+        const diffTime = Math.abs(txDate.getTime() - nextDueDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return diffDays < 25; // 25 day buffer handles most monthly billing anomalies
+      });
+
+      if (isAlreadyPaid) return;
+
+      // 2. Check LocalStorage for Skipped/Postponed status
+      // We use a key that includes year-month for skips, and just ID + timestamp for postpones (24h)
+      const skipKey = `skip_${expense.id}_${nextDueDate.toISOString().slice(0, 7)}`; // skip_ID_YYYY-MM
+      const postponeKey = `postpone_${expense.id}`;
+
+      const isSkipped = localStorage.getItem(skipKey) === 'true';
+      let isPostponed = false;
+
+      const postponeData = localStorage.getItem(postponeKey);
+      if (postponeData) {
+        const { timestamp } = JSON.parse(postponeData);
+        const hoursDiff = (now.getTime() - timestamp) / (1000 * 60 * 60);
+        if (hoursDiff < 24) { // Hidden for 24 hours
+          isPostponed = true;
+        }
+      }
+
+      if (isSkipped || isPostponed) return;
+
+      // Calculate days until due
       const daysUntilDue = Math.ceil((nextDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
       // Show payments due within next 7 days
@@ -270,6 +327,69 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
 
     return upcoming.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
   }, [expenses, pendingPayments]);
+
+  const handlePayment = async (payment: PendingPayment, action: 'paid' | 'postponed' | 'rejected') => {
+    // Update local UI state
+    setPendingPayments(prev => new Map(prev).set(payment.id, action));
+
+    if (action === 'rejected') { // Omitir / Skip
+      const skipKey = `skip_${payment.id}_${payment.dueDate.toISOString().slice(0, 7)}`;
+      localStorage.setItem(skipKey, 'true');
+    } else if (action === 'postponed') { // Posponer
+      localStorage.setItem(`postpone_${payment.id}`, JSON.stringify({ timestamp: Date.now() }));
+    } else if (action === 'paid') {
+      // Explicitly update the recurring parent transaction with lastPaidDate
+      if (onUpdateTransaction) {
+        await onUpdateTransaction(payment.id, {
+          lastPaidDate: payment.dueDate.toISOString()
+        });
+      }
+    }
+
+    // Handle notification service action
+    const pendingNotification = smartNotificationService.hasPendingNotification(payment.id);
+    if (pendingNotification) {
+      await smartNotificationService.handleScheduledPaymentAction(
+        pendingNotification.id,
+        action === 'rejected' ? 'cancel' : action === 'paid' ? 'pay' : 'postpone',
+        async (transactionId, amount, dueDate) => {
+          // When user confirms payment, create a new expense transaction
+          if (onPaymentConfirmed) {
+            const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
+              type: 'expense',
+              amount: payment.transaction.amount,
+              category: payment.transaction.category,
+              description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
+              date: new Date().toISOString().split('T')[0],
+
+              // CRITICAL: Link this new one-off payment to the recurring definition
+              isRecurring: false,
+              relatedRecurringId: payment.id,
+
+              notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
+            };
+            await onPaymentConfirmed(newTransaction);
+          }
+        }
+      );
+    } else if (action === 'paid' && onPaymentConfirmed) {
+      // No notification exists, but user still wants to pay - create transaction directly
+      const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
+        type: 'expense',
+        amount: payment.transaction.amount,
+        category: payment.transaction.category,
+        description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
+        date: new Date().toISOString().split('T')[0],
+
+        // CRITICAL: Link this new one-off payment to the recurring definition
+        isRecurring: false,
+        relatedRecurringId: payment.id,
+
+        notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
+      };
+      await onPaymentConfirmed(newTransaction);
+    }
+  };
 
   // Filter and sort history
   const filteredHistory = useMemo(() => {
@@ -335,55 +455,12 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     return groups;
   }, [filteredHistory]);
 
-  const formatCurrency = (amount: number) => {
-    return `${currencySymbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+
 
   const formatTime = (dateStr: string, timeStr?: string) => {
     if (timeStr) return timeStr;
     const date = parseLocalDate(dateStr);
     return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const handlePayment = async (payment: PendingPayment, action: 'paid' | 'postponed' | 'rejected') => {
-    // Update local UI state
-    setPendingPayments(prev => new Map(prev).set(payment.id, action));
-
-    // Handle notification service action
-    const pendingNotification = smartNotificationService.hasPendingNotification(payment.id);
-    if (pendingNotification) {
-      await smartNotificationService.handleScheduledPaymentAction(
-        pendingNotification.id,
-        action === 'rejected' ? 'cancel' : action === 'paid' ? 'pay' : 'postpone',
-        async (transactionId, amount, dueDate) => {
-          // When user confirms payment, create a new expense transaction
-          if (onPaymentConfirmed) {
-            const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
-              type: 'expense',
-              amount: payment.transaction.amount,
-              category: payment.transaction.category,
-              description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
-              date: new Date().toISOString().split('T')[0],
-              isRecurring: false, // This is the actual payment, not the recurring definition
-              notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
-            };
-            await onPaymentConfirmed(newTransaction);
-          }
-        }
-      );
-    } else if (action === 'paid' && onPaymentConfirmed) {
-      // No notification exists, but user still wants to pay - create transaction directly
-      const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
-        type: 'expense',
-        amount: payment.transaction.amount,
-        category: payment.transaction.category,
-        description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
-        date: new Date().toISOString().split('T')[0],
-        isRecurring: false,
-        notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
-      };
-      await onPaymentConfirmed(newTransaction);
-    }
   };
 
   const getDueDateLabel = (daysUntilDue: number): { text: string; color: string } => {
@@ -969,7 +1046,6 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         subtitle={language === 'es' ? '¿De dónde vienen tus gastos?' : 'Where do your expenses come from?'}
         totalAmount={thisMonthExpenses}
         breakdown={monthExpenseBreakdown}
-        currencySymbol={currencySymbol}
         language={language as 'es' | 'en'}
       />
 
@@ -980,7 +1056,6 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         subtitle={language === 'es' ? 'Desglose de tu presupuesto mensual' : 'Breakdown of your monthly budget'}
         totalAmount={budgetTotal}
         breakdown={budgetBreakdown}
-        currencySymbol={currencySymbol}
         language={language as 'es' | 'en'}
       />
     </div>

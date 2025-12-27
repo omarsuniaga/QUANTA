@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { ArrowLeft, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, Clock, Wallet, TrendingUp, Info } from 'lucide-react';
+import { ArrowLeft, Plane, Shield, Gift, Car, Home, Save, Trash2, Calculator, Calendar, Clock, Wallet, TrendingUp, Info, Target } from 'lucide-react';
 import { Goal, Transaction } from '../types';
 import { parseLocalDate } from '../utils/dateHelpers';
 import { Button } from './Button';
@@ -8,22 +8,21 @@ import { useI18n } from '../contexts/I18nContext';
 interface GoalViewProps {
   goal: Goal;
   transactions: Transaction[];
-  currencySymbol: string;
-  currencyCode: string;
   onBack: () => void;
   onSave: (goal: Goal) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
+import { useCurrency } from '../hooks/useCurrency';
+
 export const GoalView: React.FC<GoalViewProps> = memo(({
   goal,
   transactions,
-  currencySymbol,
-  currencyCode,
   onBack,
   onSave,
   onDelete
 }) => {
+  const { formatAmount, fromBase, toBase, currencySymbol } = useCurrency();
   const { t, language } = useI18n();
   const [editingGoal, setEditingGoal] = useState<Goal>({ ...goal });
   const [isSaving, setIsSaving] = useState(false);
@@ -136,7 +135,6 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
         </div>
         <Button
           variant="ghost"
-          size="sm"
           onClick={() => onDelete(goal.id)}
           className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20"
         >
@@ -167,11 +165,11 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
             <div className="flex justify-between items-end">
               <div>
                 <p className="text-xs opacity-70 mb-1">{language === 'es' ? 'Ahorrado' : 'Saved'}</p>
-                <p className="text-xl font-bold">{currencySymbol}{goal.currentAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold">{formatAmount(goal.currentAmount)}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs opacity-70 mb-1">{language === 'es' ? 'Meta' : 'Target'}</p>
-                <p className="text-xl font-bold">{currencySymbol}{goal.targetAmount.toLocaleString()}</p>
+                <p className="text-xl font-bold">{formatAmount(goal.targetAmount)}</p>
               </div>
             </div>
           </div>
@@ -198,7 +196,7 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
               </span>
             </div>
             <p className="text-lg font-bold text-slate-800 dark:text-white">
-              {currencySymbol}{remainingAmount.toLocaleString()}
+              {formatAmount(remainingAmount)}
             </p>
           </div>
         </div>
@@ -227,8 +225,8 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
                 <span className="text-slate-400 font-bold">{currencySymbol}</span>
                 <input
                   type="number"
-                  value={editingGoal.targetAmount}
-                  onChange={(e) => setEditingGoal({ ...editingGoal, targetAmount: parseFloat(e.target.value) || 0 })}
+                  value={fromBase(editingGoal.targetAmount)}
+                  onChange={(e) => setEditingGoal({ ...editingGoal, targetAmount: toBase(parseFloat(e.target.value) || 0) })}
                   className="w-24 text-right font-bold text-slate-800 dark:text-white bg-transparent border-b-2 border-slate-100 focus:border-indigo-500 transition-colors focus:outline-none"
                 />
               </div>
@@ -252,8 +250,8 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
                 <button
                   onClick={() => setCalculationMode('monthly')}
                   className={`p-3 rounded-2xl border text-center transition-all ${calculationMode === 'monthly'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
-                      : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
+                    : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
                     }`}
                 >
                   <p className={`text-xs font-bold ${calculationMode === 'monthly' ? 'text-indigo-600' : 'text-slate-500'}`}>
@@ -263,8 +261,8 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
                 <button
                   onClick={() => setCalculationMode('targetDate')}
                   className={`p-3 rounded-2xl border text-center transition-all ${calculationMode === 'targetDate'
-                      ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
-                      : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                    ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
+                    : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
                     }`}
                 >
                   <p className={`text-xs font-bold ${calculationMode === 'targetDate' ? 'text-indigo-600' : 'text-slate-500'}`}>
@@ -282,8 +280,8 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
                         <span className="text-slate-400 font-bold">{currencySymbol}</span>
                         <input
                           type="number"
-                          value={editingGoal.contributionAmount || 0}
-                          onChange={(e) => setEditingGoal({ ...editingGoal, contributionAmount: parseFloat(e.target.value) || 0 })}
+                          value={fromBase(editingGoal.contributionAmount || 0)}
+                          onChange={(e) => setEditingGoal({ ...editingGoal, contributionAmount: toBase(parseFloat(e.target.value) || 0) })}
                           className="w-20 text-right font-bold text-slate-800 dark:text-white bg-transparent border-b-2 border-slate-100 focus:border-indigo-500 transition-colors focus:outline-none"
                         />
                       </div>
@@ -294,8 +292,8 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
                           key={freq}
                           onClick={() => setEditingGoal({ ...editingGoal, contributionFrequency: freq })}
                           className={`flex-1 py-2 px-1 rounded-lg text-[10px] font-bold transition-all ${editingGoal.contributionFrequency === freq
-                              ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200'
-                              : 'bg-slate-50 dark:bg-slate-700 text-slate-500'
+                            ? 'bg-indigo-500 text-white shadow-md shadow-indigo-200'
+                            : 'bg-slate-50 dark:bg-slate-700 text-slate-500'
                             }`}
                         >
                           {freq === 'weekly' ? (language === 'es' ? 'Semanal' : 'Weekly') :
@@ -353,7 +351,6 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
         {/* Action Button */}
         <Button
           fullWidth
-          size="lg"
           onClick={handleSave}
           disabled={isSaving}
           className={`shadow-xl ${isSaving ? 'opacity-70' : ''}`}

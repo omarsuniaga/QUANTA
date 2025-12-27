@@ -25,15 +25,15 @@ import { Transaction, DashboardStats, Goal, FinancialAnalysis, AIRecommendation 
 import { aiCoachService } from '../services/aiCoachService';
 import { storageService } from '../services/storageService';
 import { useI18n } from '../contexts';
+import { useCurrency } from '../hooks/useCurrency';
 import { Button } from './Button';
+
 
 interface AICoachScreenProps {
   transactions: Transaction[];
   stats: DashboardStats;
   goals: Goal[];
   selectedPlanId?: string;
-  currencySymbol: string;
-  currencyCode: string;
   onBack: () => void;
   onOpenSavingsPlanner: () => void;
   onOpenChallenges: () => void;
@@ -45,14 +45,13 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   stats,
   goals,
   selectedPlanId,
-  currencySymbol,
-  currencyCode,
   onBack,
   onOpenSavingsPlanner,
   onOpenChallenges,
   onOpenStrategies
 }) => {
   const { language, t } = useI18n();
+  const { formatAmount } = useCurrency();
   const [analysis, setAnalysis] = useState<FinancialAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [quickTips, setQuickTips] = useState<string[]>([]);
@@ -91,10 +90,10 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
     if (customCat) {
       return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
-    
+
     const translated = (t.categories as Record<string, string>)?.[categoryId];
     if (translated && translated !== categoryId) return translated;
-    
+
     // If no translation or it's an ID (long string), return generic name
     return language === 'es' ? 'Otra categoría' : 'Other category';
   };
@@ -102,10 +101,10 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   // Process recommendation text to replace category IDs with names
   const processRecommendationText = (text: string): string => {
     let processedText = text;
-    
+
     // Find all potential category IDs in the text (alphanumeric strings 15+ chars)
     const potentialIds = text.match(/[A-Za-z0-9]{15,}/g);
-    
+
     if (potentialIds) {
       potentialIds.forEach(id => {
         const categoryName = getCategoryName(id);
@@ -115,7 +114,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
         }
       });
     }
-    
+
     return processedText;
   };
 
@@ -197,7 +196,9 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                   <p className="text-indigo-200 text-sm font-medium">Salud Financiera</p>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-4xl font-bold">{analysis.healthScore}</span>
-                    <span className="text-indigo-200">/100</span>
+                    <span className="text-sm px-2 py-0.5 rounded-full bg-white/20 text-white font-medium">
+                      {formatAmount(analysis.savingsRate)} {language === 'es' ? 'ahorrado' : 'saved'}
+                    </span>
                   </div>
                 </div>
                 <div className={`p-4 rounded-2xl bg-${getHealthColor(analysis.healthStatus)}-500/20`}>
@@ -206,7 +207,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                   })}
                 </div>
               </div>
-              
+
               {/* Progress Bar */}
               <div className="mt-4">
                 <div className="h-2 bg-white/20 rounded-full overflow-hidden">
@@ -232,11 +233,10 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
-              className={`flex-1 py-3 px-4 text-sm font-semibold rounded-t-xl transition-colors ${
-                activeTab === tab
-                  ? 'bg-slate-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400'
-                  : 'text-indigo-200 hover:bg-white/10'
-              }`}
+              className={`flex-1 py-3 px-4 text-sm font-semibold rounded-t-xl transition-colors ${activeTab === tab
+                ? 'bg-slate-50 dark:bg-slate-900 text-indigo-600 dark:text-indigo-400'
+                : 'text-indigo-200 hover:bg-white/10'
+                }`}
             >
               {tab === 'overview' && 'Resumen'}
               {tab === 'recommendations' && 'Acciones'}
@@ -276,15 +276,14 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                       </p>
                     </div>
                   </div>
-                  
+
                   {/* Trend Indicator */}
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
-                    analysis.monthlyTrend === 'improving' 
-                      ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                      : analysis.monthlyTrend === 'declining'
+                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${analysis.monthlyTrend === 'improving'
+                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                    : analysis.monthlyTrend === 'declining'
                       ? 'bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400'
                       : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}>
+                    }`}>
                     {analysis.monthlyTrend === 'improving' ? (
                       <TrendingUp className="w-4 h-4" />
                     ) : analysis.monthlyTrend === 'declining' ? (
@@ -296,12 +295,53 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                   </div>
                 </div>
 
+                {/* Constructive Criticism Section */}
+                {analysis.constructiveCriticism && analysis.constructiveCriticism.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-500" />
+                      {t.aiCoach.constructiveCriticism}
+                    </h3>
+                    <div className="grid gap-3">
+                      {analysis.constructiveCriticism.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`p-4 rounded-xl border flex gap-4 ${item.impact === 'high'
+                            ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-100 dark:border-rose-800'
+                            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800'
+                            }`}
+                        >
+                          <div className={`mt-1 p-2 rounded-lg ${item.impact === 'high' ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400' : 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400'
+                            }`}>
+                            {item.type === 'habit_alert' ? <RefreshCw className="w-5 h-5" /> : item.type === 'insight' ? <Lightbulb className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                          </div>
+                          <div className="flex-1">
+                            <h4 className={`font-bold text-sm mb-1 ${item.impact === 'high' ? 'text-rose-900 dark:text-rose-200' : 'text-amber-900 dark:text-amber-200'
+                              }`}>
+                              {item.title}
+                            </h4>
+                            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed mb-2">
+                              {item.message}
+                            </p>
+                            {item.detectedPattern && (
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white/60 dark:bg-black/20 text-xs font-semibold text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/5">
+                                <Activity className="w-3 h-3" />
+                                {item.detectedPattern}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Quick Stats Grid */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
                     <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 mb-2">
                       <TrendingUp className="w-4 h-4" />
-                      <span className="text-xs font-bold">Tasa de Ahorro</span>
+                      <span className="text-xs font-bold">{t.aiCoach.savingsRate}</span>
                     </div>
                     <p className="text-2xl font-bold text-slate-800 dark:text-white">
                       {analysis.savingsRate.toFixed(1)}%
@@ -310,7 +350,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                   <div className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
                     <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
                       <Shield className="w-4 h-4" />
-                      <span className="text-xs font-bold">Nivel de Riesgo</span>
+                      <span className="text-xs font-bold">{t.aiCoach.riskLevel}</span>
                     </div>
                     <p className="text-2xl font-bold text-slate-800 dark:text-white capitalize">
                       {analysis.riskLevel === 'low' ? 'Bajo' : analysis.riskLevel === 'medium' ? 'Medio' : 'Alto'}
@@ -322,7 +362,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-4 border border-emerald-100 dark:border-emerald-800">
                     <h4 className="font-bold text-emerald-800 dark:text-emerald-300 text-sm flex items-center gap-2 mb-3">
-                      <ThumbsUp className="w-4 h-4" /> Fortalezas
+                      <ThumbsUp className="w-4 h-4" /> {t.aiCoach.strengths}
                     </h4>
                     <ul className="space-y-2">
                       {analysis.strengths.map((s, i) => (
@@ -335,7 +375,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                   </div>
                   <div className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl p-4 border border-amber-100 dark:border-amber-800">
                     <h4 className="font-bold text-amber-800 dark:text-amber-300 text-sm flex items-center gap-2 mb-3">
-                      <AlertCircle className="w-4 h-4" /> Áreas de Mejora
+                      <AlertCircle className="w-4 h-4" /> {t.aiCoach.weaknesses}
                     </h4>
                     <ul className="space-y-2">
                       {analysis.weaknesses.map((w, i) => (
@@ -350,28 +390,28 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
 
                 {/* Action Shortcuts */}
                 <div className="bg-gradient-to-br from-violet-500 to-indigo-600 rounded-2xl p-5 text-white">
-                  <h3 className="font-bold mb-4">Herramientas del Coach</h3>
+                  <h3 className="font-bold mb-4">{t.aiCoach.coachTools}</h3>
                   <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={onOpenSavingsPlanner}
                       className="bg-white/10 hover:bg-white/20 rounded-xl p-3 text-center transition-colors"
                     >
                       <Target className="w-6 h-6 mx-auto mb-1" />
-                      <span className="text-xs font-medium">Planes de Ahorro</span>
+                      <span className="text-xs font-medium">{t.savingsPlanner.title}</span>
                     </button>
                     <button
                       onClick={onOpenChallenges}
                       className="bg-white/10 hover:bg-white/20 rounded-xl p-3 text-center transition-colors"
                     >
                       <Zap className="w-6 h-6 mx-auto mb-1" />
-                      <span className="text-xs font-medium">Challenges</span>
+                      <span className="text-xs font-medium">{t.challenges.title}</span>
                     </button>
                     <button
                       onClick={onOpenStrategies}
                       className="bg-white/10 hover:bg-white/20 rounded-xl p-3 text-center transition-colors"
                     >
                       <PieChart className="w-6 h-6 mx-auto mb-1" />
-                      <span className="text-xs font-medium">Estrategias</span>
+                      <span className="text-xs font-medium">{t.strategies.title}</span>
                     </button>
                   </div>
                 </div>
@@ -382,7 +422,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
             {activeTab === 'recommendations' && (
               <div className="space-y-4 animate-in fade-in duration-300">
                 <p className="text-slate-500 dark:text-slate-400 text-sm">
-                  Acciones recomendadas ordenadas por prioridad
+                  {language === 'es' ? 'Acciones recomendadas ordenadas por prioridad' : 'Recommended actions sorted by priority'}
                 </p>
                 {analysis.recommendations
                   .sort((a, b) => {
@@ -393,8 +433,6 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                     <RecommendationCard
                       key={rec.id}
                       recommendation={rec}
-                      currencySymbol={currencySymbol}
-                      currencyCode={currencyCode}
                       processText={processRecommendationText}
                     />
                   ))}
@@ -408,7 +446,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
                   <h3 className="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                     <PieChart className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    Top Categorías de Gasto
+                    {language === 'es' ? 'Top Categorías de Gasto' : 'Top Expense Categories'}
                   </h3>
                   <div className="space-y-3">
                     {analysis.topExpenseCategories.map((cat, i) => (
@@ -422,7 +460,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                               {getCategoryName(cat.category)}
                             </span>
                             <span className="text-sm font-bold text-slate-800 dark:text-white">
-                              {cat.amount.toLocaleString()} {currencyCode}
+                              {formatAmount(cat.amount)}
                             </span>
                           </div>
                           <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -444,7 +482,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-2xl p-5 border border-amber-100 dark:border-amber-800">
                   <h3 className="font-bold text-amber-800 dark:text-amber-300 mb-4 flex items-center gap-2">
                     <Lightbulb className="w-5 h-5" />
-                    Tips Rápidos del Coach
+                    {t.aiCoach.quickTips}
                   </h3>
                   <div className="space-y-3">
                     {quickTips.map((tip, i) => (
@@ -461,21 +499,27 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
           <div className="text-center py-12">
             <Brain className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
             <h3 className="font-bold text-slate-600 dark:text-slate-400 mb-2">
-              No hay análisis disponible
+              {t.aiCoach.noAnalysis}
             </h3>
             <p className="text-slate-500 dark:text-slate-500 text-sm mb-4">
               {(() => {
                 if (!localStorage.getItem('gemini_api_key')) {
-                  return 'Configura tu API key de Gemini en Ajustes para habilitar el análisis de IA.';
+                  return language === 'es'
+                    ? 'Configura tu API key de Gemini en Ajustes para habilitar el análisis de IA.'
+                    : 'Configure your Gemini API key in Settings to enable AI analysis.';
                 }
                 if (!transactions || transactions.length === 0) {
-                  return 'Agrega algunas transacciones para obtener insights personalizados.';
+                  return language === 'es'
+                    ? 'Agrega algunas transacciones para obtener insights personalizados.'
+                    : 'Add some transactions to get personalized insights.';
                 }
-                return 'No se pudo generar el análisis. Intenta nuevamente o revisa tu configuración de IA.';
+                return language === 'es'
+                  ? 'No se pudo generar el análisis. Intenta nuevamente o revisa tu configuración de IA.'
+                  : 'Analysis generation failed. Try again or check your AI settings.';
               })()}
             </p>
             <Button onClick={loadAnalysis} isLoading={loading}>
-              Generar Análisis
+              {t.aiCoach.analyzeFinances}
             </Button>
           </div>
         )}
@@ -487,10 +531,14 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
 // Recommendation Card Component
 const RecommendationCard: React.FC<{
   recommendation: AIRecommendation;
-  currencySymbol: string;
-  currencyCode: string;
   processText: (text: string) => string;
-}> = ({ recommendation, currencySymbol, currencyCode, processText }) => {
+}> = ({ recommendation, processText }) => {
+  const { formatAmount } = useCurrency();
+  // Hook is needed here too or pass it down. 
+  // RecommendationCard IS a functional component.
+  // It receives currencySymbol and currencyCode as props but we want to use the global context.
+  // Let's rely on global context inside the card.
+
   const TypeIcon = getTypeIconForRec(recommendation.type);
   const priorityColor = recommendation.priority === 'high' ? 'rose' : recommendation.priority === 'medium' ? 'amber' : 'blue';
 
@@ -512,11 +560,11 @@ const RecommendationCard: React.FC<{
           <p className="text-sm text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">
             {processText(recommendation.description)}
           </p>
-          
+
           {recommendation.potentialSavings && (
             <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-sm font-medium">
               <DollarSign className="w-4 h-4" />
-              Ahorro potencial: {recommendation.potentialSavings.toLocaleString()} {currencyCode}
+              Ahorro potencial: {formatAmount(recommendation.potentialSavings)}
             </div>
           )}
 

@@ -35,8 +35,6 @@ interface SavingsPlannerProps {
   goals: Goal[];
   transactions: Transaction[];
   stats: DashboardStats;
-  currencySymbol: string;
-  currencyCode: string;
   onBack: () => void;
   onEditGoal: (goal: Goal) => void;
   onAddGoal?: () => void;
@@ -182,17 +180,18 @@ const generateSuggestions = (
   return suggestions.slice(0, 4); // Limit to 4 suggestions
 };
 
+import { useCurrency } from '../hooks/useCurrency';
+
 export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
   goals,
   transactions,
   stats,
-  currencySymbol,
-  currencyCode,
   onBack,
   onEditGoal,
   onAddGoal
 }) => {
   const { t, language } = useI18n();
+  const { formatAmount, currencyCode } = useCurrency();
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [showAllGoals, setShowAllGoals] = useState(true);
 
@@ -355,8 +354,8 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
               <div>
                 <p className="text-emerald-200 text-sm">{l.progress}</p>
                 <p className="text-2xl font-bold">
-                  {selectedGoal.currentAmount.toLocaleString()} {currencyCode}
-                  <span className="text-emerald-200 text-lg font-normal"> / {selectedGoal.targetAmount.toLocaleString()} {currencyCode}</span>
+                  {formatAmount(selectedGoal.currentAmount)}
+                  <span className="text-emerald-200 text-lg font-normal"> / {formatAmount(selectedGoal.targetAmount)}</span>
                 </p>
               </div>
               <div className="text-right">
@@ -379,11 +378,11 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 border border-white/20">
               <p className="text-emerald-200 text-xs">{l.totalSaved}</p>
-              <p className="text-xl font-bold">{overallStats.totalSaved.toLocaleString()} {currencyCode}</p>
+              <p className="text-xl font-bold">{formatAmount(overallStats.totalSaved)}</p>
             </div>
             <div className="bg-white/10 backdrop-blur-lg rounded-xl p-3 border border-white/20">
               <p className="text-emerald-200 text-xs">{l.remaining}</p>
-              <p className="text-xl font-bold">{overallStats.totalRemaining.toLocaleString()} {currencyCode}</p>
+              <p className="text-xl font-bold">{formatAmount(overallStats.totalRemaining)}</p>
             </div>
           </div>
         )}
@@ -462,7 +461,7 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
                             <div>
                               <h3 className="font-bold text-slate-800 dark:text-white">{goal.name}</h3>
                               <p className="text-sm text-slate-500 dark:text-slate-400">
-                                {isCompleted ? l.goalReached : `${l.remaining}: ${remaining.toLocaleString()} ${currencyCode}`}
+                                {isCompleted ? l.goalReached : `${l.remaining}: ${formatAmount(remaining)}`}
                               </p>
                             </div>
                           </div>
@@ -471,7 +470,7 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
 
                         <div className="mt-4">
                           <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                            <span>{goal.currentAmount.toLocaleString()} {currencyCode}</span>
+                            <span>{formatAmount(goal.currentAmount)}</span>
                             <span>{Math.min(100, progress).toFixed(0)}%</span>
                           </div>
                           <div className="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -487,7 +486,7 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
                         {goal.contributionAmount && !isCompleted && (
                           <div className="mt-3 flex items-center gap-2 text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded-lg w-fit">
                             <Wallet className="w-3 h-3" />
-                            {goal.contributionAmount.toLocaleString()} {currencyCode} {getFrequencyLabel(goal.contributionFrequency || 'monthly').toLowerCase()}
+                            {formatAmount(goal.contributionAmount)} {getFrequencyLabel(goal.contributionFrequency || 'monthly').toLowerCase()}
                           </div>
                         )}
 
@@ -553,7 +552,7 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-2xl font-bold text-indigo-900 dark:text-indigo-100">
-                          {selectedGoal.contributionAmount.toLocaleString()} {currencyCode}
+                          {formatAmount(selectedGoal.contributionAmount)}
                           <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400 ml-1">{l.perPeriod}</span>
                         </p>
                         <p className="text-sm text-indigo-600 dark:text-indigo-400">
@@ -582,19 +581,19 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
                     <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 text-center">
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">{l.daily}</p>
                       <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
-                        {plan.dailyTarget.toFixed(0)} {currencyCode}
+                        {formatAmount(plan.dailyTarget)}
                       </p>
                     </div>
                     <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 text-center">
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">{l.weekly}</p>
                       <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
-                        {plan.weeklyTarget.toFixed(0)} {currencyCode}
+                        {formatAmount(plan.weeklyTarget)}
                       </p>
                     </div>
                     <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 text-center">
                       <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-1">{l.monthly}</p>
                       <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
-                        {plan.monthlyTarget.toFixed(0)} {currencyCode}
+                        {formatAmount(plan.monthlyTarget)}
                       </p>
                     </div>
                   </div>
@@ -631,7 +630,7 @@ export const SavingsPlanner: React.FC<SavingsPlannerProps> = ({
                           <div className="flex-1 pb-4">
                             <div className="flex items-center justify-between">
                               <p className={`font-semibold ${milestone.isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200'}`}>
-                                {milestone.percentage}% - {milestone.amount.toLocaleString()} {currencyCode}
+                                {milestone.percentage}% - {formatAmount(milestone.amount)}
                               </p>
                               {milestone.isCompleted && (
                                 <span className="text-xs bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-medium">

@@ -16,36 +16,36 @@ interface SettingsContextType {
   isDarkMode: boolean;
   currencySymbol: string;
   currencyCode: string;
-  
+
   // Settings
   updateSettings: (settings: Partial<AppSettings>) => Promise<void>;
-  
+
   // Quick Actions
   updateQuickActions: (actions: QuickAction[]) => Promise<void>;
   addQuickAction: (action: Omit<QuickAction, 'id'>) => Promise<void>;
   deleteQuickAction: (id: string) => Promise<void>;
-  
+
   // Goals
   updateGoals: (goals: Goal[]) => void;
   addGoal: (goal: Goal) => Promise<void>;
   updateGoal: (goal: Goal) => Promise<void>;
   deleteGoal: (id: string) => Promise<void>;
-  
+
   // Promos
   updatePromos: (promos: Promo[]) => void;
   addPromo: (promo: Promo) => Promise<void>;
   updatePromo: (promo: Promo) => Promise<void>;
   deletePromo: (id: string) => Promise<void>;
-  
+
   // Accounts
   updateAccounts: (accounts: Account[]) => Promise<void>;
   addAccount: (account: Account) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
-  
+
   // Budgets
   updateBudget: (budget: Budget) => Promise<void>;
   deleteBudget: (category: string) => Promise<void>;
-  
+
   // Refresh
   refreshAll: () => Promise<void>;
   refreshGoals: () => Promise<void>;
@@ -55,7 +55,14 @@ interface SettingsContextType {
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   language: 'es',
-  currency: { localCode: 'USD', localSymbol: '$', rateToBase: 1, baseCode: 'USD' },
+  currency: {
+    localCode: 'DOP',
+    localSymbol: 'RD$',
+    rateToBase: 0.017,
+    rateUSDToLocal: 60,
+    displayMode: 'local',
+    baseCode: 'USD'
+  },
   notifications: { enabled: true, billReminders: true, reminderLeadDays: 3, emailAlerts: false },
   aiConfig: { enabled: true, level: 'medium', dataSharing: false }
 };
@@ -65,7 +72,7 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const toast = useToast();
-  
+
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [quickActions, setQuickActions] = useState<QuickAction[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -73,7 +80,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // System theme preference
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
@@ -89,9 +96,7 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   // Load all data when user changes
   useEffect(() => {
-    if (user) {
-      loadAllData();
-    } else {
+    if (!user) {
       setSettings(null);
       setQuickActions([]);
       setGoals([]);
@@ -99,54 +104,65 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
       setAccounts([]);
       setBudgets([]);
       setLoading(false);
+      return;
     }
-  }, [user?.id]);
 
-  const loadAllData = async () => {
     setLoading(true);
-    try {
-      const [sts, qa, gs, ps, accs, bdgs] = await Promise.all([
-        storageService.getSettings(),
-        storageService.getQuickActions(),
-        storageService.getGoals(),
-        storageService.getPromos(),
-        storageService.getAccounts(),
-        storageService.getBudgets()
-      ]);
-      
-      setSettings(sts);
-      setQuickActions(qa);
-      setGoals(gs);
-      setPromos(ps);
-      setAccounts(accs);
-      setBudgets(bdgs);
-      
-      // Sync user's Gemini API key with service
-      if (sts?.aiConfig?.userGeminiApiKey) {
-        setUserGeminiApiKey(sts.aiConfig.userGeminiApiKey);
-      }
-    } catch (error) {
-      console.error('Error loading settings data:', error);
-    } finally {
+
+    const unsubSettings = storageService.subscribeToSettings(user.uid, (data) => {
+      setSettings(data);
       setLoading(false);
-    }
-  };
+      if (data?.aiConfig?.userGeminiApiKey) {
+        setUserGeminiApiKey(data.aiConfig.userGeminiApiKey);
+      }
+    });
+
+    const unsubQA = storageService.subscribeToQuickActions(user.uid, (data) => {
+      setQuickActions(data);
+    });
+
+    const unsubGoals = storageService.subscribeToGoals(user.uid, (data) => {
+      setGoals(data);
+    });
+
+    const unsubPromos = storageService.subscribeToPromos(user.uid, (data) => {
+      setPromos(data);
+    });
+
+    const unsubAccs = storageService.subscribeToAccounts(user.uid, (data) => {
+      setAccounts(data);
+    });
+
+    const unsubBudgets = storageService.subscribeToBudgets(user.uid, (data) => {
+      setBudgets(data);
+    });
+
+    return () => {
+      unsubSettings();
+      unsubQA();
+      unsubGoals();
+      unsubPromos();
+      unsubAccs();
+      unsubBudgets();
+    };
+  }, [user?.id]);
 
   // Computed values
   const isDarkMode = settings?.theme === 'dark' || (settings?.theme === 'system' && systemPrefersDark);
-  const currencySymbol = settings?.currency?.localSymbol || '$';
-  const currencyCode = settings?.currency?.localCode || 'USD';
+  const displayMode = settings?.currency?.displayMode || 'local';
+  const currencySymbol = displayMode === 'usd' ? '$' : (settings?.currency?.localSymbol || '$');
+  const currencyCode = displayMode === 'usd' ? 'USD' : (settings?.currency?.localCode || 'USD');
 
   // Settings actions
   const updateSettings = useCallback(async (updates: Partial<AppSettings>) => {
     const newSettings = { ...settings, ...updates } as AppSettings;
     setSettings(newSettings);
-    
+
     // Sync Gemini API key if it was updated
     if (updates.aiConfig?.userGeminiApiKey !== undefined) {
       setUserGeminiApiKey(updates.aiConfig.userGeminiApiKey);
     }
-    
+
     try {
       await storageService.saveSettings(newSettings);
     } catch (error) {
@@ -259,16 +275,11 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [budgets]);
 
   const refreshAll = useCallback(async () => {
-    await loadAllData();
+    // Handled by listeners
   }, []);
 
   const refreshGoals = useCallback(async () => {
-    try {
-      const gs = await storageService.getGoals();
-      setGoals(gs);
-    } catch (error) {
-      console.error('Error refreshing goals:', error);
-    }
+    // Handled by listeners
   }, []);
 
   return (

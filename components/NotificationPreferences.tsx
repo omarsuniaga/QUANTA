@@ -18,12 +18,13 @@ import {
   Info
 } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
-import { 
-  smartNotificationService, 
+import {
+  smartNotificationService,
   NotificationPreferences as NotificationPrefs,
-  DEFAULT_NOTIFICATION_PREFERENCES 
+  DEFAULT_NOTIFICATION_PREFERENCES
 } from '../services/smartNotificationService';
 import { pushNotificationService } from '../services/pushNotificationService';
+import { ModalWrapper } from './ModalWrapper';
 
 interface NotificationPreferencesProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
     masterToggle: language === 'es' ? 'Notificaciones activas' : 'Notifications enabled',
     permissionDenied: language === 'es' ? 'Permisos denegados. Habilítalos en la configuración del navegador.' : 'Permissions denied. Enable them in browser settings.',
     requestPermission: language === 'es' ? 'Solicitar permisos' : 'Request permissions',
-    
+
     // Categorías
     categoryPayments: language === 'es' ? 'Pagos y Servicios' : 'Payments & Services',
     categoryGoals: language === 'es' ? 'Metas de Ahorro' : 'Savings Goals',
@@ -55,38 +56,38 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
     // Tipos de notificaciones
     servicePayments: language === 'es' ? 'Recordatorios de pagos' : 'Payment reminders',
     servicePaymentsDesc: language === 'es' ? 'Avisos antes del vencimiento de servicios y suscripciones' : 'Alerts before service and subscription due dates',
-    
+
     insufficientFunds: language === 'es' ? 'Alertas de fondos' : 'Funds alerts',
     insufficientFundsDesc: language === 'es' ? 'Aviso cuando no hay fondos suficientes para pagos próximos' : 'Alert when insufficient funds for upcoming payments',
-    
+
     goalContributions: language === 'es' ? 'Aportes a metas' : 'Goal contributions',
     goalContributionsDesc: language === 'es' ? 'Recordatorio de cuotas programadas para tus metas' : 'Reminder for scheduled goal contributions',
-    
+
     goalMilestones: language === 'es' ? 'Hitos y logros' : 'Milestones & achievements',
     goalMilestonesDesc: language === 'es' ? 'Celebración al alcanzar 25%, 50%, 75% y 100% de tus metas' : 'Celebration when reaching 25%, 50%, 75%, and 100% of goals',
-    
+
     budgetAlerts: language === 'es' ? 'Alertas de presupuesto' : 'Budget alerts',
     budgetAlertsDesc: language === 'es' ? 'Aviso cuando uses 80% o superes tu presupuesto' : 'Alert when using 80% or exceeding your budget',
-    
+
     unusualExpenses: language === 'es' ? 'Gastos inusuales' : 'Unusual expenses',
     unusualExpensesDesc: language === 'es' ? 'Detectar gastos significativamente mayores al promedio' : 'Detect expenses significantly higher than average',
-    
+
     weeklySummary: language === 'es' ? 'Resumen semanal' : 'Weekly summary',
     weeklySummaryDesc: language === 'es' ? 'Resumen de ingresos, gastos y progreso (domingos)' : 'Income, expenses and progress summary (Sundays)',
-    
+
     savingsTips: language === 'es' ? 'Consejos de ahorro' : 'Savings tips',
     savingsTipsDesc: language === 'es' ? 'Tips personalizados para mejorar tus finanzas' : 'Personalized tips to improve your finances',
-    
+
     achievements: language === 'es' ? 'Logros desbloqueados' : 'Unlocked achievements',
     achievementsDesc: language === 'es' ? 'Celebración de rachas y logros financieros' : 'Celebration of streaks and financial achievements',
 
     // Configuración de tiempo
     reminderDays: language === 'es' ? 'Días de anticipación' : 'Days in advance',
     reminderDaysDesc: language === 'es' ? 'Cuántos días antes recordar pagos' : 'How many days before to remind payments',
-    
+
     quietHours: language === 'es' ? 'Horario silencioso' : 'Quiet hours',
     quietHoursDesc: language === 'es' ? 'No enviar notificaciones durante estas horas' : 'Do not send notifications during these hours',
-    
+
     maxDaily: language === 'es' ? 'Máximo diario' : 'Daily maximum',
     maxDailyDesc: language === 'es' ? 'Límite de notificaciones por día' : 'Notification limit per day',
 
@@ -141,8 +142,8 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
     if (Notification.permission === 'granted') {
       const registration = await navigator.serviceWorker.ready;
       await registration.showNotification('🔔 Prueba de QUANTA', {
-        body: language === 'es' 
-          ? '¡Las notificaciones están funcionando correctamente!' 
+        body: language === 'es'
+          ? '¡Las notificaciones están funcionando correctamente!'
           : 'Notifications are working correctly!',
         icon: '/icon-192.png',
         badge: '/badge-72.png'
@@ -152,11 +153,11 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
 
   if (!isOpen) return null;
 
-  const NotificationOption = ({ 
-    icon: Icon, 
-    label, 
-    description, 
-    checked, 
+  const NotificationOption = ({
+    icon: Icon,
+    label,
+    description,
+    checked,
     onToggle,
     color = 'indigo'
   }: {
@@ -176,13 +177,11 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
           <button
             onClick={onToggle}
-            className={`relative w-11 h-6 rounded-full transition-colors ${
-              checked ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
-            }`}
+            className={`relative w-11 h-6 rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+              }`}
           >
-            <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${
-              checked ? 'translate-x-5' : ''
-            }`} />
+            <span className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-5' : ''
+              }`} />
           </button>
         </div>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{description}</p>
@@ -191,13 +190,10 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
   );
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div 
-        className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl"
-        onClick={e => e.stopPropagation()}
-      >
+    <ModalWrapper isOpen={isOpen} onClose={onClose} alignment="center">
+      <div className="bg-white dark:bg-slate-800 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
         {/* Header */}
-        <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+        <div className="p-6 border-b border-slate-100 dark:border-slate-700 shrink-0">
           <div className="flex justify-between items-start">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/40 dark:to-violet-900/40 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
@@ -208,7 +204,7 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
                 <p className="text-sm text-slate-500 dark:text-slate-400">{l.subtitle}</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={onClose}
               className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
@@ -246,19 +242,17 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
             </div>
             <button
               onClick={() => handleToggle('enabled')}
-              className={`relative w-12 h-7 rounded-full transition-colors ${
-                preferences.enabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
-              }`}
+              className={`relative w-12 h-7 rounded-full transition-colors ${preferences.enabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
             >
-              <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
-                preferences.enabled ? 'translate-x-5' : ''
-              }`} />
+              <span className={`absolute top-1 left-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${preferences.enabled ? 'translate-x-5' : ''
+                }`} />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto max-h-[60vh] p-6 space-y-6">
+        <div className="overflow-y-auto flex-1 p-6 space-y-6">
           {/* Pagos y Servicios */}
           <section>
             <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -392,7 +386,7 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
                       max={7}
                       value={preferences.reminderDaysBefore}
                       onChange={e => handleNumberChange('reminderDaysBefore', Math.min(7, Math.max(1, parseInt(e.target.value) || 1)))}
-                      className="w-14 px-2 py-1 text-center text-sm font-bold bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg"
+                      className="w-14 px-2 py-1 text-center text-sm font-bold bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     />
                     <span className="text-xs text-slate-500">{l.days}</span>
                   </div>
@@ -412,7 +406,7 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
                     <select
                       value={preferences.quietHoursStart}
                       onChange={e => handleNumberChange('quietHoursStart', parseInt(e.target.value))}
-                      className="px-2 py-1 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg"
+                      className="px-2 py-1 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     >
                       {Array.from({ length: 24 }, (_, i) => (
                         <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
@@ -424,7 +418,7 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
                     <select
                       value={preferences.quietHoursEnd}
                       onChange={e => handleNumberChange('quietHoursEnd', parseInt(e.target.value))}
-                      className="px-2 py-1 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg"
+                      className="px-2 py-1 text-sm bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     >
                       {Array.from({ length: 24 }, (_, i) => (
                         <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
@@ -448,7 +442,7 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
                       max={20}
                       value={preferences.maxDailyNotifications}
                       onChange={e => handleNumberChange('maxDailyNotifications', Math.min(20, Math.max(1, parseInt(e.target.value) || 5)))}
-                      className="w-14 px-2 py-1 text-center text-sm font-bold bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg"
+                      className="w-14 px-2 py-1 text-center text-sm font-bold bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg text-slate-900 dark:text-white"
                     />
                     <span className="text-xs text-slate-500">{l.notifications}</span>
                   </div>
@@ -459,7 +453,7 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3">
+        <div className="p-6 border-t border-slate-100 dark:border-slate-700 flex flex-col sm:flex-row gap-3 shrink-0 bg-white dark:bg-slate-800">
           {permissionStatus === 'granted' && (
             <button
               onClick={handleTestNotification}
@@ -477,11 +471,10 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
           </button>
           <button
             onClick={handleSave}
-            className={`px-6 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${
-              saved 
-                ? 'bg-emerald-600 text-white' 
+            className={`px-6 py-2 rounded-xl font-semibold text-sm transition-all flex items-center gap-2 ${saved
+                ? 'bg-emerald-600 text-white'
                 : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-            }`}
+              }`}
           >
             {saved ? (
               <>
@@ -492,6 +485,6 @@ export const NotificationPreferences: React.FC<NotificationPreferencesProps> = (
           </button>
         </div>
       </div>
-    </div>
+    </ModalWrapper>
   );
 };

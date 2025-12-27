@@ -4,23 +4,21 @@ import { Transaction } from '../types';
 import { TransactionList } from './TransactionList';
 import { FilterModal } from './FilterModal';
 import { parseLocalDate } from '../utils/dateHelpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface TransactionsScreenProps {
   transactions: Transaction[];
   onEdit: (transaction: Transaction) => void;
   onDelete: (id: string) => void;
-  currencySymbol?: string;
-  currencyCode?: string;
 }
 
 export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
   transactions,
   onEdit,
-  onDelete,
-  currencySymbol = '$',
-  currencyCode = 'MXN'
+  onDelete
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const { formatAmount, convertAmount } = useCurrency();
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -73,11 +71,11 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
   const stats = useMemo(() => {
     const income = filteredTransactions
       .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
 
     const expenses = filteredTransactions
       .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
 
     return {
       total: filteredTransactions.length,
@@ -106,7 +104,7 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
   const hasActiveFilters = filters.type !== 'all' || filters.category || filters.dateFrom || filters.dateTo || filters.paymentMethod || searchTerm;
 
   const formatCurrency = (amount: number) => {
-    return `${currencySymbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return formatAmount(amount);
   };
 
   const exportToCSV = () => {
@@ -247,8 +245,6 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
           transactions={filteredTransactions}
           onEdit={onEdit}
           onDelete={onDelete}
-          currencySymbol={currencySymbol}
-          currencyCode={currencyCode}
           activeFilter={hasActiveFilters ? { type: 'category', value: 'filtered' } : null}
           onClearFilter={handleClearFilters}
         />

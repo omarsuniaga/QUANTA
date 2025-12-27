@@ -6,6 +6,7 @@ import { Transaction } from '../types';
 import { useTransactions, useSettings, useI18n } from '../contexts';
 import { storageService } from '../services/storageService';
 import { parseLocalDate, getTodayDateString } from '../utils/dateHelpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface QuickExpenseWidgetProps {
   onOpenFullScreen: () => void;
@@ -13,8 +14,9 @@ interface QuickExpenseWidgetProps {
 
 export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFullScreen }) => {
   const { transactions, addTransaction } = useTransactions();
-  const { currencySymbol, currencyCode } = useSettings();
+  const { settings } = useSettings();
   const { language } = useI18n();
+  const { formatAmount, convertAmount } = useCurrency();
 
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -67,8 +69,8 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
     const today = getTodayDateString();
     return transactions
       .filter(tx => tx.type === 'expense' && tx.date && tx.date.startsWith(today))
-      .reduce((sum, tx) => sum + tx.amount, 0);
-  }, [transactions]);
+      .reduce((sum, tx) => sum + convertAmount(tx.amount), 0);
+  }, [transactions, convertAmount]);
 
   // Smart suggestion based on spending patterns and proportions
   const generateSmartSuggestion = useMemo(() => {
@@ -115,12 +117,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(language === 'es' ? 'es-ES' : 'en-US', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(value);
+    return formatAmount(value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -183,7 +180,7 @@ export const QuickExpenseWidget: React.FC<QuickExpenseWidgetProps> = ({ onOpenFu
         <div className="flex gap-2 flex-wrap">
           <div className="relative w-28 shrink-0">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">
-              {currencySymbol}
+              {formatAmount(0).replace(/[0-9.,\s]/g, '')}
             </span>
             <input
               type="number"

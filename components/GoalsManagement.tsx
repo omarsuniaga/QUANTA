@@ -31,10 +31,10 @@ interface GoalsManagementProps {
   onEditGoal: (goal: Goal) => void;
   onDeleteGoal: (id: string) => void;
   onUpdateGoal: (goal: Goal) => void;
-  currencySymbol?: string;
-  currencyCode?: string;
   availableBalance?: number;
 }
+
+import { useCurrency } from '../hooks/useCurrency';
 
 export const GoalsManagement: React.FC<GoalsManagementProps> = ({
   isOpen,
@@ -44,10 +44,9 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
   onEditGoal,
   onDeleteGoal,
   onUpdateGoal,
-  currencySymbol = '$',
-  currencyCode = 'USD',
   availableBalance = 0
 }) => {
+  const { formatAmount, currencySymbol, currencyCode } = useCurrency();
   const { language } = useI18n();
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [showContributionModal, setShowContributionModal] = useState(false);
@@ -64,14 +63,14 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
     editGoal: language === 'es' ? 'Editar Meta' : 'Edit Goal',
     deleteGoal: language === 'es' ? 'Eliminar' : 'Delete',
     deleteConfirm: language === 'es' ? '¿Estás seguro de eliminar esta meta?' : 'Are you sure you want to delete this goal?',
-    
+
     // Estados
     progress: language === 'es' ? 'Progreso' : 'Progress',
     remaining: language === 'es' ? 'Faltan' : 'Remaining',
     saved: language === 'es' ? 'Ahorrado' : 'Saved',
     target: language === 'es' ? 'Objetivo' : 'Target',
     completed: language === 'es' ? '¡Completada!' : 'Completed!',
-    
+
     // Contribuciones
     contribution: language === 'es' ? 'Aporte' : 'Contribution',
     contributionFreq: language === 'es' ? 'Frecuencia de aporte' : 'Contribution frequency',
@@ -80,7 +79,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
     monthly: language === 'es' ? 'Mensual' : 'Monthly',
     estimatedDate: language === 'es' ? 'Fecha estimada' : 'Estimated date',
     nextContribution: language === 'es' ? 'Próximo aporte' : 'Next contribution',
-    
+
     // Acciones
     addContribution: language === 'es' ? 'Agregar Aporte' : 'Add Contribution',
     adjustAmount: language === 'es' ? 'Ajustar Monto' : 'Adjust Amount',
@@ -88,7 +87,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
     quickSubtract: language === 'es' ? 'Corregir monto' : 'Correct amount',
     add: language === 'es' ? 'Agregar' : 'Add',
     subtract: language === 'es' ? 'Restar' : 'Subtract',
-    
+
     // Modal de contribución
     contributionTitle: language === 'es' ? 'Registrar Aporte' : 'Record Contribution',
     contributionSubtitle: language === 'es' ? 'Actualiza el progreso de tu meta' : 'Update your goal progress',
@@ -97,11 +96,11 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
     newBalance: language === 'es' ? 'Nuevo balance' : 'New balance',
     save: language === 'es' ? 'Guardar' : 'Save',
     cancel: language === 'es' ? 'Cancelar' : 'Cancel',
-    
+
     // Alertas
     noFunds: language === 'es' ? 'Fondos insuficientes' : 'Insufficient funds',
     available: language === 'es' ? 'Disponible' : 'Available',
-    
+
     // Estadísticas
     totalSaved: language === 'es' ? 'Total Ahorrado' : 'Total Saved',
     activeGoals: language === 'es' ? 'Metas Activas' : 'Active Goals',
@@ -116,22 +115,22 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
     const completed = goals.filter(g => g.currentAmount >= g.targetAmount).length;
     const active = goals.length - completed;
     const avgProgress = totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0;
-    
+
     return { totalSaved, totalTarget, completed, active, avgProgress };
   }, [goals]);
 
   // Calcular progreso y tiempo restante
   const getGoalDetails = (goal: Goal) => {
-    const progress = goal.targetAmount > 0 
+    const progress = goal.targetAmount > 0
       ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100))
       : 0;
     const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
     const isCompleted = goal.currentAmount >= goal.targetAmount;
-    
+
     // Calcular tiempo restante
     let estimatedDate = null;
     if (goal.contributionAmount && goal.contributionFrequency && remaining > 0) {
-      const multiplier = goal.contributionFrequency === 'weekly' ? 4.33 
+      const multiplier = goal.contributionFrequency === 'weekly' ? 4.33
         : goal.contributionFrequency === 'biweekly' ? 2 : 1;
       const monthlyContribution = goal.contributionAmount * multiplier;
       const monthsRemaining = Math.ceil(remaining / monthlyContribution);
@@ -139,21 +138,21 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
       date.setMonth(date.getMonth() + monthsRemaining);
       estimatedDate = date;
     }
-    
+
     return { progress, remaining, isCompleted, estimatedDate };
   };
 
   // Manejar contribución
   const handleContribution = () => {
     if (!selectedGoal || !contributionAmount) return;
-    
+
     const amount = parseFloat(contributionAmount);
     if (isNaN(amount) || amount <= 0) return;
-    
-    const newAmount = contributionType === 'add' 
+
+    const newAmount = contributionType === 'add'
       ? selectedGoal.currentAmount + amount
       : Math.max(0, selectedGoal.currentAmount - amount);
-    
+
     onUpdateGoal({
       ...selectedGoal,
       currentAmount: newAmount,
@@ -163,7 +162,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
         { date: new Date().toISOString(), amount: contributionType === 'add' ? amount : -amount }
       ]
     });
-    
+
     setShowContributionModal(false);
     setContributionAmount('');
     setSelectedGoal(null);
@@ -213,7 +212,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div 
+      <div
         className="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
@@ -229,7 +228,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                 <p className="text-sm text-slate-500 dark:text-slate-400">{l.subtitle}</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={onClose}
               className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
@@ -243,7 +242,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
               <div className="bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl">
                 <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{l.totalSaved}</p>
                 <p className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
-                  {stats.totalSaved.toLocaleString()} {currencyCode}
+                  {formatAmount(stats.totalSaved)}
                 </p>
               </div>
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl">
@@ -281,15 +280,14 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
               {goals.map(goal => {
                 const { progress, remaining, isCompleted, estimatedDate } = getGoalDetails(goal);
                 const colorName = getProgressColor(progress);
-                
+
                 return (
-                  <div 
-                    key={goal.id} 
-                    className={`bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border-2 ${
-                      isCompleted 
-                        ? 'border-emerald-200 dark:border-emerald-800' 
-                        : 'border-transparent'
-                    }`}
+                  <div
+                    key={goal.id}
+                    className={`bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border-2 ${isCompleted
+                      ? 'border-emerald-200 dark:border-emerald-800'
+                      : 'border-transparent'
+                      }`}
                   >
                     {/* Goal Header */}
                     <div className="flex items-start justify-between mb-3">
@@ -308,7 +306,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                             )}
                           </h4>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {l.target}: {goal.targetAmount.toLocaleString()} {currencyCode}
+                            {l.target}: {formatAmount(goal.targetAmount)}
                           </p>
                         </div>
                       </div>
@@ -332,14 +330,14 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                     <div className="mb-3">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                          {goal.currentAmount.toLocaleString()} {currencyCode}
+                          {formatAmount(goal.currentAmount)}
                         </span>
                         <span className={`text-sm font-bold text-${colorName}-600 dark:text-${colorName}-400`}>
                           {progress}%
                         </span>
                       </div>
                       <div className="h-3 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className={`h-full bg-gradient-to-r from-${colorName}-400 to-${colorName}-500 dark:from-${colorName}-500 dark:to-${colorName}-400 rounded-full transition-all duration-500`}
                           style={{ width: `${progress}%` }}
                         />
@@ -352,7 +350,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                         <div className="bg-white dark:bg-slate-700 p-2 rounded-lg">
                           <p className="text-slate-500 dark:text-slate-400">{l.remaining}</p>
                           <p className="font-bold text-slate-800 dark:text-white">
-                            {remaining.toLocaleString()} {currencyCode}
+                            {formatAmount(remaining)}
                           </p>
                         </div>
                       )}
@@ -360,7 +358,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                         <div className="bg-white dark:bg-slate-700 p-2 rounded-lg">
                           <p className="text-slate-500 dark:text-slate-400">{l.contribution}</p>
                           <p className="font-bold text-slate-800 dark:text-white">
-                            {goal.contributionAmount.toLocaleString()} / {formatFrequency(goal.contributionFrequency)}
+                            {formatAmount(goal.contributionAmount)} / {formatFrequency(goal.contributionFrequency)}
                           </p>
                         </div>
                       )}
@@ -409,16 +407,15 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
         {/* Contribution Modal */}
         {showContributionModal && selectedGoal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setShowContributionModal(false)}>
-            <div 
+            <div
               className="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full shadow-2xl p-6"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center gap-3 mb-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  contributionType === 'add' 
-                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
-                }`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${contributionType === 'add'
+                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400'
+                  }`}>
                   {contributionType === 'add' ? <Plus className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
                 </div>
                 <div>
@@ -432,7 +429,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-slate-600 dark:text-slate-400">{l.currentBalance}</span>
                   <span className="font-bold text-slate-800 dark:text-white">
-                    {selectedGoal.currentAmount.toLocaleString()} {currencyCode}
+                    {formatAmount(selectedGoal.currentAmount)}
                   </span>
                 </div>
               </div>
@@ -458,26 +455,23 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
 
               {/* New Balance Preview */}
               {contributionAmount && (
-                <div className={`p-3 rounded-xl mb-4 ${
-                  contributionType === 'add'
-                    ? 'bg-emerald-50 dark:bg-emerald-900/20'
-                    : 'bg-amber-50 dark:bg-amber-900/20'
-                }`}>
+                <div className={`p-3 rounded-xl mb-4 ${contributionType === 'add'
+                  ? 'bg-emerald-50 dark:bg-emerald-900/20'
+                  : 'bg-amber-50 dark:bg-amber-900/20'
+                  }`}>
                   <div className="flex justify-between items-center">
-                    <span className={`text-sm ${
-                      contributionType === 'add'
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-amber-600 dark:text-amber-400'
-                    }`}>{l.newBalance}</span>
-                    <span className={`font-bold ${
-                      contributionType === 'add'
-                        ? 'text-emerald-700 dark:text-emerald-300'
-                        : 'text-amber-700 dark:text-amber-300'
-                    }`}>
-                      {(contributionType === 'add' 
-                        ? selectedGoal.currentAmount + (parseFloat(contributionAmount) || 0)
-                        : Math.max(0, selectedGoal.currentAmount - (parseFloat(contributionAmount) || 0))
-                      ).toLocaleString()} {currencyCode}
+                    <span className={`text-sm ${contributionType === 'add'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                      }`}>{l.newBalance}</span>
+                    <span className={`font-bold ${contributionType === 'add'
+                      ? 'text-emerald-700 dark:text-emerald-300'
+                      : 'text-amber-700 dark:text-amber-300'
+                      }`}>
+                      {(contributionType === 'add'
+                        ? formatAmount(selectedGoal.currentAmount + (parseFloat(contributionAmount) || 0))
+                        : formatAmount(Math.max(0, selectedGoal.currentAmount - (parseFloat(contributionAmount) || 0)))
+                      )}
                     </span>
                   </div>
                 </div>
@@ -494,11 +488,10 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                 <button
                   onClick={handleContribution}
                   disabled={!contributionAmount || parseFloat(contributionAmount) <= 0}
-                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    contributionType === 'add'
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'bg-amber-600 hover:bg-amber-700 text-white'
-                  }`}
+                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${contributionType === 'add'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                    }`}
                 >
                   <Check className="w-4 h-4 inline mr-2" />
                   {l.save}

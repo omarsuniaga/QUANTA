@@ -134,6 +134,10 @@ export interface Transaction {
   // Sharing
   sharedWith?: string[]; 
   
+  // Link to Recurring Parent
+  relatedRecurringId?: string; // ID of the recurring transaction definition this payment belongs to
+  lastPaidDate?: string; // ISO Date of the last time this recurring transaction was processed/paid
+
   createdAt: number;
 }
 
@@ -153,7 +157,7 @@ export interface Goal {
   targetDate?: string;              // Target date to reach goal (for 'amount' mode)
   autoDeduct?: boolean;             // Automatically deduct from available balance
   // Contribution tracking
-  lastContributionDate?: string;    // Last time a contribution was made
+  lastContributionDate?: string | null;    // Last time a contribution was made
   nextContributionDate?: string;    // Next scheduled contribution date
   contributionHistory?: {           // History of contributions
     date: string;
@@ -233,7 +237,9 @@ export interface NotificationConfig {
 export interface CurrencyConfig {
   localCode: string;      // ISO 4217 code (USD, EUR, DOP, etc.)
   localSymbol: string;    // Currency symbol ($, €, RD$, etc.)
-  rateToBase: number;     // Exchange rate to base currency (USD)
+  rateToBase: number;     // Exchange rate to base currency (USD) - 1 Local = X USD
+  rateUSDToLocal?: number; // Inverse rate - 1 USD = X Local
+  displayMode?: 'local' | 'usd'; // How to show amounts across the app
   baseCode?: string;      // Base currency code (usually USD)
   lastUpdated?: number;   // Timestamp of last rate update
   flag?: string;          // Emoji flag for the currency country
@@ -267,6 +273,15 @@ export interface QuickAction {
 
 // --- AI COACH & FINANCIAL ANALYSIS ---
 
+export interface ConstructiveCriticism {
+  id: string;
+  type: 'warning' | 'insight' | 'habit_alert';
+  title: string;
+  message: string;
+  detectedPattern?: string; // e.g. "5 delivery orders this week"
+  impact: 'high' | 'medium' | 'low';
+}
+
 export interface FinancialAnalysis {
   healthScore: number; // 0-100
   healthStatus: 'excellent' | 'good' | 'warning' | 'critical';
@@ -278,6 +293,7 @@ export interface FinancialAnalysis {
   riskLevel: 'low' | 'medium' | 'high';
   topExpenseCategories: Array<{ category: string; amount: number; percentage: number }>;
   recommendations: AIRecommendation[];
+  constructiveCriticism?: ConstructiveCriticism[];
 }
 
 export interface AIRecommendation {

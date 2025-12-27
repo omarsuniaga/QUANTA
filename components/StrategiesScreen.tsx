@@ -16,22 +16,22 @@ import {
 import { Transaction, DashboardStats, FinancialStrategy, StrategyAllocation } from '../types';
 import { aiCoachService } from '../services/aiCoachService';
 import { Button } from './Button';
+import { useI18n } from '../contexts/I18nContext';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface StrategiesScreenProps {
   transactions: Transaction[];
   stats: DashboardStats;
-  currencySymbol: string;
-  currencyCode: string;
   onBack: () => void;
 }
 
 export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
   transactions,
   stats,
-  currencySymbol,
-  currencyCode,
   onBack
 }) => {
+  const { t } = useI18n();
+  const { formatAmount } = useCurrency();
   const [strategies, setStrategies] = useState<FinancialStrategy[]>([]);
   const [selectedStrategy, setSelectedStrategy] = useState<FinancialStrategy | null>(null);
   const [loading, setLoading] = useState(true);
@@ -85,13 +85,18 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
     return 'rose';
   };
 
+  // Render helper for amounts
+  const renderAmount = (amount: number) => {
+    return formatAmount(amount);
+  };
+
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'needs': return 'Necesidades';
-      case 'wants': return 'Deseos';
-      case 'savings': return 'Ahorros';
-      case 'investments': return 'Inversiones';
-      case 'debt': return 'Deudas';
+      case 'needs': return t.strategies.needs;
+      case 'wants': return t.strategies.wants;
+      case 'savings': return t.strategies.savings;
+      case 'investments': return t.strategies.investments;
+      case 'debt': return t.strategies.debt;
       default: return category;
     }
   };
@@ -121,10 +126,10 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
           <div className="flex-1">
             <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
               <PieChart className="w-6 h-6" />
-              Estrategias Financieras
+              {t.strategies.title}
             </h1>
             <p className="text-violet-200 text-sm mt-1">
-              Planes de distribución de ingresos
+              {t.strategies.subtitle}
             </p>
           </div>
         </div>
@@ -135,11 +140,10 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
             <button
               key={strategy.id}
               onClick={() => setSelectedStrategy(strategy)}
-              className={`shrink-0 px-4 py-2 rounded-full font-semibold text-sm transition-all ${
-                selectedStrategy?.id === strategy.id
-                  ? 'bg-white text-violet-600'
-                  : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
+              className={`shrink-0 px-4 py-2 rounded-full font-semibold text-sm transition-all ${selectedStrategy?.id === strategy.id
+                ? 'bg-white text-violet-600'
+                : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
             >
               {strategy.rule}
             </button>
@@ -180,7 +184,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
               {/* Compatibility Meter */}
               <div className="mt-4">
                 <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                  <span>Tu compatibilidad con esta estrategia</span>
+                  <span>{t.strategies.compatibility}</span>
                   <span>{selectedStrategy.compatibility}%</span>
                 </div>
                 <div className="h-3 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -196,7 +200,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
             <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 shadow-sm">
               <h3 className="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                 <PieChart className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-                Distribución Ideal vs Actual
+                {t.strategies.distribution}
               </h3>
 
               {/* Pie Chart Visualization */}
@@ -207,7 +211,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                       const prevOffset = acc.offset;
                       const strokeDasharray = `${alloc.targetPercentage} ${100 - alloc.targetPercentage}`;
                       const color = getCategoryColor(alloc.category);
-                      
+
                       acc.elements.push(
                         <circle
                           key={idx}
@@ -222,7 +226,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                           className="opacity-30"
                         />
                       );
-                      
+
                       // Current percentage overlay
                       acc.elements.push(
                         <circle
@@ -237,7 +241,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                           strokeDashoffset={-prevOffset}
                         />
                       );
-                      
+
                       acc.offset += alloc.targetPercentage;
                       return acc;
                     }, { elements: [] as React.ReactNode[], offset: 0 }).elements}
@@ -245,7 +249,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
                       <p className="text-2xl font-bold text-slate-800 dark:text-white">{selectedStrategy.rule}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Objetivo</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">{t.strategies.target}</p>
                     </div>
                   </div>
                 </div>
@@ -275,7 +279,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                           </span>
                         </div>
                       </div>
-                      
+
                       <div className="relative h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                         {/* Target line */}
                         <div
@@ -291,15 +295,14 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
 
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-500 dark:text-slate-400">
-                          Actual: {alloc.currentAmount.toLocaleString()} {currencyCode}
+                          {t.strategies.actual}: {renderAmount(alloc.currentAmount)}
                         </span>
-                        <span className={`font-medium ${
-                          alloc.status === 'on_track' 
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : alloc.status === 'over'
+                        <span className={`font-medium ${alloc.status === 'on_track'
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : alloc.status === 'over'
                             ? 'text-rose-600 dark:text-rose-400'
                             : 'text-amber-600 dark:text-amber-400'
-                        }`}>
+                          }`}>
                           {diff > 0 ? `+${diff}%` : `${diff}%`}
                         </span>
                       </div>
@@ -313,7 +316,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
             <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 rounded-2xl p-5 border border-violet-100 dark:border-violet-800">
               <h3 className="font-bold text-violet-800 dark:text-violet-300 mb-4 flex items-center gap-2">
                 <Lightbulb className="w-5 h-5" />
-                Cómo Mejorar tu Distribución
+                {t.strategies.howToImprove}
               </h3>
               <div className="space-y-3">
                 {selectedStrategy.allocations
@@ -332,12 +335,12 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                         )}
                         <div>
                           <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                            {isOver ? 'Reducir' : 'Aumentar'} {getCategoryLabel(alloc.category)}
+                            {isOver ? t.strategies.reduce : t.strategies.increase} {getCategoryLabel(alloc.category)}
                           </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            {isOver 
-                              ? `Estás gastando ${diff}% más de lo recomendado. Intenta reducir ${amountDiff.toFixed(0)} ${currencyCode} este mes.`
-                              : `Estás ${diff}% por debajo. Intenta destinar ${amountDiff.toFixed(0)} ${currencyCode} adicionales.`
+                            {isOver
+                              ? t.strategies.reduceTip.replace('{diff}', diff.toString()).replace('{amount}', formatAmount(amountDiff))
+                              : t.strategies.increaseTip.replace('{diff}', diff.toString()).replace('{amount}', formatAmount(amountDiff))
                             }
                           </p>
                         </div>
@@ -350,10 +353,10 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
                     <Award className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                        ¡Excelente trabajo!
+                        {t.strategies.excellentWork}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Tu distribución actual está alineada con esta estrategia. Sigue así para mantener finanzas saludables.
+                        {t.strategies.aligned}
                       </p>
                     </div>
                   </div>
@@ -365,7 +368,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
             <div className="space-y-4">
               <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-indigo-500" />
-                Otras Estrategias
+                {t.strategies.otherStrategies}
               </h3>
               {strategies
                 .filter(s => s.id !== selectedStrategy.id)
@@ -393,7 +396,7 @@ export const StrategiesScreen: React.FC<StrategiesScreenProps> = ({
           <div className="text-center py-12">
             <PieChart className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
             <h3 className="font-bold text-slate-600 dark:text-slate-400 mb-2">
-              No hay estrategias disponibles
+              {t.strategies.empty}
             </h3>
             <p className="text-slate-500 text-sm">
               Agrega más transacciones para analizar tu distribución

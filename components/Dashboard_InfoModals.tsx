@@ -1,5 +1,6 @@
 import React from 'react';
-import { X, Info, Wallet, TrendingUp } from 'lucide-react';
+import { X, Wallet, TrendingUp } from 'lucide-react';
+import { ModalWrapper } from './ModalWrapper';
 
 interface BudgetInfoModalProps {
   isOpen: boolean;
@@ -26,9 +27,9 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4" onClick={onClose}>
+    <ModalWrapper isOpen={isOpen} onClose={onClose} alignment="center">
       <div
-        className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700"
+        className="bg-white dark:bg-slate-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700 relative"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
@@ -109,7 +110,7 @@ export const BudgetInfoModal: React.FC<BudgetInfoModalProps> = ({
           {language === 'es' ? 'Entendido' : 'Got it'}
         </button>
       </div>
-    </div>
+    </ModalWrapper>
   );
 };
 
@@ -135,9 +136,9 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[999] p-4" onClick={onClose}>
+    <ModalWrapper isOpen={isOpen} onClose={onClose} alignment="center">
       <div
-        className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-emerald-400"
+        className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-emerald-400 relative"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-4">
@@ -205,6 +206,6 @@ export const SurplusInfoModal: React.FC<SurplusInfoModalProps> = ({
           {language === 'es' ? 'Entendido' : 'Got it'}
         </button>
       </div>
-    </div>
+    </ModalWrapper>
   );
 };

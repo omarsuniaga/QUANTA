@@ -2,15 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { AppSettings, QuickAction, Account, PlanId } from '../types';
 import { Button } from './Button';
 import { FINANCIAL_PLANS } from '../constants/financialPlans';
-import { Moon, Sun, Bell, Brain, LogOut, ArrowUpRight, ArrowDownRight, Zap, Trash2, Plus, GripVertical, CreditCard, Download, User, Monitor, Globe, DollarSign, Languages, ChevronDown, Search, Check, X, Settings2, Target, ChevronRight, Activity, HelpCircle, Building2, Wallet, Banknote, Edit2, ShieldCheck, PieChart as PieChartIcon, TrendingUp, Percent } from 'lucide-react';
+import {
+  User, Sun, Moon, Monitor, Bell, ShieldCheck, ChevronRight, LogOut,
+  Languages, Globe, Palette, CreditCard, Banknote, HelpCircle, X,
+  Trash2, Building2, Wallet, Plus, ArrowUpRight, ArrowDownRight, Zap,
+  Percent, Loader2, Sparkles, DollarSign, Check, Settings2, Target,
+  Search, GripVertical, Download, Upload, FileText, Save, FileJson,
+  Activity, AlertCircle, ChevronDown, Brain, Edit2
+} from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { geminiService } from '../services/geminiService';
+import { backupService } from '../services/backupService';
+import { reportService } from '../services/reportService';
 import { useI18n } from '../contexts';
 import { GeminiApiKeySettings } from './GeminiApiKeySettings';
 import { APIUsageMonitor } from './APIUsageMonitor';
 import { AVAILABLE_CURRENCIES, CurrencyOption } from '../constants';
 import { ModalWrapper } from './ModalWrapper';
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { CurrencyModal } from './CurrencyModal';
+import { AccountsHelpModal } from './AccountsHelpModal';
 
 // Common financial institutions
 const FINANCIAL_INSTITUTIONS = [
@@ -42,10 +52,11 @@ interface SettingsScreenProps {
   userEmail: string;
   onOpenNotificationPrefs?: () => void;
   onOpenGoalsManagement?: () => void;
+  onOpenDiagnostics?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
-  settings, onUpdateSettings, quickActions, onUpdateQuickActions, onLogout, userEmail, onOpenNotificationPrefs, onOpenGoalsManagement
+  settings, onUpdateSettings, quickActions, onUpdateQuickActions, onLogout, userEmail, onOpenNotificationPrefs, onOpenGoalsManagement, onOpenDiagnostics
 }) => {
   const [activeSection, setActiveSection] = useState<'general' | 'actions' | 'accounts' | 'data'>('general');
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -227,6 +238,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 truncate">{userEmail}</p>
                   </div>
                 </div>
+
+                {onOpenDiagnostics && (
+                  <Button variant="secondary" fullWidth onClick={onOpenDiagnostics} className="text-xs sm:text-sm py-2 mb-3 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border-indigo-100 dark:border-indigo-800">
+                    <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" /> {language === 'es' ? 'Diagnóstico del Sistema' : 'System Diagnostics'}
+                  </Button>
+                )}
+
                 <Button variant="danger" fullWidth onClick={onLogout} className="text-xs sm:text-sm py-2">
                   <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" /> {t.auth.logout}
                 </Button>
@@ -325,6 +343,39 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <ChevronDown className="w-5 h-5 text-slate-400" />
                 </button>
 
+                {/* Display Mode Toggle */}
+                <div className="flex flex-col gap-3">
+                  <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                    {language === 'es' ? 'Ver montos en' : 'Show amounts in'}
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-700/50 rounded-xl">
+                    <button
+                      onClick={() => onUpdateSettings({
+                        ...settings,
+                        currency: { ...settings.currency, displayMode: 'local' }
+                      })}
+                      className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${settings.currency?.displayMode !== 'usd'
+                        ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                    >
+                      {settings.currency.localCode} ({settings.currency.localSymbol})
+                    </button>
+                    <button
+                      onClick={() => onUpdateSettings({
+                        ...settings,
+                        currency: { ...settings.currency, displayMode: 'usd' }
+                      })}
+                      className={`py-2 px-3 text-xs font-bold rounded-lg transition-all ${settings.currency?.displayMode === 'usd'
+                        ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                    >
+                      USD ($)
+                    </button>
+                  </div>
+                </div>
+
                 {/* Exchange Rate Display */}
                 <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2">
@@ -332,24 +383,33 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       {language === 'es' ? 'Tasa de Cambio' : 'Exchange Rate'}
                     </span>
                     <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                      1 {settings.currency.localCode} = {settings.currency.rateToBase.toFixed(4)} USD
+                      1 USD = {settings.currency.rateUSDToLocal || (1 / settings.currency.rateToBase).toFixed(2)} {settings.currency.localCode}
                     </span>
                   </div>
                   <div className="relative">
-                    <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2 sm:left-3 top-2 sm:top-2.5" />
+                    <span className="absolute left-2 sm:left-3 top-2 sm:top-2.5 text-slate-400 text-xs sm:text-sm font-bold">$ 1 = </span>
                     <input
                       type="number"
-                      step="0.0001"
-                      className="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg pl-7 sm:pl-9 pr-2 sm:pr-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white"
-                      value={settings.currency.rateToBase}
-                      onChange={(e) => onUpdateSettings({
-                        ...settings,
-                        currency: { ...settings.currency, rateToBase: parseFloat(e.target.value) || 0 }
-                      })}
+                      step="0.01"
+                      className="w-full bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg pl-14 sm:pl-16 pr-2 sm:pr-3 py-1.5 sm:py-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white"
+                      value={settings.currency.rateUSDToLocal || (1 / settings.currency.rateToBase)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 1;
+                        onUpdateSettings({
+                          ...settings,
+                          currency: {
+                            ...settings.currency,
+                            rateUSDToLocal: val,
+                            rateToBase: 1 / val
+                          }
+                        });
+                      }}
                     />
                   </div>
                   <p className="text-[10px] text-slate-400 mt-2">
-                    {language === 'es' ? 'Ajusta manualmente si necesitas una tasa diferente.' : 'Adjust manually if you need a different rate.'}
+                    {language === 'es'
+                      ? 'Especifica cuánto representa tu moneda local ante 1 Dólar.'
+                      : 'Specify how much your local currency represents against 1 Dollar.'}
                   </p>
                 </div>
 
@@ -359,7 +419,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     {language === 'es' ? 'Vista previa de formato' : 'Format Preview'}
                   </p>
                   <p className="text-lg sm:text-xl font-bold text-indigo-900 dark:text-indigo-100">
-                    1,234.56 {settings.currency.localCode}
+                    {settings.currency.displayMode === 'usd'
+                      ? `$ ${(1234.56 / (settings.currency.rateUSDToLocal || (1 / settings.currency.rateToBase))).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`
+                      : `1,234.56 ${settings.currency.localCode}`}
                   </p>
                 </div>
               </div>
@@ -768,197 +830,107 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         )}
 
         {activeSection === 'data' && (
-          <div className="space-y-3 sm:space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm text-center">
-              <Download className="w-10 h-10 sm:w-12 sm:h-12 text-indigo-200 dark:text-indigo-900/50 mx-auto mb-3 sm:mb-4" />
-              <h3 className="font-bold text-sm sm:text-base text-slate-800 dark:text-white mb-1.5 sm:mb-2">Exportar Datos</h3>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-4 sm:mb-6">Descarga todo tu historial de transacciones en formato CSV para Excel o Google Sheets.</p>
-              <Button fullWidth onClick={() => storageService.exportData()} className="text-xs sm:text-sm py-2 sm:py-2.5">
-                Descargar CSV
-              </Button>
+          <div className="space-y-4 sm:space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+            <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-white mb-2">
+              {language === 'es' ? 'Gestión de Datos' : 'Data Management'}
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {/* BACKUP */}
+              <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center text-center group hover:border-indigo-500/50 transition-colors">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-xl flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform">
+                  <Save className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-white mb-1">
+                  {language === 'es' ? 'Crear Respaldo' : 'Create Backup'}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 h-8 flex items-center">
+                  {language === 'es' ? 'Descarga una copia completa de tus datos.' : 'Download a full copy of all your data.'}
+                </p>
+                <Button fullWidth onClick={() => backupService.downloadBackup()} className="text-xs sm:text-sm py-2 bg-indigo-600 hover:bg-indigo-700">
+                  <Download className="w-3.5 h-3.5 mr-2" /> JSON
+                </Button>
+              </div>
+
+              {/* RESTORE */}
+              <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center text-center group hover:border-emerald-500/50 transition-colors relative overflow-hidden">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-500 rounded-xl flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform">
+                  <Upload className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-white mb-1">
+                  {language === 'es' ? 'Restaurar Datos' : 'Restore Data'}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 h-8 flex items-center">
+                  {language === 'es' ? 'Recupera datos perdidos desde un archivo.' : 'Recover lost data from a file.'}
+                </p>
+                <div className="relative w-full">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) {
+                        if (confirm(language === 'es' ? '¿Estás seguro? Esto fusionará el respaldo con los datos actuales.' : 'Are you sure? This will merge the backup into your current data.')) {
+                          backupService.restoreBackup(e.target.files[0]);
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                  />
+                  <Button fullWidth variant="secondary" className="text-xs sm:text-sm py-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800">
+                    <Upload className="w-3.5 h-3.5 mr-2" /> {language === 'es' ? 'Importar' : 'Import'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* PDF REPORT */}
+              <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center text-center group hover:border-rose-500/50 transition-colors">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-rose-50 dark:bg-rose-900/30 text-rose-500 rounded-xl flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform">
+                  <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-white mb-1">
+                  {language === 'es' ? 'Informe Profesional' : 'Pro Report'}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 h-8 flex items-center">
+                  {language === 'es' ? 'Genera un Estado Financiero en PDF.' : 'Generate a Financial Statement PDF.'}
+                </p>
+                <Button fullWidth variant="danger" onClick={() => reportService.generateFinancialReport()} className="text-xs sm:text-sm py-2 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/40 border-rose-100 dark:border-rose-800">
+                  <Download className="w-3.5 h-3.5 mr-2" /> PDF
+                </Button>
+              </div>
+
+              {/* CSV EXPORT (Legacy) */}
+              <div className="bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col items-center text-center group hover:border-slate-400 transition-colors">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-100 dark:bg-slate-700 text-slate-500 rounded-xl flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform">
+                  <FileJson className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-white mb-1">
+                  CSV / Excel
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 h-8 flex items-center">
+                  {language === 'es' ? 'Lista simple de transacciones.' : 'Simple transaction list.'}
+                </p>
+                <Button fullWidth variant="secondary" onClick={() => storageService.exportData()} className="text-xs sm:text-sm py-2">
+                  <Download className="w-3.5 h-3.5 mr-2" /> CSV
+                </Button>
+              </div>
             </div>
           </div>
         )}
       </div>
 
       {/* Currency Picker Modal */}
-      {showCurrencyPicker && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 transition-all duration-300">
-          <div className="bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md shadow-2xl animate-slide-up border border-white/20 dark:border-slate-700 max-h-[85vh] sm:max-h-[80vh] flex flex-col">
-            {/* Header */}
-            <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center shrink-0">
-              <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
-                {language === 'es' ? 'Seleccionar Moneda' : 'Select Currency'}
-              </h2>
-              <button
-                onClick={() => { setShowCurrencyPicker(false); setCurrencySearch(''); }}
-                className="bg-slate-50 dark:bg-slate-800 p-1.5 sm:p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-
-            {/* Search */}
-            <div className="p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder={language === 'es' ? 'Buscar moneda...' : 'Search currency...'}
-                  value={currencySearch}
-                  onChange={(e) => setCurrencySearch(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 outline-none"
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            {/* Currency List */}
-            <div className="flex-1 overflow-y-auto p-2 sm:p-4">
-              <div className="space-y-1">
-                {filteredCurrencies.map((currency) => {
-                  const isSelected = currency.code === settings.currency.localCode;
-                  return (
-                    <button
-                      key={currency.code}
-                      onClick={() => handleSelectCurrency(currency)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${isSelected
-                        ? 'bg-indigo-50 dark:bg-indigo-900/30 border-2 border-indigo-500'
-                        : 'hover:bg-slate-50 dark:hover:bg-slate-800 border-2 border-transparent'
-                        }`}
-                    >
-                      <span className="text-2xl">{currency.flag}</span>
-                      <div className="flex-1 text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-800 dark:text-white">{currency.code}</span>
-                          <span className="text-slate-400 text-sm">{currency.symbol}</span>
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">
-                          {language === 'es' ? currency.nameEs : currency.name}
-                        </p>
-                      </div>
-                      {isSelected && (
-                        <div className="w-6 h-6 bg-indigo-500 rounded-full flex items-center justify-center">
-                          <Check className="w-4 h-4 text-white" />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-
-                {filteredCurrencies.length === 0 && (
-                  <div className="text-center py-8">
-                    <Globe className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">
-                      {language === 'es' ? 'No se encontraron monedas' : 'No currencies found'}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <CurrencyModal
+        isOpen={showCurrencyPicker}
+        onClose={() => setShowCurrencyPicker(false)}
+        settings={settings}
+        onUpdateSettings={onUpdateSettings}
+      />
 
       {/* Accounts Help Modal */}
-      {showAccountsHelp && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowAccountsHelp(false)}>
-          <div
-            className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-700"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
-                  <Building2 className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
-                </div>
-                <h3 className="text-lg font-bold text-slate-800 dark:text-white">
-                  {language === 'es' ? '¿Para qué sirven las cuentas?' : 'What are accounts for?'}
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowAccountsHelp(false)}
-                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-slate-400" />
-              </button>
-            </div>
-
-            <div className="space-y-4 text-sm text-slate-600 dark:text-slate-300">
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg mt-0.5">
-                  <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-800 dark:text-white">
-                    {language === 'es' ? 'Registra tus balances reales' : 'Track your real balances'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es'
-                      ? 'Ingresa el monto actual de cada cuenta bancaria, efectivo o billetera digital.'
-                      : 'Enter the current amount in each bank account, cash or digital wallet.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg mt-0.5">
-                  <ArrowDownRight className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-800 dark:text-white">
-                    {language === 'es' ? 'Actualización automática' : 'Automatic updates'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es'
-                      ? 'Cuando registras ingresos o gastos, puedes seleccionar de qué cuenta provienen y el balance se actualiza.'
-                      : 'When you record income or expenses, you can select which account they come from and the balance updates.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-lg mt-0.5">
-                  <Bell className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-800 dark:text-white">
-                    {language === 'es' ? 'Alertas de saldo bajo' : 'Low balance alerts'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es'
-                      ? 'Recibe notificaciones cuando el balance de una cuenta sea insuficiente para cubrir pagos próximos.'
-                      : 'Receive notifications when an account balance is insufficient to cover upcoming payments.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg mt-0.5">
-                  <CreditCard className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-800 dark:text-white">
-                    {language === 'es' ? 'Tarjetas de crédito' : 'Credit cards'}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    {language === 'es'
-                      ? 'Puedes registrar tarjetas con balance negativo para controlar tu deuda.'
-                      : 'You can register cards with negative balance to track your debt.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowAccountsHelp(false)}
-              className="w-full mt-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors"
-            >
-              {language === 'es' ? 'Entendido' : 'Got it'}
-            </button>
-          </div>
-        </div>
-      )}
+      <AccountsHelpModal
+        isOpen={showAccountsHelp}
+        onClose={() => setShowAccountsHelp(false)}
+      />
 
       {/* Add Account Modal */}
       <ModalWrapper isOpen={showAddAccount} onClose={() => setShowAddAccount(false)} alignment="center">

@@ -1,7 +1,5 @@
 // English translations
-import { TranslationKeys } from './es';
-
-export const en: TranslationKeys = {
+export const en = {
   // Common
   common: {
     save: 'Save',
@@ -214,6 +212,85 @@ export const en: TranslationKeys = {
     improving: 'Improving',
     stable: 'Stable',
     declining: 'Declining',
+    constructiveCriticism: 'Constructive Criticism',
+    habitAlert: 'Habit Detected',
+    coachTools: 'Coach Tools',
+    quickTips: 'Quick Coach Tips',
+    noAnalysis: 'No analysis available',
+  },
+
+  // Notifications
+  notifications: {
+    servicePayment: {
+      title: 'Upcoming payment: {description}',
+      body: {
+        today: 'Today - {amount} due',
+        tomorrow: 'Tomorrow - {amount} due',
+        future: 'In {days} days - {amount} due',
+      },
+    },
+    subscriptionCharge: {
+      title: 'Subscription charge: {name}',
+      body: {
+        today: 'Today {amount} will be charged',
+        tomorrow: 'Tomorrow {amount} will be charged',
+        future: 'In {days} days {amount} will be charged',
+      },
+    },
+    insufficientFunds: {
+      title: 'Alert: Insufficient funds',
+      body: 'You are short {deficit} to cover upcoming payments. Check your budget.',
+    },
+    goalContribution: {
+      title: 'Scheduled contribution: {name}',
+      body: {
+        today: 'Contribution due today: {amount}.{warning}',
+        future: 'Contribution due in {days} days: {amount}.{warning}',
+        warning: ' ⚠️ Insufficient funds',
+      },
+    },
+    goalMilestone: {
+      title: '{percent}% of your goal!',
+      body: 'You have reached {percent}% of "{name}". Keep it up!',
+    },
+    goalCompleted: {
+      title: 'Goal completed!',
+      body: 'Congratulations! You have reached your goal "{name}". Excellent work!',
+    },
+    budgetWarning: {
+      title: 'Budget alert: {category}',
+      body: 'You have used {percent}% of your budget. {remaining} remaining.',
+    },
+    budgetExceeded: {
+      title: 'Budget exceeded!',
+      body: 'You have exceeded your {category} budget by {excess}.',
+    },
+    unusualExpense: {
+      title: 'Unusual expense detected',
+      body: 'The expense "{description}" of {amount} is {multiplier}x higher than your average.',
+    },
+    weeklySummary: {
+      title: 'Your weekly summary',
+      body: 'You saved {savingsRate}% of your income this week. {activeGoals} active goals.',
+    },
+    modelAlerts: {
+      essentialist: {
+        title: 'Essentialist Alert',
+        body: 'Your essential expenses are at {percent}% (Target: 50%). Try reducing fixed costs.',
+      },
+      auditor: {
+        title: 'Unassigned Money',
+        body: 'You have unassigned funds. The Auditor requires every penny to have a job.',
+      },
+      defensive: {
+        title: 'Defensive Mode Active',
+        body: 'You are spending on wants ({percent}%) while having debt. Prioritize debt payment.',
+      },
+      velocity: {
+        title: 'High Spending Velocity',
+        body: 'At this rate ({rate}/day), you will run out of funds on day {date}.',
+      },
+    },
   },
 
   // Savings Planner
@@ -285,5 +362,11 @@ export const en: TranslationKeys = {
     otherStrategies: 'Other Strategies',
     excellentWork: 'Excellent work!',
     aligned: 'Your current distribution is aligned with this strategy.',
+    reduceTip: 'You are spending {diff}% more than recommended. Try to reduce {amount} this month.',
+    increaseTip: 'You are {diff}% under. Try to allocate an additional {amount}.',
+    target: 'Target',
+    actual: 'Actual',
+    compatibility: 'Your compatibility with this strategy',
+    empty: 'No strategies available',
   },
 };

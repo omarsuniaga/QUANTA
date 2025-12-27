@@ -9,18 +9,19 @@ import { IconPicker, DynamicIcon, getColorClasses } from './IconPicker';
 interface BudgetViewProps {
   budget?: Budget | null;
   categories: string[];
-  currencySymbol: string;
   onBack: () => void;
   onSave: (budget: Partial<Budget>) => void;
 }
 
+import { useCurrency } from '../hooks/useCurrency';
+
 export const BudgetView: React.FC<BudgetViewProps> = ({
   budget,
   categories,
-  currencySymbol,
   onBack,
   onSave,
 }) => {
+  const { fromBase, toBase, currencySymbol } = useCurrency();
   const { t, language } = useI18n();
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showCalculator, setShowCalculator] = useState(false);
@@ -60,7 +61,7 @@ export const BudgetView: React.FC<BudgetViewProps> = ({
       setFormData({
         name: budget.name || '',
         category: budget.category,
-        limit: budget.limit.toString(),
+        limit: fromBase(budget.limit).toString(),
         period: budget.period,
         color: budget.color || 'purple',
         icon: budget.icon || 'PiggyBank',
@@ -122,7 +123,7 @@ export const BudgetView: React.FC<BudgetViewProps> = ({
     const budgetData: Partial<Budget> = {
       name: formData.name.trim() || categoryName,
       category: formData.category,
-      limit: parseFloat(formData.limit),
+      limit: toBase(parseFloat(formData.limit)),
       period: formData.period,
       color: formData.color,
       icon: formData.icon,

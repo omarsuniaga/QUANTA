@@ -62,34 +62,40 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   // Load transactions, accounts, and goals when user changes
   useEffect(() => {
-    if (user) {
-      loadAllData();
-    } else {
+    if (!user) {
       setTransactions([]);
       setAccounts([]);
       setGoals([]);
       setLoading(false);
+      return;
     }
+
+    setLoading(true);
+
+    // Subscribe to all data sources
+    const unsubTxs = storageService.subscribeToTransactions(user.uid, (data) => {
+      setTransactions(data);
+      setLoading(false);
+    });
+
+    const unsubAccs = storageService.subscribeToAccounts(user.uid, (data) => {
+      setAccounts(data);
+    });
+
+    const unsubGoals = storageService.subscribeToGoals(user.uid, (data) => {
+      setGoals(data);
+    });
+
+    return () => {
+      unsubTxs();
+      unsubAccs();
+      unsubGoals();
+    };
   }, [user?.id]);
 
-  const loadAllData = async () => {
-    setLoading(true);
-    try {
-      const [txs, accs, gls] = await Promise.all([
-        storageService.getTransactions(),
-        storageService.getAccounts(),
-        storageService.getGoals()
-      ]);
-      setTransactions(txs);
-      setAccounts(accs);
-      setGoals(gls);
-    } catch (error) {
-      console.error('Error loading data:', error);
-      toast.error('Error al cargar datos');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const refreshTransactions = useCallback(async () => {
+    // console.log("Refresh: Real-time sync is active");
+  }, []);
 
   // Calculate stats with real balance from accounts
   const stats: DashboardStats = useMemo(() => {
@@ -104,23 +110,12 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
       }
     });
 
-    // Patrimonio real = suma de todas las cuentas
     const realBalance = accounts.reduce((sum, account) => sum + account.balance, 0);
-
-    // Total comprometido en metas
     const committedSavings = goals.reduce((sum, goal) => sum + (goal.currentAmount || 0), 0);
 
-    // Balance disponible:
-    // Con la nueva integridad financiera, el "Disponible Hoy" es el balance real de las cuentas
-    // menos lo comprometido en ahorros. Los ingresos/gastos bancarios ya están en realBalance.
-    // Los ingresos/gastos en EFECTIVO (no vinculados a cuenta) se calculan aparte si no hay cuentas.
-
-    let availableBalance = realBalance - committedSavings;
-
-    // Si no hay cuentas, usamos el cálculo histórico
-    if (accounts.length === 0) {
-      availableBalance = totalIncome - totalExpense - committedSavings;
-    }
+    let availableBalance = accounts.length > 0
+      ? realBalance - committedSavings
+      : totalIncome - totalExpense - committedSavings;
 
     return {
       totalIncome,
@@ -142,13 +137,13 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const counts: Record<string, number> = {};
     recent.forEach(t => {
-      const key = `${t.amount} -${t.description} `;
+      const key = `${t.amount} - ${t.description}`;
       counts[key] = (counts[key] || 0) + 1;
     });
 
     Object.entries(counts).forEach(([key, count]) => {
       if (count > 1) {
-        const [amt, desc] = key.split('-');
+        const [amt, desc] = key.split(' - ');
         warnings.push(`Posible cargo duplicado: ${desc} ($${amt}) aparece ${count} veces.`);
       }
     });
@@ -158,7 +153,6 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Filtered transactions
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      // Search
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
         const matchesSearch =
@@ -167,20 +161,11 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
           t.amount.toString().includes(searchLower);
         if (!matchesSearch) return false;
       }
-
-      // Category
       if (filters.category && t.category !== filters.category) return false;
-
-      // Date range
       if (filters.dateFrom && t.date < filters.dateFrom) return false;
       if (filters.dateTo && t.date > filters.dateTo) return false;
-
-      // Type
       if (filters.type !== 'all' && t.type !== filters.type) return false;
-
-      // Payment method
       if (filters.paymentMethod && t.paymentMethod !== filters.paymentMethod) return false;
-
       return true;
     }).sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
   }, [transactions, filters]);
@@ -188,35 +173,22 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   // Actions
   const addTransaction = useCallback(async (tx: Omit<Transaction, 'id' | 'createdAt'>): Promise<Transaction | null> => {
     try {
-      // Validate date strictly
       const dateError = validateDate(tx.date);
       if (dateError) {
         toastError('Error de validación', dateError);
         return null;
       }
-
       const newTx = await storageService.addTransaction(tx);
-      setTransactions(prev => [...prev, newTx]);
-
-      // Refresh accounts to get updated balances
-      const updatedAccs = await storageService.getAccounts();
-      setAccounts(updatedAccs);
-
-      toast.success(
-        tx.type === 'income' ? 'Ingreso registrado' : 'Gasto registrado',
-        `${tx.description}: $${tx.amount.toLocaleString()} `
-      );
+      toast.success(tx.type === 'income' ? 'Ingreso registrado' : 'Gasto registrado');
       return newTx;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error adding transaction:', message);
+    } catch (error: any) {
+      console.error('Error adding transaction:', error);
       return null;
     }
-  }, [toast]);
+  }, [toast, toastError]);
 
   const updateTransaction = useCallback(async (id: string, updates: Partial<Transaction>): Promise<boolean> => {
     try {
-      // Validate date if present
       if (updates.date) {
         const dateError = validateDate(updates.date);
         if (dateError) {
@@ -224,16 +196,7 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
           return false;
         }
       }
-
       await storageService.updateTransaction(id, updates);
-      setTransactions(prev =>
-        prev.map(t => t.id === id ? { ...t, ...updates } : t)
-      );
-
-      // Refresh accounts to get updated balances
-      const updatedAccs = await storageService.getAccounts();
-      setAccounts(updatedAccs);
-
       toast.success('Transacción actualizada');
       return true;
     } catch (error: any) {
@@ -245,41 +208,27 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
   const deleteTransaction = useCallback(async (id: string): Promise<boolean> => {
     const txToDelete = transactions.find(t => t.id === id);
     if (!txToDelete) return false;
-
     try {
       await storageService.deleteTransaction(id);
-      setTransactions(prev => prev.filter(t => t.id !== id));
-
-      // Refresh accounts to get updated balances
-      const updatedAccs = await storageService.getAccounts();
-      setAccounts(updatedAccs);
-
       setLastDeleted(txToDelete);
-
       toast.addToast({
         type: 'info',
         title: 'Transacción eliminada',
         message: txToDelete.description,
         duration: 6000,
-        action: {
-          label: 'Deshacer',
-          onClick: () => undoDelete()
-        }
+        action: { label: 'Deshacer', onClick: () => undoDelete() }
       });
       return true;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error updating commission:', message);
+    } catch (error: any) {
+      console.error('Error deleting transaction:', error);
       return false;
     }
   }, [transactions, toast]);
 
   const undoDelete = useCallback(async (): Promise<boolean> => {
     if (!lastDeleted) return false;
-
     try {
-      const restored = await storageService.addTransaction(lastDeleted);
-      setTransactions(prev => [...prev, restored]);
+      await storageService.addTransaction(lastDeleted);
       setLastDeleted(null);
       toast.success('Transacción restaurada');
       return true;
@@ -295,10 +244,6 @@ export const TransactionsProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const clearFilters = useCallback(() => {
     setFiltersState(defaultFilters);
-  }, []);
-
-  const refreshTransactions = useCallback(async () => {
-    await loadAllData();
   }, []);
 
   return (

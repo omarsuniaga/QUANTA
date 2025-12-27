@@ -4,6 +4,7 @@ import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { calculatePlanAllocations, PlanId } from '../utils/surplusPlan';
 import { createGoalsFromPlan, getCurrentPeriodKey, hasGoalsForPeriod, deleteGoalsForPeriod } from '../services/goalsService';
 import { useI18n } from '../contexts/I18nContext';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface AllocationPlan {
   id: string;
@@ -99,36 +100,67 @@ const ALLOCATION_PLANS: AllocationPlan[] = [
 
 interface SurplusDistributionViewProps {
   budgetPeriodData: BudgetPeriodData;
-  currencySymbol: string;
   language: string;
   onBack: () => void;
   onGoalsCreated?: () => void;
 }
 
+import { useSettings } from '../contexts/SettingsContext';
+
+// ... imports
+
 export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = ({
   budgetPeriodData,
-  currencySymbol,
   language,
   onBack,
   onGoalsCreated
 }) => {
   const { t } = useI18n();
-  const [selectedPlan, setSelectedPlan] = useState<AllocationPlan | null>(null);
+  const { formatAmount } = useCurrency();
+  const { settings, updateSettings } = useSettings(); // Use settings context
+
+  // Initialize selectedPlan from settings if available
+  const [selectedPlan, setSelectedPlan] = useState<AllocationPlan | null>(() => {
+    if (settings?.aiConfig?.selectedPlanId) {
+      return ALLOCATION_PLANS.find(p => p.id === settings.aiConfig.selectedPlanId) || null;
+    }
+    return null;
+  });
+
   const [isCreating, setIsCreating] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [hasExistingGoals, setHasExistingGoals] = useState(false);
 
   // Check for existing goals
   React.useEffect(() => {
-    const currentPeriod = getCurrentPeriodKey();
-    setHasExistingGoals(hasGoalsForPeriod(currentPeriod));
+    const checkGoals = async () => {
+      const currentPeriod = getCurrentPeriodKey();
+      const hasGoals = await hasGoalsForPeriod(currentPeriod);
+      setHasExistingGoals(hasGoals);
+    };
+    checkGoals();
   }, []);
 
   const surplus = Math.max(0, budgetPeriodData.incomeTotal - budgetPeriodData.expensesTotal);
-  const allocations = selectedPlan ? calculatePlanAllocations(selectedPlan.id as PlanId, surplus) : null;
+  const allocations = selectedPlan ? calculatePlanAllocations(surplus, selectedPlan.id as PlanId) : null;
 
-  const handlePlanSelect = (plan: AllocationPlan) => {
+  const handlePlanSelect = async (plan: AllocationPlan) => {
     setSelectedPlan(plan);
+    // Persist immediately when user selects a plan
+    try {
+      await updateSettings({
+        aiConfig: {
+          ...settings?.aiConfig,
+          // Cast to any because surplusId and financialPlanId are currently conflicting types in the system
+          // TODO: Unify PlanId types or separate into financialPlanId vs distributionPlanId
+          selectedPlanId: plan.id as any,
+          enabled: settings?.aiConfig?.enabled ?? true,
+          level: settings?.aiConfig?.level ?? 'medium'
+        }
+      });
+    } catch (error) {
+      console.error('Error persisting selected plan:', error);
+    }
   };
 
   const handleConfirm = async () => {
@@ -143,8 +175,13 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
         await deleteGoalsForPeriod(currentPeriod);
       }
 
-      // Create new goals based on selected plan
-      await createGoalsFromPlan(selectedPlan.id as PlanId, allocations, currencySymbol, language);
+      // Fix: Call with correct object signature
+      await createGoalsFromPlan({
+        periodKey: currentPeriod,
+        planId: selectedPlan.id as PlanId,
+        allocations,
+        language: language as 'es' | 'en'
+      });
 
       setShowConfirmDialog(false);
       onGoalsCreated?.();
@@ -157,16 +194,13 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
   };
 
   const formatCurrency = (amount: number) => {
-    const locale = language === 'es' ? 'es-DO' : 'en-US';
-    return `${currencySymbol} ${amount.toLocaleString(locale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
+    return formatAmount(amount);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
-      {/* Header */}
+      {/* ... (Header same as before) ... */}
+      {/* Header content repeated for context stability if needed, or leave unchanged parts */}
       <header className="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -190,7 +224,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto p-4 pb-28">
-        {/* Available Surplus Card */}
+        {/* ... (Available Surplus Card same as before) ... */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-6 border border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
@@ -233,8 +267,8 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                 key={plan.id}
                 onClick={() => handlePlanSelect(plan)}
                 className={`bg-white dark:bg-slate-800 rounded-2xl p-6 border-2 cursor-pointer transition-all ${selectedPlan?.id === plan.id
-                    ? 'border-indigo-500 ring-2 ring-indigo-100 dark:ring-indigo-900/30'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                  ? 'border-indigo-500 ring-2 ring-indigo-100 dark:ring-indigo-900/30'
+                  : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
                   }`}
               >
                 <div className="flex items-start gap-4">
@@ -256,6 +290,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
                       {language === 'es' ? plan.description : plan.descriptionEn}
                     </p>
 
+                    {/* ... (Percentages same as before) ... */}
                     <div className="grid grid-cols-3 gap-4 text-xs">
                       <div>
                         <span className="text-slate-500 dark:text-slate-400">
@@ -332,22 +367,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
           </div>
         </div>
 
-        {/* Info Section */}
-        <div className="mt-8 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-200 dark:border-blue-800">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-blue-900 dark:text-blue-400 mb-1">
-                {language === 'es' ? '¿Cómo funciona?' : 'How does it work?'}
-              </h4>
-              <p className="text-sm text-blue-800 dark:text-blue-300">
-                {language === 'es'
-                  ? 'Elige un plan de distribución y crearemos automáticamente metas de ahorro basadas en tu superávit. Podrás ajustarlas más tarde.'
-                  : 'Choose a distribution plan and we\'ll automatically create savings goals based on your surplus. You can adjust them later.'}
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Info Section moved out of view, will be replaced by modal on click */}
       </main>
 
       {/* Fixed Footer */}
@@ -372,42 +392,46 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
         </div>
       </footer>
 
-      {/* Confirmation Dialog */}
+      {/* Updated Explanation + Confirmation Modal */}
       {showConfirmDialog && selectedPlan && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full border border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full border border-slate-200 dark:border-slate-700 animate-in zoom-in-50 duration-200">
             <div className="flex items-center justify-center mb-4">
-              <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center">
-                <Target className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center ${selectedPlan.bgColor}`}>
+                <selectedPlan.icon className={`w-8 h-8 ${selectedPlan.iconColor}`} />
               </div>
             </div>
 
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white text-center mb-2">
-              {language === 'es' ? 'Confirmar Plan' : 'Confirm Plan'}
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white text-center mb-2">
+              {language === 'es' ? selectedPlan.name : selectedPlan.nameEn}
             </h3>
 
-            <p className="text-sm text-slate-600 dark:text-slate-400 text-center mb-6">
-              {language === 'es'
-                ? `¿Crear metas basadas en el plan "${language === 'es' ? selectedPlan.name : selectedPlan.nameEn}"?`
-                : `Create goals based on the "${language === 'es' ? selectedPlan.name : selectedPlan.nameEn}" plan?`
-              }
-            </p>
+            <div className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-4 mb-6 text-center">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                {language === 'es' ? 'Cómo funciona:' : 'How it works:'}
+              </p>
+              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                {language === 'es'
+                  ? 'Al confirmar, el sistema distribuirá automáticamente tu excedente en 3 metas financieras según los porcentajes del plan, y deducirá el monto de tu saldo disponible hoy mismo.'
+                  : 'Upon confirmation, the system will automatically distribute your surplus into 3 financial goals according to the plan percentages, and deduct the amount from your available balance today.'}
+              </p>
+            </div>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirmDialog(false)}
-                className="flex-1 py-2 px-4 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                className="flex-1 py-2.5 px-4 rounded-xl font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
               >
-                {language === 'es' ? 'Cancelar' : 'Cancel'}
+                {language === 'es' ? 'Volver' : 'Back'}
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={isCreating}
-                className="flex-1 py-2 px-4 rounded-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex-1 py-2.5 px-4 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-indigo-500/30"
               >
                 {isCreating
-                  ? (language === 'es' ? 'Creando...' : 'Creating...')
-                  : (language === 'es' ? 'Crear' : 'Create')
+                  ? (language === 'es' ? 'Aplicando...' : 'Applying...')
+                  : (language === 'es' ? 'Aplicar Plan' : 'Apply Plan')
                 }
               </button>
             </div>

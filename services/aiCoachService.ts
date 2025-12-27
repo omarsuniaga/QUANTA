@@ -169,11 +169,12 @@ export const aiCoachService = {
     const contextData = { ...metrics, currentBalance: stats.balance, planId: selectedPlanId || 'essentialist', topCategories, goalsProgress: goals.map(g => ({ name: g.name, progress: ((g.currentAmount / g.targetAmount) * 100).toFixed(0), remaining: g.targetAmount - g.currentAmount })) };
     
     // Generate Key
-    const cacheKey = generateCacheKey('analysis_v2', {
+    const cacheKey = generateCacheKey('analysis_v3_smart', { // Updated version
       balance: Math.round(stats.balance / 100),
       savingsRate: Math.round(metrics.savingsRate),
       plan: selectedPlanId,
-      txCount: transactions.length
+      txCount: transactions.length,
+      lastTx: transactions[0]?.id
     });
 
     // Mock Data
@@ -187,7 +188,17 @@ export const aiCoachService = {
       savingsRate: metrics.savingsRate,
       riskLevel: 'low',
       topExpenseCategories: topCategories,
-      recommendations: []
+      recommendations: [],
+      constructiveCriticism: [
+        {
+          id: 'mock_1',
+          type: 'habit_alert',
+          title: 'Hábito de Café',
+          message: 'Detecto compras diarias en cafeterías. Pequeños gastos que suman.',
+          detectedPattern: '5 compras de "Starbucks" ($500)',
+          impact: 'low'
+        }
+      ]
     };
 
     return resolveWithShield<FinancialAnalysis>(
@@ -195,31 +206,60 @@ export const aiCoachService = {
       forceRefresh,
       async () => {
         const ai = new GoogleGenAI({ apiKey });
+        
+        // PREPARE RICH CONTEXT FOR AI
+        // We select last 30 transactions to give the AI visibility into PATTERNS
+        const recentTxContext = transactions
+          .slice(0, 40) // Top 40 most recent
+          .map(t => `- ${t.date}: ${t.description} (${t.category}) $${t.amount}`)
+          .join('\n');
+
         return geminiRateLimiter.execute(
           cacheKey,
           async () => {
              const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
-              contents: `Eres "QUANTA Strategic CFO". Analiza estas métricas matemáticas PRECISAS y genera un diagnóstico estratégico.
-            Modelo Financiero Activo: ${selectedPlanId || 'essentialist'}
+              model: 'gemini-2.0-flash-exp', // Using Flash Exp for better logic or fallback to 1.5-pro if needed
+              contents: `Eres "QUANTA Strategic CFO", un asesor financiero de élite, directo y observador.
+              
+TU OBJETIVO: Analizar los datos y dar CRÍTICA CONSTRUCTIVA BASADA EN EVIDENCIA REAL. No uses plantillas genéricas.
 
-Métricas del usuario:
-${JSON.stringify(contextData, null, 2)}
+Contexto Financiero:
+- Balance: $${stats.balance}
+- Ingresos Mes: $${stats.totalIncome} | Gastos Mes: $${stats.totalExpense}
+- Tasa Ahorro: ${metrics.savingsRate.toFixed(1)}% (Ideal: 20%+)
+- Modelo: ${selectedPlanId || 'essentialist'}
 
-GENERA EL RESULTADO EN JSON:
+MUESTRA DE TRANSACCIONES RECIENTES (Úsalas para detectar hábitos):
+${recentTxContext}
+
+INSTRUCCIONES DE ANÁLISIS:
+1. **Detecta Micro-H%C3%A1bitos**: Busca items repetidos (ej: "Hielo", "Café", "Uber"). Si ves algo repetido 3+ veces, FLÁGALO.
+2. **Analiza Anomalías**: Si hay gastos grandes en categorías de "Deseo" (Variedades, Entretenimiento) pero los ingresos no suben.
+3. **Contexto Temporal**: Si es Diciembre, menciona Navidad/Año Nuevo si ves gastos relacionados. Si es Enero, habla de la "Cuesta de Enero".
+4. **Sé Específico**: No digas "Gasta menos". Di: "Gastaste $2000 en 'Restaurantes' mientras tus ingresos son fijos. Eso es un riesgo."
+
+GENERA JSON:
 {
-  "healthScore": número,
-  "healthStatus": 'excellent' | 'good' | 'warning' | 'critical',
-  "summary": "resumen estratégico corto",
-  "strengths": ["fortaleza 1", "fortaleza 2"],
-  "weaknesses": ["debilidad 1", "debilidad 2"],
-  "monthlyTrend": 'improving' | 'stable' | 'declining',
-  "savingsRate": número,
-  "riskLevel": 'low' | 'medium' | 'high',
+  "healthScore": 0-100,
+  "healthStatus": "excellent" | "good" | "warning" | "critical",
+  "summary": "Resumen ejecutivo de 2 líneas.",
+  "strengths": ["string"],
+  "weaknesses": ["string"],
+  "monthlyTrend": "improving" | "stable" | "declining",
+  "savingsRate": number,
+  "riskLevel": "high" | "medium" | "low",
+  "constructiveCriticism": [
+    {
+      "id": "unique_id",
+      "type": "warning" | "insight" | "habit_alert",
+      "title": "Título corto e impactante (ej: 'Obsesión con Delivery')",
+      "message": "Mensaje directo explicando el problema y la solución. (ej: 'Pediste hielo 5 veces esta semana. Considera comprar bandejas para el freezer.')",
+      "detectedPattern": "La evidencia (ej: '5 cargos de PedidosYa')",
+      "impact": "high" | "medium" | "low"
+    }
+  ],
   "recommendations": []
-}
-
-Responde SOLO en español.`,
+}`,
               config: {
                 responseMimeType: 'application/json',
                 responseSchema: {
@@ -233,6 +273,21 @@ Responde SOLO en español.`,
                     monthlyTrend: { type: Type.STRING, enum: ['improving', 'stable', 'declining'] },
                     savingsRate: { type: Type.NUMBER },
                     riskLevel: { type: Type.STRING, enum: ['low', 'medium', 'high'] },
+                    constructiveCriticism: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          id: { type: Type.STRING },
+                          type: { type: Type.STRING, enum: ['warning', 'insight', 'habit_alert'] },
+                          title: { type: Type.STRING },
+                          message: { type: Type.STRING },
+                          detectedPattern: { type: Type.STRING },
+                          impact: { type: Type.STRING, enum: ['high', 'medium', 'low'] }
+                        },
+                        required: ['id', 'type', 'title', 'message', 'impact']
+                      }
+                    },
                     recommendations: {
                       type: Type.ARRAY,
                       items: {
@@ -251,7 +306,7 @@ Responde SOLO en español.`,
                       }
                     }
                   },
-                  required: ['healthScore', 'healthStatus', 'summary', 'strengths', 'weaknesses', 'monthlyTrend', 'savingsRate', 'riskLevel', 'recommendations']
+                  required: ['healthScore', 'healthStatus', 'summary', 'strengths', 'weaknesses', 'monthlyTrend', 'savingsRate', 'riskLevel', 'constructiveCriticism', 'recommendations']
                 }
               }
             });

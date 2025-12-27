@@ -64,6 +64,10 @@ export const geminiService = {
     }
   },
 
+  async hasApiKey(): Promise<boolean> {
+    return hasValidApiKey();
+  },
+
   /**
    * Parses natural language input into a structured transaction object.
    * Hybrid Logic: Checks keywords locally first, falls back to AI.

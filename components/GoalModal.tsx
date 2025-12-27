@@ -5,14 +5,13 @@ import { parseLocalDate, dateToString } from '../utils/dateHelpers';
 import { Button } from './Button';
 import { useI18n } from '../contexts/I18nContext';
 import { ModalWrapper } from './ModalWrapper';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface GoalModalProps {
   goal?: Goal | null;
   onSave: (goal: Goal) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
-  currencySymbol?: string;
-  currencyCode?: string;
   availableBalance?: number;
 }
 
@@ -38,11 +37,10 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   onSave,
   onDelete,
   onClose,
-  currencySymbol = '$',
-  currencyCode = 'USD',
   availableBalance = 0
 }) => {
   const { t, language } = useI18n();
+  const { formatAmount, currencySymbol } = useCurrency();
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -303,7 +301,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
             <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl flex items-center justify-between">
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{l.remaining}</span>
               <span className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                {remainingAmount.toLocaleString()} {currencyCode}
+                {formatAmount(remainingAmount)}
               </span>
             </div>
           )}
@@ -392,7 +390,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                       <div className="mt-2 flex items-center gap-2 text-amber-600 dark:text-amber-400">
                         <Info className="w-4 h-4" />
                         <span className="text-xs font-medium">
-                          {l.insufficientFunds} ({l.availableBalance}: {availableBalance.toLocaleString()} {currencyCode})
+                          {l.insufficientFunds} ({l.availableBalance}: {formatAmount(availableBalance)})
                         </span>
                       </div>
                     )}
@@ -440,7 +438,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                           {l.requiredContribution}
                         </div>
                         <p className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
-                          {calculatedContribution.toLocaleString()} {currencyCode} <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{l.perPeriod}</span>
+                          {formatAmount(calculatedContribution)} <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{l.perPeriod}</span>
                         </p>
 
                         {/* Feasibility check for calculated amount */}
@@ -448,7 +446,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
                           <div className="mt-2 flex items-center gap-2 text-amber-600 dark:text-amber-400">
                             <Info className="w-4 h-4" />
                             <span className="text-xs font-medium">
-                              {l.insufficientFunds} ({l.availableBalance}: {availableBalance.toLocaleString()} {currencyCode})
+                              {l.insufficientFunds} ({l.availableBalance}: {formatAmount(availableBalance)})
                             </span>
                           </div>
                         )}
@@ -541,8 +539,6 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
 const arePropsEqual = (prevProps: GoalModalProps, nextProps: GoalModalProps) => {
   return (
     prevProps.goal === nextProps.goal &&
-    prevProps.currencySymbol === nextProps.currencySymbol &&
-    prevProps.currencyCode === nextProps.currencyCode &&
     prevProps.availableBalance === nextProps.availableBalance &&
     prevProps.onSave === nextProps.onSave &&
     prevProps.onDelete === nextProps.onDelete &&

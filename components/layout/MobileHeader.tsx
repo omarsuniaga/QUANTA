@@ -2,6 +2,7 @@ import React from 'react';
 import { WifiOff, Settings as SettingsIcon } from 'lucide-react';
 import { User, DashboardStats } from '../../types';
 import { NotificationBell } from '../NotificationCenter';
+import { useCurrency } from '../../hooks/useCurrency';
 
 interface TranslationObject {
   dashboard: {
@@ -18,7 +19,6 @@ interface MobileHeaderProps {
   stats: DashboardStats;
   isOnline: boolean;
   isDarkMode: boolean;
-  currencySymbol: string;
   onNavigateToSettings: () => void;
   onOpenNotificationCenter: () => void;
   t: TranslationObject;
@@ -36,11 +36,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   stats,
   isOnline,
   isDarkMode,
-  currencySymbol,
   onNavigateToSettings,
   onOpenNotificationCenter,
   t,
 }) => {
+  const { formatAmount } = useCurrency();
   return (
     <header
       className={`px-4 sm:px-6 pt-8 sm:pt-12 pb-4 sticky top-0 z-30 border-b flex justify-between items-start transition-all backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-slate-200/50 dark:border-slate-800 lg:hidden`}
@@ -58,10 +58,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           )}
         </div>
         <h2 className="text-2xl sm:text-3xl font-bold mt-1 tracking-tight text-slate-900 dark:text-white">
-          {currencySymbol}{' '}
-          {(stats.realBalance > 0 ? stats.realBalance : stats.balance).toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-          })}
+          {formatAmount(stats.realBalance || stats.balance || 0)}
         </h2>
         <p className="text-xs text-indigo-500 dark:text-indigo-400 font-semibold mt-1 bg-indigo-50 dark:bg-indigo-900/30 inline-block px-2 py-0.5 rounded-md">
           {t.dashboard.availableToday}

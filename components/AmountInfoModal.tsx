@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Info, TrendingUp, TrendingDown, Target, PiggyBank, RefreshCw, Percent, AlertCircle } from 'lucide-react';
-import { useModalScrollLock } from '../hooks/useModalScrollLock';
+import { ModalWrapper } from './ModalWrapper';
+import { useCurrency } from '../hooks/useCurrency';
 
 export interface AmountBreakdownItem {
   label: string;
@@ -16,7 +17,6 @@ interface AmountInfoModalProps {
   title: string;
   totalAmount: number;
   breakdown: AmountBreakdownItem[];
-  currencySymbol: string;
   language?: 'es' | 'en';
   subtitle?: string;
 }
@@ -27,17 +27,13 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
   title,
   totalAmount,
   breakdown,
-  currencySymbol,
   language = 'es',
   subtitle
 }) => {
-  useModalScrollLock(isOpen);
-
   if (!isOpen) return null;
 
-  const formatCurrency = (amount: number) => {
-    return `${currencySymbol} ${Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  const { formatAmount } = useCurrency();
+  const formatCurrency = formatAmount;
 
   const getIcon = (iconType?: string) => {
     switch (iconType) {
@@ -88,20 +84,11 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex justify-center items-start overflow-y-auto pointer-events-auto"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClose();
-      }}
-    >
+    <ModalWrapper isOpen={isOpen} onClose={onClose} alignment="start">
       {/* Modal */}
-      <div
-        className="relative bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[85vh] mt-16 mb-8 mx-4 flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="relative bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 dark:border-slate-800 max-h-[85vh] mt-16 mb-8 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-br from-indigo-500 to-indigo-600">
+        <div className="p-5 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-br from-indigo-500 to-indigo-600 dark:from-indigo-600 dark:to-indigo-800">
           <div className="flex items-start justify-between mb-2">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-white/20 rounded-lg">
@@ -156,7 +143,7 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
               {breakdown.map((item, index) => (
                 <div
                   key={index}
-                  className={`${getItemBg(item.type)} rounded-xl p-4 border border-slate-200 dark:border-slate-700`}
+                  className={`${getItemBg(item.type)} rounded-xl p-4 border border-slate-200 dark:border-slate-800/50`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`p-2 rounded-lg ${getItemBg(item.type)} ${getItemColor(item.type)}`}>
@@ -185,7 +172,7 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+        <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
           <button
             onClick={onClose}
             className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors"
@@ -194,8 +181,7 @@ export const AmountInfoModal: React.FC<AmountInfoModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
-
+    </ModalWrapper>
   );
 };
 

@@ -3,11 +3,11 @@ import { AlertTriangle, CheckCircle, ChevronDown, ChevronUp, TrendingDown, Trend
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { getFinancialHealth, getStatusColor, FinancialHealthStatus } from '../utils/financialHealth';
 import { FinancialHealthMetrics } from '../types';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface FinancialHealthCardProps {
   budgetPeriodData: BudgetPeriodData;
   financialHealthMetrics?: FinancialHealthMetrics;
-  currencySymbol?: string;
   language?: 'es' | 'en';
   onManageSurplus?: () => void;
 }
@@ -43,7 +43,7 @@ const getStatusMessage = (
           ? 'Aún no tienes presupuestos activos este mes. Ve a Presupuestos para crear tu distribución.'
           : 'You have no active budgets this month. Go to Budgets to create your distribution.'
       };
-    
+
     case 'critical_deficit':
     case 'deficit':
       if (incomeTotal === 0) {
@@ -55,14 +55,14 @@ const getStatusMessage = (
         };
       }
       return {
-        title: language === 'es' 
+        title: language === 'es'
           ? `Te faltan ${formatCurrency(Math.abs(delta))} para cubrir tu presupuesto`
           : `You need ${formatCurrency(Math.abs(delta))} to cover your budget`,
         description: language === 'es'
           ? 'Tus ingresos no cubren el presupuesto del mes. Considera registrar ingresos adicionales o revisar gastos.'
           : 'Your income doesn\'t cover this month\'s budget. Consider recording additional income or reviewing expenses.'
       };
-    
+
     case 'balanced':
       return {
         title: language === 'es' ? '✓ Estás en equilibrio' : '✓ You\'re balanced',
@@ -70,7 +70,7 @@ const getStatusMessage = (
           ? 'Tus ingresos cubren tu presupuesto perfectamente.'
           : 'Your income covers your budget perfectly.'
       };
-    
+
     case 'healthy_surplus':
     case 'strong_surplus':
       return {
@@ -86,25 +86,22 @@ const getStatusMessage = (
 
 export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
   budgetPeriodData,
-  currencySymbol = 'RD$',
+  financialHealthMetrics,
   language = 'es',
   onManageSurplus
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+  const { formatAmount } = useCurrency();
+
   const { budgetTotal, incomeTotal, incomeSurplus } = budgetPeriodData;
   const { status, coverageRatio } = getFinancialHealth(budgetPeriodData);
   const colors = getStatusColor(status);
   const StatusIcon = getStatusIcon(status);
-  
+
   const formatCurrency = (amount: number) => {
-    const locale = language === 'es' ? 'es-DO' : 'en-US';
-    return `${currencySymbol} ${amount.toLocaleString(locale, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
+    return formatAmount(amount);
   };
-  
+
   const { title, description } = getStatusMessage(
     status,
     incomeSurplus,
@@ -113,10 +110,10 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
     language,
     formatCurrency
   );
-  
+
   const hasSurplus = status === 'healthy_surplus' || status === 'strong_surplus';
   const showCoverageBar = status !== 'no_budget';
-  
+
   return (
     <div className="px-3 sm:px-4 mb-4 sm:mb-6">
       <div className={`rounded-xl sm:rounded-2xl p-4 sm:p-5 border-2 ${colors.border} ${colors.bg}`}>
@@ -135,7 +132,7 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
                 </p>
               </div>
             </div>
-            
+
             <button
               onClick={() => setIsExpanded(!isExpanded)}
               className={`p-1.5 rounded-lg transition-colors ${colors.text} hover:bg-white/50 dark:hover:bg-black/20`}
@@ -148,7 +145,7 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
               )}
             </button>
           </div>
-          
+
           {/* Actions */}
           {!isExpanded && hasSurplus && onManageSurplus && (
             <button
@@ -159,7 +156,7 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
             </button>
           )}
         </div>
-        
+
         {/* Expanded View */}
         {isExpanded && (
           <div className="mt-4 pt-4 border-t border-current/10 space-y-4">
@@ -167,7 +164,7 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
               {description}
             </p>
-            
+
             {/* Coverage Bar */}
             {showCoverageBar && (
               <div>
@@ -181,19 +178,18 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
                 </div>
                 <div className="h-2 sm:h-2.5 bg-white dark:bg-slate-700 rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all duration-300 ${
-                      status === 'critical_deficit' || status === 'deficit'
-                        ? 'bg-red-500'
-                        : status === 'balanced'
+                    className={`h-full transition-all duration-300 ${status === 'critical_deficit' || status === 'deficit'
+                      ? 'bg-red-500'
+                      : status === 'balanced'
                         ? 'bg-amber-500'
                         : 'bg-emerald-500'
-                    }`}
+                      }`}
                     style={{ width: `${Math.min(100, coverageRatio * 100)}%` }}
                   />
                 </div>
               </div>
             )}
-            
+
             {/* Budget Breakdown */}
             {budgetTotal > 0 && (
               <div className="space-y-2 text-xs sm:text-sm">
@@ -227,7 +223,7 @@ export const FinancialHealthCard: React.FC<FinancialHealthCardProps> = ({
                 )}
               </div>
             )}
-            
+
             {/* Deep Math Metrics */}
             {financialHealthMetrics && (
               <div className="pt-4 border-t border-current/10">

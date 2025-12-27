@@ -25,7 +25,6 @@ interface AppLayoutProps {
   stats: DashboardStats;
   isOnline: boolean;
   isDarkMode: boolean;
-  currencySymbol: string;
   activeTab: TabType;
   onNavigateToTab: (tab: TabType) => void;
   onOpenNotificationCenter: () => void;
@@ -50,7 +49,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   stats,
   isOnline,
   isDarkMode,
-  currencySymbol,
   activeTab,
   onNavigateToTab,
   onOpenNotificationCenter,
@@ -72,7 +70,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           stats={stats}
           isOnline={isOnline}
           isDarkMode={isDarkMode}
-          currencySymbol={currencySymbol}
           activeTab={activeTab}
           onNavigateToTab={onNavigateToTab}
           onOpenNotificationCenter={onOpenNotificationCenter}
@@ -90,7 +87,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             stats={stats}
             isOnline={isOnline}
             isDarkMode={isDarkMode}
-            currencySymbol={currencySymbol}
             onNavigateToSettings={() => onNavigateToTab('settings')}
             onOpenNotificationCenter={onOpenNotificationCenter}
             t={t}

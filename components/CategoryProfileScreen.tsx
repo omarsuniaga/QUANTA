@@ -6,23 +6,22 @@ interface Props {
   category: string;
   transactions: Transaction[];
   customCategories: CustomCategory[];
-  currencySymbol: string;
-  currencyCode: string;
   onBack: () => void;
   onEditTransaction: (tx: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
 }
 
+import { useCurrency } from '../hooks/useCurrency';
+
 export const CategoryProfileScreen: React.FC<Props> = ({
   category,
   transactions,
   customCategories,
-  currencySymbol,
-  currencyCode,
   onBack,
   onEditTransaction,
   onDeleteTransaction
 }) => {
+  const { formatAmount, currencySymbol } = useCurrency();
   const displayName = (() => {
     const found = customCategories.find(c => c.id === category || c.key === category);
     if (found) return found.name?.es || found.name?.en || found.key;
@@ -55,7 +54,7 @@ export const CategoryProfileScreen: React.FC<Props> = ({
                   <div className="text-xs text-slate-400">{tx.date}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-sm font-bold">{tx.amount.toLocaleString()} {currencyCode}</div>
+                  <div className="text-sm font-bold">{formatAmount(tx.amount)}</div>
                   <button onClick={() => onEditTransaction(tx)} className="text-xs text-indigo-600">Editar</button>
                   <button onClick={() => onDeleteTransaction(tx.id)} className="text-xs text-rose-600">Eliminar</button>
                 </div>

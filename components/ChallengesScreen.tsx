@@ -25,24 +25,24 @@ import { parseLocalDate } from '../utils/dateHelpers';
 import { Transaction, DashboardStats, Goal, SavingsChallenge } from '../types';
 import { aiCoachService, CHALLENGE_TEMPLATES } from '../services/aiCoachService';
 import { Button } from './Button';
+import { ModalWrapper } from './ModalWrapper';
 
 interface ChallengesScreenProps {
   transactions: Transaction[];
   stats: DashboardStats;
   goals: Goal[];
-  currencySymbol: string;
-  currencyCode: string;
   onBack: () => void;
 }
+
+import { useCurrency } from '../hooks/useCurrency';
 
 export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
   transactions,
   stats,
   goals,
-  currencySymbol,
-  currencyCode,
   onBack
 }) => {
+  const { formatAmount, currencyCode } = useCurrency();
   const [challenges, setChallenges] = useState<SavingsChallenge[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<SavingsChallenge[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +51,7 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
   useEffect(() => {
     loadChallenges();
     loadActiveChallenges();
-  }, []);
+  }, [transactions]); // Added transactions dependency to recalc progress
 
   const loadChallenges = async () => {
     setLoading(true);
@@ -429,10 +429,10 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
                     });
                   }}
                   className={`p-4 rounded-xl border text-center transition-all ${isActive
-                      ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 opacity-50'
-                      : isCompleted
-                        ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
-                        : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
+                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 opacity-50'
+                    : isCompleted
+                      ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                      : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
                     }`}
                 >
                   <div className={`w-10 h-10 rounded-lg bg-${template.color}-100 dark:bg-${template.color}-900/30 flex items-center justify-center mx-auto mb-2`}>
@@ -451,17 +451,23 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
         </div>
       </div>
 
+
+
       {/* Challenge Detail Modal */}
-      {selectedChallenge && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-2 sm:p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto animate-slide-up">
-            <div className={`p-6 bg-gradient-to-br from-${selectedChallenge.color}-500 to-${selectedChallenge.color}-600 text-white rounded-t-3xl sm:rounded-t-3xl`}>
+      <ModalWrapper
+        isOpen={!!selectedChallenge}
+        onClose={() => setSelectedChallenge(null)}
+        alignment="center"
+      >
+        {selectedChallenge && (
+          <div className="bg-white dark:bg-slate-800 rounded-3xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className={`p-6 bg-gradient-to-br from-${selectedChallenge.color}-500 to-${selectedChallenge.color}-600 text-white`}>
               <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
                   {React.createElement(getIconComponent(selectedChallenge.icon), { className: 'w-8 h-8' })}
                 </div>
                 <div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full bg-white/20 font-medium`}>
+                  <span className={`text-xs px-2 py-0.5 rounded-full bg-white/20 font-medium backdrop-blur-sm`}>
                     {getDifficultyBadge(selectedChallenge.difficulty).label}
                   </span>
                   <h2 className="text-xl font-bold mt-1">{selectedChallenge.title}</h2>
@@ -469,52 +475,95 @@ export const ChallengesScreen: React.FC<ChallengesScreenProps> = ({
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
-              <p className="text-slate-600 dark:text-slate-300">{selectedChallenge.description}</p>
+            <div className="p-6 space-y-5">
+              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">{selectedChallenge.description}</p>
+
+              {/* Progress Bar (Visible if active) */}
+              {selectedChallenge.status === 'active' && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-slate-500 dark:text-slate-400">Progreso</span>
+                    <span className={`text-${selectedChallenge.color}-600 dark:text-${selectedChallenge.color}-400`}>
+                      {selectedChallenge.currentProgress} / {selectedChallenge.targetProgress} {selectedChallenge.type === 'streak' || selectedChallenge.type === 'no_spend' ? 'días' : ''}
+                    </span>
+                  </div>
+                  <div className="h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full bg-${selectedChallenge.color}-500 transition-all duration-500`}
+                      style={{ width: `${Math.min(100, (selectedChallenge.currentProgress / selectedChallenge.targetProgress) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-3">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Duración</p>
-                  <p className="font-bold text-slate-800 dark:text-white">{selectedChallenge.duration} días</p>
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Duración</p>
+                  <p className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-slate-400" />
+                    {selectedChallenge.duration} días
+                  </p>
                 </div>
-                <div className="bg-slate-50 dark:bg-slate-700 rounded-xl p-3">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Recompensa</p>
-                  <p className="font-bold text-slate-800 dark:text-white">{selectedChallenge.reward}</p>
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Recompensa</p>
+                  <p className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-500" />
+                    {selectedChallenge.reward}
+                  </p>
                 </div>
               </div>
 
               {selectedChallenge.targetAmount && (
-                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 flex items-center gap-3">
-                  <Target className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-4 flex items-center gap-3 border border-emerald-100 dark:border-emerald-800/30">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
+                    <Target className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
                   <div>
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400">Meta de ahorro</p>
-                    <p className="font-bold text-emerald-700 dark:text-emerald-300">
-                      {selectedChallenge.targetAmount} {currencyCode}
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Meta de ahorro</p>
+                    <p className="font-bold text-emerald-700 dark:text-emerald-300 text-lg">
+                      {formatAmount(selectedChallenge.targetAmount || 0)}
                     </p>
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-2">
                 <Button
                   variant="secondary"
                   onClick={() => setSelectedChallenge(null)}
-                  className="flex-1"
+                  className="flex-1 py-3"
                 >
-                  Cancelar
+                  Cerrar
                 </Button>
-                <Button
-                  onClick={() => startChallenge(selectedChallenge)}
-                  className="flex-1"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Iniciar Challenge
-                </Button>
+                {selectedChallenge.status !== 'active' && selectedChallenge.status !== 'completed' && (
+                  <Button
+                    onClick={() => startChallenge(selectedChallenge)}
+                    className={`flex-1 py-3 bg-${selectedChallenge.color}-600 hover:bg-${selectedChallenge.color}-700 text-white border-none`}
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Aceptar Reto
+                  </Button>
+                )}
+                {selectedChallenge.status === 'active' && (
+                  <Button
+                    variant="danger"
+                    onClick={() => {
+                      // Logic to abandon challenge
+                      const updated = activeChallenges.filter(c => c.id !== selectedChallenge.id);
+                      setActiveChallenges(updated);
+                      localStorage.setItem('active_challenges', JSON.stringify(updated));
+                      setSelectedChallenge(null);
+                    }}
+                    className="flex-1 py-3"
+                  >
+                    Abandonar
+                  </Button>
+                )}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </ModalWrapper>
     </div>
   );
 };

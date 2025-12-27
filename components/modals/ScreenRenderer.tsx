@@ -76,8 +76,6 @@ interface ScreenRendererProps {
   stats: DashboardStats;
   customCategories: CustomCategory[];
   settings?: AppSettings;
-  currencySymbol: string;
-  currencyCode: string;
   availableBalance: number;
 }
 
@@ -117,8 +115,6 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
   stats,
   customCategories,
   settings,
-  currencySymbol,
-  currencyCode,
   availableBalance,
 }) => {
   return (
@@ -131,8 +127,6 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
             stats={stats}
             goals={goals}
             selectedPlanId={settings?.aiConfig?.selectedPlanId}
-            currencySymbol={currencySymbol}
-            currencyCode={currencyCode}
             onBack={onCloseScreens.aiCoach}
             onOpenSavingsPlanner={() => {
               onCloseScreens.aiCoach();
@@ -157,8 +151,6 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
             goals={goals}
             transactions={transactions}
             stats={stats}
-            currencySymbol={currencySymbol}
-            currencyCode={currencyCode}
             onBack={onCloseScreens.savingsPlanner}
             onEditGoal={(goal) => {
               onCloseScreens.savingsPlanner();
@@ -179,8 +171,6 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
             transactions={transactions}
             stats={stats}
             goals={goals}
-            currencySymbol={currencySymbol}
-            currencyCode={currencyCode}
             onBack={onCloseScreens.challenges}
           />
         </div>
@@ -192,8 +182,6 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
           <StrategiesScreen
             transactions={transactions}
             stats={stats}
-            currencySymbol={currencySymbol}
-            currencyCode={currencyCode}
             onBack={onCloseScreens.strategies}
           />
         </div>
@@ -241,8 +229,6 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
           }}
           onDeleteGoal={onDeleteGoal}
           onUpdateGoal={onUpdateGoal}
-          currencySymbol={currencySymbol}
-          currencyCode={currencyCode}
           availableBalance={availableBalance}
         />
       )}
@@ -251,12 +237,10 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
       {goalViewScreen.show && (
         <GoalView
           goal={goalViewScreen.goal}
+          transactions={transactions}
           onSave={onSaveGoal}
           onDelete={onDeleteGoal}
           onBack={onCloseScreens.goalView}
-          currencySymbol={currencySymbol}
-          currencyCode={currencyCode}
-          availableBalance={availableBalance}
         />
       )}
 
@@ -274,9 +258,9 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
       {budgetViewScreen.show && (
         <BudgetView
           budget={budgetViewScreen.budget}
+          categories={customCategories.map(c => c.id)}
           onSave={onSaveBudget}
           onBack={onCloseScreens.budgetView}
-          currencySymbol={currencySymbol}
         />
       )}
 
@@ -287,8 +271,6 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
             category={categoryProfileScreen.category}
             transactions={transactions}
             customCategories={customCategories}
-            currencySymbol={currencySymbol}
-            currencyCode={currencyCode}
             onBack={onCloseScreens.categoryProfile}
             onEditTransaction={(tx) => {
               onCloseScreens.categoryProfile();

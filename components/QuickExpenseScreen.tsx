@@ -8,6 +8,7 @@ import { Transaction, CustomCategory } from '../types';
 import { useTransactions, useSettings, useI18n } from '../contexts';
 import { storageService } from '../services/storageService';
 import { parseLocalDate, getTodayDateString } from '../utils/dateHelpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface QuickExpenseScreenProps {
   isOpen: boolean;
@@ -18,8 +19,9 @@ type DateFilter = 'today' | 'week' | 'month' | 'custom';
 
 export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, onClose }) => {
   const { transactions, addTransaction, updateTransaction, deleteTransaction } = useTransactions();
-  const { settings, budgets, currencySymbol, currencyCode } = useSettings();
+  const { settings, budgets } = useSettings();
   const { t, language } = useI18n();
+  const { formatAmount, convertAmount } = useCurrency();
 
   // Form state
   const [amount, setAmount] = useState('');
@@ -97,8 +99,8 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
 
   // Calculate total for filtered period
   const periodTotal = useMemo(() => {
-    return quickExpenses.reduce((sum, tx) => sum + tx.amount, 0);
-  }, [quickExpenses]);
+    return quickExpenses.reduce((sum, tx) => sum + convertAmount(tx.amount), 0);
+  }, [quickExpenses, convertAmount]);
 
   // Group expenses by date (sorted by createdAt within each group)
   const groupedExpenses = useMemo(() => {
@@ -164,12 +166,7 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
   };
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat(language === 'es' ? 'es-ES' : 'en-US', {
-      style: 'currency',
-      currency: currencyCode,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2
-    }).format(value);
+    return formatAmount(value);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -266,7 +263,7 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
           <div className="flex-1 flex gap-2">
             <div className="relative flex-shrink-0 w-28">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/70 font-medium">
-                {currencySymbol}
+                {formatAmount(0).replace(/[0-9.,\s]/g, '')}
               </span>
               <input
                 type="number"
@@ -426,7 +423,7 @@ export const QuickExpenseScreen: React.FC<QuickExpenseScreenProps> = ({ isOpen, 
                           <div className="flex gap-2">
                             <div className="relative w-24">
                               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-                                {currencySymbol}
+                                {formatAmount(0).replace(/[0-9.,\s]/g, '')}
                               </span>
                               <input
                                 type="number"

@@ -10,12 +10,11 @@ import { storageService } from '../services/storageService';
 import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
 import { parseLocalDate } from '../utils/dateHelpers';
 import { ModalWrapper } from './ModalWrapper';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface IncomeScreenProps {
   transactions: Transaction[];
   stats: DashboardStats;
-  currencySymbol?: string;
-  currencyCode?: string;
   budgetPeriodData: BudgetPeriodData;
   onAddFixedIncome: () => void;
   onAddExtraIncome: () => void;
@@ -27,8 +26,6 @@ interface IncomeScreenProps {
 export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   transactions,
   stats,
-  currencySymbol = 'RD$',
-  currencyCode = 'DOP',
   budgetPeriodData,
   onAddFixedIncome,
   onAddExtraIncome,
@@ -37,6 +34,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   onGoalsCreated
 }) => {
   const { language } = useI18n();
+  const { formatAmount, convertAmount } = useCurrency();
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'all'>('current');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; type: 'fixed' | 'extra' } | null>(null);
@@ -73,8 +71,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
         const date = parseLocalDate(t.date);
         return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
       })
-      .reduce((sum, t) => sum + t.amount, 0);
-  }, [incomeTransactions, currentMonth, currentYear]);
+      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
+  }, [incomeTransactions, currentMonth, currentYear, convertAmount]);
 
   // Calcular promedio mensual (últimos 6 meses)
   const averageMonthlyIncome = useMemo(() => {
@@ -84,8 +82,8 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
     const recentIncomes = incomeTransactions.filter(t => parseLocalDate(t.date) >= sixMonthsAgo);
     const monthsCount = Math.min(6, new Date().getMonth() + 1);
 
-    return recentIncomes.reduce((sum, t) => sum + t.amount, 0) / (monthsCount || 1);
-  }, [incomeTransactions]);
+    return recentIncomes.reduce((sum, t) => sum + convertAmount(t.amount), 0) / (monthsCount || 1);
+  }, [incomeTransactions, convertAmount]);
 
   // Calculate Deep Health Metrics
   const financialHealthMetrics = useMemo(() => {
@@ -97,10 +95,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
     );
   }, [transactions, stats.balance, budgetPeriodData.incomeTotal, budgetPeriodData.expensesTotal]);
 
-  const formatCurrency = (amount: number) => {
-    const locale = language === 'es' ? 'es-DO' : 'en-US';
-    return `${currencySymbol} ${amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  const formatCurrency = formatAmount;
 
   const formatDate = (dateStr: string) => {
     const date = parseLocalDate(dateStr);
@@ -141,10 +136,7 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
               <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
             </div>
             <div className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatCurrency(thisMonthIncome)}
-            </div>
-            <div className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 sm:mt-1">
-              {currencyCode}
+              {formatAmount(thisMonthIncome)}
             </div>
           </div>
 
@@ -184,7 +176,6 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
       <FinancialHealthCard
         budgetPeriodData={budgetPeriodData}
         financialHealthMetrics={financialHealthMetrics}
-        currencySymbol={currencySymbol}
         language={language}
         onManageSurplus={hasSurplus ? () => setShowSurplusView(true) : undefined}
       />
@@ -401,7 +392,6 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
       {showSurplusView && (
         <SurplusDistributionView
           budgetPeriodData={budgetPeriodData}
-          currencySymbol={currencySymbol}
           language={language}
           onBack={() => setShowSurplusView(false)}
           onGoalsCreated={onGoalsCreated}

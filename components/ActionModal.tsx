@@ -7,6 +7,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { DynamicIcon, getColorClasses, IconPicker } from './IconPicker';
 import { Calculator } from './Calculator';
 import { ModalWrapper } from './ModalWrapper';
+import { useCurrency } from '../hooks/useCurrency';
 
 type ModalMode = 'income' | 'expense' | 'service';
 
@@ -20,13 +21,11 @@ interface ActionModalProps {
     description?: string;
     paymentMethod?: string;
     date?: string;
-    time?: string;
     bankTransferType?: 'internal' | 'ach' | 'lbtr';
   };
-  currencySymbol?: string;
 }
 
-const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSave, initialValues, currencySymbol = '$' }) => {
+const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSave, initialValues }) => {
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -44,7 +43,12 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
   }, [mode]);
 
   // Common Fields
-  const [amount, setAmount] = useState(initialValues?.amount?.toString() || '');
+  const { fromBase, toBase, currencySymbol } = useCurrency();
+
+  // Si estamos editando, el monto inicial debe convertirse de BASE -> DISPLAY para que el usuario vea lo que "cree" que guardó en su moneda actual
+  const initialAmount = initialValues?.amount !== undefined ? fromBase(initialValues.amount).toString() : '';
+
+  const [amount, setAmount] = useState(initialAmount);
   const [concept, setConcept] = useState(initialValues?.description || ''); // Description/Name
   const [category, setCategory] = useState<string>(initialValues?.category || '');
 
@@ -164,8 +168,11 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       }
     }
 
+    // NORMALIZACIÓN CRÍTICA: Convertir de Display -> BASE antes de persistir
+    const normalizedAmount = toBase(parseFloat(amount) || 0);
+
     const baseData = {
-      amount: parseFloat(amount),
+      amount: normalizedAmount,
       description: concept,
       category,
       paymentMethodId: paymentMethodId || null,
@@ -200,7 +207,7 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
       });
     }
     onClose();
-  }, [mode, amount, concept, category, paymentMethodId, accounts, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose, bankTransferType]);
+  }, [mode, amount, concept, category, paymentMethodId, accounts, date, time, notes, mood, gigType, incomeType, isAlreadyInBalance, isRecurring, frequency, chargeDay, reminderDays, onSave, onClose, bankTransferType, toBase]);
 
   // UI Config
   const config = {
@@ -773,7 +780,6 @@ const ActionModalComponent: React.FC<ActionModalProps> = ({ mode, onClose, onSav
 const arePropsEqual = (prevProps: ActionModalProps, nextProps: ActionModalProps) => {
   return (
     prevProps.mode === nextProps.mode &&
-    prevProps.currencySymbol === nextProps.currencySymbol &&
     prevProps.initialValues === nextProps.initialValues &&
     prevProps.onClose === nextProps.onClose &&
     prevProps.onSave === nextProps.onSave

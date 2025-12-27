@@ -19,6 +19,8 @@ import { storageService } from './storageService';
 import { parseLocalDate } from '../utils/dateHelpers';
 import { CATEGORY_TO_GROUP } from '../constants/financialPlans';
 import { calculateBurnRate } from '../utils/financialMathCore';
+import { es } from '../locales/es';
+import { en } from '../locales/en';
 
 // ========================
 // TIPOS DE NOTIFICACIONES
@@ -424,13 +426,16 @@ class SmartNotificationService {
       // No enviar si ya existe una notificación para este pago
       if (this.notifications.some(n => n.id.startsWith(notificationId))) continue;
 
-      const title = language === 'es' 
-        ? `Pago próximo: ${transaction.description || transaction.category}`
-        : `Upcoming payment: ${transaction.description || transaction.category}`;
+      const t = language === 'es' ? es : en;
+      const title = t.notifications.servicePayment.title.replace('{description}', transaction.description || transaction.category);
       
-      const body = language === 'es'
-        ? `${daysUntil === 0 ? 'Hoy' : daysUntil === 1 ? 'Mañana' : `En ${daysUntil} días`} - ${transaction.amount.toLocaleString()} a pagar`
-        : `${daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`} - ${transaction.amount.toLocaleString()} due`;
+      let bodyTemplate = t.notifications.servicePayment.body.future;
+      if (daysUntil === 0) bodyTemplate = t.notifications.servicePayment.body.today;
+      else if (daysUntil === 1) bodyTemplate = t.notifications.servicePayment.body.tomorrow;
+
+      const body = bodyTemplate
+        .replace('{days}', daysUntil.toString())
+        .replace('{amount}', transaction.amount.toLocaleString());
 
       const notification = this.createNotification(
         'service_payment',
@@ -455,13 +460,16 @@ class SmartNotificationService {
       const notificationId = `sub_${subscription.id}_${date.toISOString().split('T')[0]}`;
       if (this.notifications.some(n => n.id.startsWith(notificationId))) continue;
 
-      const title = language === 'es'
-        ? `Cobro de suscripción: ${subscription.name}`
-        : `Subscription charge: ${subscription.name}`;
+      const t = language === 'es' ? es : en;
+      const title = t.notifications.subscriptionCharge.title.replace('{name}', subscription.name);
       
-      const body = language === 'es'
-        ? `${daysUntil === 0 ? 'Hoy' : daysUntil === 1 ? 'Mañana' : `En ${daysUntil} días`} se cobra ${amount.toLocaleString()}`
-        : `${daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`} - ${amount.toLocaleString()} will be charged`;
+      let bodyTemplate = t.notifications.subscriptionCharge.body.future;
+      if (daysUntil === 0) bodyTemplate = t.notifications.subscriptionCharge.body.today;
+      else if (daysUntil === 1) bodyTemplate = t.notifications.subscriptionCharge.body.tomorrow;
+
+      const body = bodyTemplate
+        .replace('{days}', daysUntil.toString())
+        .replace('{amount}', amount.toLocaleString());
 
       const notification = this.createNotification(
         'service_payment',
@@ -499,13 +507,10 @@ class SmartNotificationService {
       
       if (this.notifications.some(n => n.id === notificationId && !n.dismissed)) return null;
 
-      const title = language === 'es'
-        ? 'Alerta: Fondos insuficientes'
-        : 'Alert: Insufficient funds';
-      
-      const body = language === 'es'
-        ? `Te faltan ${deficit.toLocaleString()} ${currency} para cubrir tus pagos próximos. Revisa tu presupuesto.`
-        : `You need ${deficit.toLocaleString()} ${currency} more to cover upcoming payments. Review your budget.`;
+      const t = language === 'es' ? es : en;
+      const title = t.notifications.insufficientFunds.title;
+      const body = t.notifications.insufficientFunds.body
+        .replace('{deficit}', `${deficit.toLocaleString()} ${currency}`);
 
       const notification = this.createNotification(
         'insufficient_funds',
@@ -568,20 +573,18 @@ class SmartNotificationService {
 
         const canAfford = balance >= goal.contributionAmount;
         
-        const title = language === 'es'
-          ? `Aporte programado: ${goal.name}`
-          : `Scheduled contribution: ${goal.name}`;
+        const t = language === 'es' ? es : en;
+        const title = t.notifications.goalContribution.title.replace('{name}', goal.name);
         
-        let body: string;
-        if (daysUntil === 0) {
-          body = language === 'es'
-            ? `Hoy toca aportar ${goal.contributionAmount.toLocaleString()} ${currency} a tu meta.${!canAfford ? ' ⚠️ Fondos insuficientes' : ''}`
-            : `Today is time to contribute ${goal.contributionAmount.toLocaleString()} ${currency} to your goal.${!canAfford ? ' ⚠️ Insufficient funds' : ''}`;
-        } else {
-          body = language === 'es'
-            ? `En ${daysUntil} día${daysUntil > 1 ? 's' : ''} debes aportar ${goal.contributionAmount.toLocaleString()} ${currency}.${!canAfford ? ' ⚠️ Prepara los fondos' : ''}`
-            : `In ${daysUntil} day${daysUntil > 1 ? 's' : ''} you should contribute ${goal.contributionAmount.toLocaleString()} ${currency}.${!canAfford ? ' ⚠️ Prepare the funds' : ''}`;
-        }
+        const warning = !canAfford ? t.notifications.goalContribution.body.warning : '';
+        const bodyTemplate = daysUntil === 0 
+          ? t.notifications.goalContribution.body.today
+          : t.notifications.goalContribution.body.future;
+
+        const body = bodyTemplate
+          .replace('{amount}', `${goal.contributionAmount.toLocaleString()} ${currency}`)
+          .replace('{days}', daysUntil.toString())
+          .replace('{warning}', warning);
 
         const notification = this.createNotification(
           'goal_contribution',
@@ -621,18 +624,17 @@ class SmartNotificationService {
           const notificationId = `milestone_${goal.id}_${milestone}`;
           if (this.notifications.some(n => n.id === notificationId)) continue;
 
+          const t = language === 'es' ? es : en;
           let title: string, body: string;
           
           if (milestone === 100) {
-            title = language === 'es' ? `¡Meta completada!` : `Goal completed!`;
-            body = language === 'es'
-              ? `¡Felicidades! Has alcanzado tu meta "${goal.name}". ¡Excelente trabajo!`
-              : `Congratulations! You've reached your goal "${goal.name}". Excellent work!`;
+            title = t.notifications.goalCompleted.title.replace('{name}', goal.name); // Added replace for consistence if title has name
+            body = t.notifications.goalCompleted.body.replace('{name}', goal.name);
           } else {
-            title = language === 'es' ? `¡${milestone}% de tu meta!` : `${milestone}% of your goal!`;
-            body = language === 'es'
-              ? `Has alcanzado el ${milestone}% de "${goal.name}". ¡Sigue así!`
-              : `You've reached ${milestone}% of "${goal.name}". Keep it up!`;
+            title = t.notifications.goalMilestone.title.replace('{percent}', milestone.toString());
+            body = t.notifications.goalMilestone.body
+              .replace('{percent}', milestone.toString())
+              .replace('{name}', goal.name);
           }
 
           const notification = this.createNotification(
@@ -680,12 +682,11 @@ class SmartNotificationService {
       if (percentage >= 80 && percentage < 100) {
         const notificationId = `${notificationIdBase}_warning`;
         if (!this.notifications.some(n => n.id === notificationId)) {
-          const title = language === 'es'
-            ? `Alerta de presupuesto: ${budget.category}`
-            : `Budget alert: ${budget.category}`;
-          const body = language === 'es'
-            ? `Has usado el ${Math.round(percentage)}% de tu presupuesto. Te quedan ${(budget.limit - spent).toLocaleString()} ${currency}.`
-            : `You've used ${Math.round(percentage)}% of your budget. ${(budget.limit - spent).toLocaleString()} ${currency} remaining.`;
+          const t = language === 'es' ? es : en;
+          const title = t.notifications.budgetWarning.title.replace('{category}', budget.category);
+          const body = t.notifications.budgetWarning.body
+            .replace('{percent}', Math.round(percentage).toString())
+            .replace('{remaining}', `${(budget.limit - spent).toLocaleString()} ${currency}`);
 
           const notification = this.createNotification('budget_warning', title, body, 'medium', {
             category: budget.category, spent, limit: budget.limit, percentage
@@ -701,12 +702,11 @@ class SmartNotificationService {
         const notificationId = `${notificationIdBase}_exceeded`;
         if (!this.notifications.some(n => n.id === notificationId)) {
           const excess = spent - budget.limit;
-          const title = language === 'es'
-            ? `¡Presupuesto excedido!`
-            : `Budget exceeded!`;
-          const body = language === 'es'
-            ? `Has superado tu presupuesto de ${budget.category} por ${excess.toLocaleString()} ${currency}.`
-            : `You've exceeded your ${budget.category} budget by ${excess.toLocaleString()} ${currency}.`;
+          const t = language === 'es' ? es : en;
+          const title = t.notifications.budgetExceeded.title;
+          const body = t.notifications.budgetExceeded.body
+            .replace('{category}', budget.category)
+            .replace('{excess}', `${excess.toLocaleString()} ${currency}`);
 
           const notification = this.createNotification('budget_exceeded', title, body, 'high', {
             category: budget.category, spent, limit: budget.limit, excess
@@ -755,13 +755,13 @@ class SmartNotificationService {
     const notificationId = `unusual_${latestExpense.id}`;
     if (this.notifications.some(n => n.id === notificationId)) return null;
 
-    const title = language === 'es'
-      ? 'Gasto inusual detectado'
-      : 'Unusual expense detected';
+    const t = language === 'es' ? es : en;
+    const title = t.notifications.unusualExpense.title;
     
-    const body = language === 'es'
-      ? `El gasto "${latestExpense.description || latestExpense.category}" de ${latestExpense.amount.toLocaleString()} ${currency} es ${Math.round(latestExpense.amount / avgExpense)}x mayor que tu promedio.`
-      : `The expense "${latestExpense.description || latestExpense.category}" of ${latestExpense.amount.toLocaleString()} ${currency} is ${Math.round(latestExpense.amount / avgExpense)}x higher than your average.`;
+    const body = t.notifications.unusualExpense.body
+      .replace('{description}', latestExpense.description || latestExpense.category)
+      .replace('{amount}', `${latestExpense.amount.toLocaleString()} ${currency}`)
+      .replace('{multiplier}', Math.round(latestExpense.amount / avgExpense).toString());
 
     const notification = this.createNotification('unusual_expense', title, body, 'medium', {
       transactionId: latestExpense.id, amount: latestExpense.amount, average: avgExpense
@@ -796,13 +796,12 @@ class SmartNotificationService {
 
     const activeGoals = goals.filter(g => g.currentAmount < g.targetAmount).length;
 
-    const title = language === 'es'
-      ? 'Tu resumen semanal'
-      : 'Your weekly summary';
+    const t = language === 'es' ? es : en;
+    const title = t.notifications.weeklySummary.title;
     
-    const body = language === 'es'
-      ? `Esta semana: Ingresos ${stats.totalIncome.toLocaleString()} ${currency}, Gastos ${stats.totalExpense.toLocaleString()} ${currency}. Tasa de ahorro: ${savingsRate}%. ${activeGoals} metas activas.`
-      : `This week: Income ${stats.totalIncome.toLocaleString()} ${currency}, Expenses ${stats.totalExpense.toLocaleString()} ${currency}. Savings rate: ${savingsRate}%. ${activeGoals} active goals.`;
+    const body = t.notifications.weeklySummary.body
+      .replace('{savingsRate}', savingsRate.toString())
+      .replace('{activeGoals}', activeGoals.toString());
 
     const notification = this.createNotification('weekly_summary', title, body, 'low', {
       income: stats.totalIncome, expense: stats.totalExpense, savingsRate, activeGoals
@@ -857,12 +856,14 @@ class SmartNotificationService {
       if (needsPct > 55) { // 5% tolerance
         const id = `${notificationIdBase}_needs`;
         if (!this.notifications.some(n => n.id === id)) {
+          const t = language === 'es' ? es : en;
+          const title = t.notifications.modelAlerts.essentialist.title;
+          const body = t.notifications.modelAlerts.essentialist.body.replace('{percent}', needsPct.toFixed(0));
+
           notifications.push(this.createNotification(
             'budget_warning',
-            language === 'es' ? 'Alerta Esencialista' : 'Essentialist Alert',
-            language === 'es' 
-              ? `Tus gastos esenciales están al ${needsPct.toFixed(0)}% (Meta: 50%). Intenta reducir fijos.`
-              : `Your essential expenses are at ${needsPct.toFixed(0)}% (Target: 50%). Try reducing fixed costs.`,
+            title,
+            body,
             'medium'
           ));
         }
@@ -877,12 +878,14 @@ class SmartNotificationService {
       if (unassigned > totalIncome * 0.05) { // If >5% is unassigned
         const id = `${notificationIdBase}_unassigned`;
         if (!this.notifications.some(n => n.id === id)) {
+          const t = language === 'es' ? es : en;
+          const title = t.notifications.modelAlerts.auditor.title;
+          const body = t.notifications.modelAlerts.auditor.body;
+
           notifications.push(this.createNotification(
             'budget_warning',
-            language === 'es' ? 'Dinero sin Asignar' : 'Unassigned Money',
-            language === 'es'
-              ? `Tienes fondos sin propósito asignado. El Auditor requiere que cada moneda tenga un trabajo.`
-              : `You have unassigned funds. The Auditor requires every penny to have a job.`,
+            title,
+            body,
             'medium'
           ));
         }
@@ -897,12 +900,14 @@ class SmartNotificationService {
       if (hasDebt && wantsPct > 10) {
         const id = `${notificationIdBase}_defensive`;
         if (!this.notifications.some(n => n.id === id)) {
+          const t = language === 'es' ? es : en;
+          const title = t.notifications.modelAlerts.defensive.title;
+          const body = t.notifications.modelAlerts.defensive.body.replace('{percent}', wantsPct.toFixed(0));
+
           notifications.push(this.createNotification(
             'budget_exceeded',
-            language === 'es' ? 'Modo Defensivo Activado' : 'Defensive Mode Active',
-            language === 'es'
-              ? `Estás gastando en deseos (${wantsPct.toFixed(0)}%) mientras tienes deuda. Prioriza pagar la deuda.`
-              : `You're spending on wants (${wantsPct.toFixed(0)}%) while having debt. Prioritize debt payment.`,
+            title,
+            body,
             'high'
           ));
         }
@@ -922,12 +927,16 @@ class SmartNotificationService {
       if (daysOfRunway < daysLeft) {
         const id = `${notificationIdBase}_velocity`;
         if (!this.notifications.some(n => n.id === id)) {
+          const t = language === 'es' ? es : en;
+          const title = t.notifications.modelAlerts.velocity.title;
+          const body = t.notifications.modelAlerts.velocity.body
+            .replace('{rate}', Math.round(burnRate).toString())
+            .replace('{date}', Math.round(today.getDate() + daysOfRunway).toString());
+
           notifications.push(this.createNotification(
             'budget_warning',
-            language === 'es' ? 'Velocidad de Gasto Alta' : 'High Spending Velocity',
-            language === 'es'
-              ? `A este ritmo (${Math.round(burnRate)}/día), te quedarás sin fondos el día ${Math.round(today.getDate() + daysOfRunway)}.`
-              : `At this rate (${Math.round(burnRate)}/day), you'll run out of funds on day ${Math.round(today.getDate() + daysOfRunway)}.`,
+            title,
+            body,
             'high'
           ));
         }

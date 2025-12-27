@@ -3,13 +3,13 @@ import { User, Transaction, Goal, DashboardStats } from '../types';
 import { pushNotificationService } from '../services/pushNotificationService';
 import { smartNotificationService } from '../services/smartNotificationService';
 
+import { useCurrency } from './useCurrency';
+
 interface UseNotificationSystemParams {
   user: User | null;
   transactions: Transaction[];
   goals: Goal[];
   stats: DashboardStats;
-  currencyCode: string;
-  currencySymbol: string;
   language: string;
   onShowPrompt: () => void;
 }
@@ -25,11 +25,10 @@ export function useNotificationSystem({
   transactions,
   goals,
   stats,
-  currencyCode,
-  currencySymbol,
   language,
   onShowPrompt,
 }: UseNotificationSystemParams) {
+  const { currencyCode, currencySymbol } = useCurrency();
   // Ref para evitar inicialización duplicada
   const notificationsInitialized = useRef(false);
 
@@ -74,7 +73,7 @@ export function useNotificationSystem({
           [], // budgets - no implementado aún
           stats,
           currencyCode,
-          language,
+          language as 'es' | 'en',
           currencySymbol
         );
       } catch (error) {

@@ -6,12 +6,12 @@ import { storageService } from '../services/storageService';
 import { Calculator } from './Calculator';
 import { IconPicker, DynamicIcon, getColorClasses } from './IconPicker';
 import { ModalWrapper } from './ModalWrapper';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface BudgetModalProps {
   isOpen: boolean;
   budget?: Budget | null;
   categories: string[];
-  currencySymbol: string;
   onClose: () => void;
   onSave: (budget: Partial<Budget>) => void;
 }
@@ -20,11 +20,11 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
   isOpen,
   budget,
   categories,
-  currencySymbol,
   onClose,
   onSave,
 }) => {
   const { t, language } = useI18n();
+  const { formatAmount, currencySymbol } = useCurrency();
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -435,7 +435,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="font-bold text-lg text-slate-800 dark:text-white">
-                      {currencySymbol} {formData.limit || '0'}
+                      {formatAmount(parseFloat(formData.limit) || 0)}
                     </span>
                   </div>
                 </div>

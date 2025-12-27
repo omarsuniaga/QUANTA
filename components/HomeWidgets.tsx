@@ -4,6 +4,7 @@ import { GOAL_ICONS } from '../constants';
 import { Plane, ShoppingBag, Gift, Star, Coffee, Music, Plus, Edit2, Info, X, Calendar, Clock, AlertTriangle, CheckCircle2, Wallet, TrendingUp, Play, Trash2 } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 import { parseLocalDate } from '../utils/dateHelpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 // --- INFO CONTENT BY LANGUAGE ---
 const INFO_CONTENT = {
@@ -125,8 +126,6 @@ interface GoalsWidgetProps {
   onEditGoal: (goal: Goal) => void;
   onAddGoal: () => void;
   onDeleteContribution?: (goalId: string, contributionIndex: number) => void;
-  currencySymbol?: string;
-  currencyCode?: string;
   availableBalance?: number;
 }
 
@@ -332,11 +331,10 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
   onEditGoal,
   onAddGoal,
   onDeleteContribution,
-  currencySymbol = '$',
-  currencyCode = 'USD',
   availableBalance = 0
 }) => {
   const { language } = useI18n();
+  const { formatAmount } = useCurrency();
   const [showInfo, setShowInfo] = useState(false);
   const [showContribConfirm, setShowContribConfirm] = useState<string | null>(null);
   const mainGoal = goals[0];
@@ -421,7 +419,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
         <div className="flex items-center gap-2">
           <div>
             <p className="text-[10px] sm:text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{l.totalSaved}</p>
-            <p className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">{totalSaved.toLocaleString()} {currencyCode}</p>
+            <p className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">{formatAmount(totalSaved)}</p>
           </div>
           <button
             onClick={() => setShowInfo(true)}
@@ -481,8 +479,8 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                 {/* Progress Section */}
                 <div className="mt-3 sm:mt-4">
                   <div className="flex justify-between text-[10px] sm:text-xs font-bold mb-1.5">
-                    <span className="text-slate-600 dark:text-slate-300">{mainGoal.currentAmount.toLocaleString()} {currencyCode}</span>
-                    <span className="text-slate-400 dark:text-slate-500">{l.target}: {mainGoal.targetAmount.toLocaleString()} {currencyCode}</span>
+                    <span className="text-slate-600 dark:text-slate-300">{formatAmount(mainGoal.currentAmount)}</span>
+                    <span className="text-slate-400 dark:text-slate-500">{l.target}: {formatAmount(mainGoal.targetAmount)}</span>
                   </div>
                   <div className="h-2 sm:h-2.5 w-full bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
@@ -500,7 +498,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                       </div>
                     ) : (
                       <p className="text-[9px] sm:text-[10px] text-slate-400 dark:text-slate-500 font-medium">
-                        {l.remaining}: <span className="text-slate-600 dark:text-slate-400 font-bold">{(mainGoal.targetAmount - mainGoal.currentAmount).toLocaleString()} {currencyCode}</span>
+                        {l.remaining}: <span className="text-slate-600 dark:text-slate-400 font-bold">{formatAmount(mainGoal.targetAmount - mainGoal.currentAmount)}</span>
                       </p>
                     )}
 
@@ -533,7 +531,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                       {mainGoal.contributionHistory && mainGoal.contributionHistory.length > 0 ? (
                         <div className="flex items-center gap-2">
                           <span className="text-[9px] sm:text-[10px] font-medium">{l.lastContribution}:</span>
-                          <span className="font-bold text-slate-700 dark:text-slate-200">{mainGoal.contributionHistory[mainGoal.contributionHistory.length - 1].amount.toLocaleString()} {currencyCode}</span>
+                          <span className="font-bold text-slate-700 dark:text-slate-200">{formatAmount(mainGoal.contributionHistory[mainGoal.contributionHistory.length - 1].amount)}</span>
                           <span className="text-slate-400 dark:text-slate-500">·</span>
                           <span>{parseLocalDate(mainGoal.contributionHistory[mainGoal.contributionHistory.length - 1].date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
                         </div>
@@ -584,7 +582,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                       <div className="flex items-center gap-1.5">
                         <Wallet className="w-3 h-3 text-indigo-500" />
                         <span className="text-[9px] sm:text-[10px] font-medium text-slate-600 dark:text-slate-300">
-                          {l.contributionOf} <span className="font-bold">{mainGoal.contributionAmount?.toLocaleString()} {currencyCode}</span> {getFrequencyLabel(mainGoal.contributionFrequency || 'monthly')}
+                          {l.contributionOf} <span className="font-bold">{formatAmount(mainGoal.contributionAmount || 0)}</span> {getFrequencyLabel(mainGoal.contributionFrequency || 'monthly')}
                         </span>
                       </div>
                     </div>
@@ -594,7 +592,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                       <div className="mt-2 flex items-center gap-1.5 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 px-2 py-1.5 rounded-lg">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                         <span className="text-[9px] sm:text-[10px] font-medium">
-                          {l.insufficientFunds} ({l.availableBalance}: {availableBalance.toLocaleString()} {currencyCode})
+                          {l.insufficientFunds} ({l.availableBalance}: {formatAmount(availableBalance)})
                         </span>
                       </div>
                     )}
@@ -613,7 +611,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                           className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg transition-colors ml-auto"
                         >
                           <Play className="w-3 h-3" />
-                          {l.makeContribution} ({mainGoal.contributionAmount?.toLocaleString()} {currencyCode})
+                          {l.makeContribution} ({formatAmount(mainGoal.contributionAmount || 0)})
                         </button>
                       </div>
                     )}
@@ -656,7 +654,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                               <div key={idx} className="flex justify-between items-center text-[9px] sm:text-[10px] text-slate-500 dark:text-slate-400 group">
                                 <span>{parseLocalDate(c.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: 'numeric', month: 'short' })}</span>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-bold text-slate-700 dark:text-slate-200">{c.amount.toLocaleString()} {currencyCode}</span>
+                                  <span className="font-bold text-slate-700 dark:text-slate-200">{formatAmount(c.amount)}</span>
                                   {onDeleteContribution && (
                                     <button
                                       onClick={(e) => handleDeleteContribution(e, mainGoal.id, actualIndex)}
@@ -714,7 +712,7 @@ export const GoalsWidget: React.FC<GoalsWidgetProps> = ({
                 <div className={`h-full ${isCompleted ? 'bg-emerald-500' : `bg-${goal.color}-500`}`} style={{ width: `${progress}%` }}></div>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium">{(goal.targetAmount - goal.currentAmount).toLocaleString()} {currencyCode} {language === 'es' ? 'faltan' : 'left'}</span>
+                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium">{formatAmount(goal.targetAmount - goal.currentAmount)} {language === 'es' ? 'faltan' : 'left'}</span>
                 <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium text-right">{Math.round(progress)}%</span>
               </div>
             </div>

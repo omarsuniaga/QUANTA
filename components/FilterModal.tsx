@@ -3,20 +3,13 @@ import { X, Filter, Calendar, Tag, CreditCard, TrendingUp, TrendingDown } from '
 import { Button } from './Button';
 import { PAYMENT_METHODS } from '../constants';
 import { storageService } from '../services/storageService';
-import { CustomCategory } from '../types';
+import { CustomCategory, TransactionFilters } from '../types';
 import { useI18n } from '../contexts/I18nContext';
 import { ModalWrapper } from './ModalWrapper';
 
 interface FilterModalProps {
-    filters: {
-        search: string;
-        category: string | null;
-        dateFrom: string | null;
-        dateTo: string | null;
-        type: 'all' | 'income' | 'expense';
-        paymentMethod: string | null;
-    };
-    onApply: (filters: any) => void;
+    filters: TransactionFilters;
+    onApply: (filters: TransactionFilters) => void;
     onClose: () => void;
 }
 

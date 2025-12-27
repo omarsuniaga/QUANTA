@@ -4,6 +4,7 @@ import { ActionModal } from '../ActionModal';
 import { FilterModal } from '../FilterModal';
 import { NotificationPermissionPrompt } from '../NotificationPermissionPrompt';
 import { ModalState } from '../../hooks/useModalManager';
+import { useCurrency } from '../../hooks/useCurrency';
 
 interface ModalRendererProps {
   // Modal states
@@ -22,8 +23,6 @@ interface ModalRendererProps {
 
   // Data
   filters: TransactionFilters;
-  currencySymbol: string;
-  currencyCode: string;
   availableBalance: number;
 }
 
@@ -41,10 +40,9 @@ export const ModalRenderer: React.FC<ModalRendererProps> = ({
   onApplyFilters,
   onCloseModals,
   filters,
-  currencySymbol,
-  currencyCode,
   availableBalance,
 }) => {
+  const { currencySymbol } = useCurrency();
   return (
     <>
       {/* Action Modal (Income/Expense/Service) */}
@@ -54,7 +52,6 @@ export const ModalRenderer: React.FC<ModalRendererProps> = ({
           onClose={onCloseModals.action}
           onSave={(data) => onSaveFromModal(data, actionModal.mode!, actionModal.editingItem)}
           initialValues={actionModal.initialValues}
-          currencySymbol={currencySymbol}
         />
       )}
 

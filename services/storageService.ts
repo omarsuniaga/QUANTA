@@ -87,7 +87,14 @@ const cleanForFirebase = <T>(obj: T): T => {
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   language: 'es-ES',
-  currency: { localCode: 'USD', localSymbol: '$', rateToBase: 1, baseCode: 'USD' },
+  currency: { 
+    localCode: 'DOP', 
+    localSymbol: 'RD$', 
+    rateToBase: 0.017, 
+    rateUSDToLocal: 60,
+    displayMode: 'local',
+    baseCode: 'USD' 
+  },
   notifications: { enabled: true, billReminders: true, reminderLeadDays: 3, emailAlerts: false },
   aiConfig: { enabled: true, level: 'medium', dataSharing: false }
 };
@@ -240,6 +247,88 @@ export const storageService = {
     });
 
     await batch.commit();
+  },
+
+  // --- REAL-TIME SUBSCRIPTIONS ---
+
+  subscribeToSettings(uid: string, callback: (settings: AppSettings) => void): () => void {
+    if (!canUseFirebase()) return () => {};
+    return getUserRef(uid).collection('settings').doc('config').onSnapshot(doc => {
+      if (doc.exists) {
+        const settings = doc.data() as AppSettings;
+        saveToLocal(LS_KEYS.SETTINGS, settings);
+        callback(settings);
+      } else {
+        callback(DEFAULT_SETTINGS);
+      }
+    }, err => console.error("Settings subscription error:", err));
+  },
+
+  subscribeToAccounts(uid: string, callback: (accounts: Account[]) => void): () => void {
+    if (!canUseFirebase()) return () => {};
+    return getUserRef(uid).collection('accounts').onSnapshot(snapshot => {
+      const accounts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+      saveToLocal(LS_KEYS.ACCOUNTS, accounts);
+      callback(accounts);
+    }, err => console.error("Accounts subscription error:", err));
+  },
+
+  subscribeToTransactions(uid: string, callback: (transactions: Transaction[]) => void): () => void {
+    if (!canUseFirebase()) return () => {};
+    return getUserRef(uid).collection('transactions')
+      .orderBy('date', 'desc')
+      .limit(500) // Performance limit
+      .onSnapshot(snapshot => {
+        const transactions = snapshot.docs.map(doc => {
+          const data = doc.data();
+          const amountVal = typeof data.amount === 'object' ? data.amount.value : data.amount;
+          return {
+            id: doc.id,
+            ...data,
+            amount: amountVal,
+            monetaryDetails: typeof data.amount === 'object' ? data.amount : undefined,
+            description: data.description || ''
+          } as Transaction;
+        });
+        saveToLocal(LS_KEYS.TRANSACTIONS, transactions);
+        callback(transactions);
+      }, err => console.error("Transactions subscription error:", err));
+  },
+
+  subscribeToGoals(uid: string, callback: (goals: Goal[]) => void): () => void {
+    if (!canUseFirebase()) return () => {};
+    return getUserRef(uid).collection('goals').onSnapshot(snapshot => {
+      const goals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Goal));
+      saveToLocal(LS_KEYS.GOALS, goals);
+      callback(goals);
+    }, err => console.error("Goals subscription error:", err));
+  },
+
+  subscribeToQuickActions(uid: string, callback: (actions: QuickAction[]) => void): () => void {
+    if (!canUseFirebase()) return () => {};
+    return getUserRef(uid).collection('quick_actions').onSnapshot(snapshot => {
+      const actions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as QuickAction));
+      saveToLocal(LS_KEYS.QUICK_ACTIONS, actions);
+      callback(actions);
+    }, err => console.error("QuickActions subscription error:", err));
+  },
+
+  subscribeToPromos(uid: string, callback: (promos: Promo[]) => void): () => void {
+    if (!canUseFirebase()) return () => {};
+    return getUserRef(uid).collection('promos').onSnapshot(snapshot => {
+      const promos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promo));
+      saveToLocal(LS_KEYS.PROMOS, promos);
+      callback(promos);
+    }, err => console.error("Promos subscription error:", err));
+  },
+
+  subscribeToBudgets(uid: string, callback: (budgets: Budget[]) => void): () => void {
+    if (!canUseFirebase()) return () => {};
+    return getUserRef(uid).collection('budgets').onSnapshot(snapshot => {
+      const budgets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Budget));
+      saveToLocal(LS_KEYS.BUDGETS, budgets);
+      callback(budgets);
+    }, err => console.error("Budgets subscription error:", err));
   },
 
   // --- TRANSACTIONS ---

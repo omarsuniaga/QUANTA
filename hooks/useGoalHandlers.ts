@@ -144,7 +144,7 @@ export function useGoalHandlers({
       ...goal,
       currentAmount: Math.max(0, goal.currentAmount - contribution.amount),
       contributionHistory: newHistory,
-      lastContributionDate: newHistory.length > 0 ? newHistory[newHistory.length - 1].date : undefined
+      lastContributionDate: newHistory.length > 0 ? newHistory[newHistory.length - 1].date : null
     };
 
     await updateGoal(updatedGoal);

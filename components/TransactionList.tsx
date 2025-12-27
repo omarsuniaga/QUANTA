@@ -1,11 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Transaction, Category, CustomCategory } from '../types';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Transaction, CustomCategory } from '../types';
 import { CATEGORY_ICONS, CATEGORY_COLORS } from '../constants';
 import { Trash2, Edit2, RefreshCcw, Calendar, Filter, X, ArrowUpDown, ArrowUp, ArrowDown, DollarSign, CalendarDays, MoreHorizontal, Repeat } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
 import { parseLocalDate } from '../utils/dateHelpers';
+import { useCurrency } from '../hooks/useCurrency';
 
 type SortOption = 'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc';
 
@@ -15,11 +16,91 @@ interface TransactionListProps {
   onDelete: (id: string) => void;
   activeFilter?: { type: 'category' | 'date', value: string } | null;
   onClearFilter?: () => void;
-  currencySymbol?: string;
-  currencyCode?: string;
 }
 
-export const TransactionList: React.FC<TransactionListProps> = ({ transactions, onEdit, onDelete, activeFilter, onClearFilter, currencySymbol = '$', currencyCode = 'USD' }) => {
+interface TransactionRowProps {
+  tx: Transaction;
+  onEdit: (tx: Transaction) => void;
+  onDelete: (id: string) => void;
+  getCategoryIcon: (cat: string) => any;
+  getCategoryColor: (cat: string) => string;
+  getCategoryName: (cat: string) => string;
+  locale: string;
+}
+
+// --- TRANSACTION ROW COMPONENT (MEMOIZED) ---
+const TransactionRow = React.memo<TransactionRowProps>(({
+  tx,
+  onEdit,
+  onDelete,
+  getCategoryIcon,
+  getCategoryColor,
+  getCategoryName,
+  locale
+}) => {
+  const Icon = getCategoryIcon(tx.category);
+  const color = getCategoryColor(tx.category);
+  const dateObj = parseLocalDate(tx.date);
+  const { formatAmount } = useCurrency();
+
+  return (
+    <div className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between group hover:shadow-md transition-shadow duration-200">
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+        <div
+          className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm"
+          style={{ backgroundColor: color }}
+        >
+          <Icon className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2.5} />
+        </div>
+        <div className="flex flex-col min-w-0 flex-1">
+          <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm mb-0.5 truncate">
+            {tx.description || getCategoryName(tx.category)}
+          </h4>
+          <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-medium">{dateObj.toLocaleDateString(locale, { day: 'numeric', month: 'short' })}</span>
+            {tx.isRecurring && (
+              <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold border border-indigo-100 dark:border-indigo-800">
+                <RefreshCcw className="w-2.5 h-2.5 sm:w-3 sm:h-3" strokeWidth={2.5} /> {tx.frequency}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 sm:gap-3 ml-2">
+        <span className={`font-bold text-sm sm:text-base whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
+          {tx.type === 'income' ? '+' : '-'}{formatAmount(tx.amount)}
+        </span>
+
+        <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
+            className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(tx.id); }}
+            className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+TransactionRow.displayName = 'TransactionRow';
+
+// --- MAIN LIST COMPONENT ---
+export const TransactionList: React.FC<TransactionListProps> = ({
+  transactions,
+  onEdit,
+  onDelete,
+  activeFilter,
+  onClearFilter
+}) => {
   const { t, language } = useI18n();
   const [sortBy, setSortBy] = useState<SortOption>('date-desc');
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
@@ -38,52 +119,34 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
     loadCategories();
   }, []);
 
-  // Helper to get translated category name
-  const getCategoryName = (categoryId: string): string => {
-    // First try custom categories
+  // Memoize helpers to prevent identity changes
+  const getCategoryName = useCallback((categoryId: string): string => {
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat) {
       return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
-    // Fallback to translations
     const translation = (t.categories as Record<string, string>)[categoryId];
     if (!translation || translation === categoryId) {
-      // If no translation found, it's likely an ID - use generic name
       return language === 'es' ? 'Otra categoría' : 'Other category';
     }
     return translation;
-  };
+  }, [customCategories, language, t.categories]);
 
-  // Helper to get category icon
-  const getCategoryIcon = (categoryId: string): any => {
-    // First check default category icons
-    if (CATEGORY_ICONS[categoryId]) {
-      return CATEGORY_ICONS[categoryId];
-    }
-    // Then check custom categories
+  const getCategoryIcon = useCallback((categoryId: string): any => {
+    if (CATEGORY_ICONS[categoryId]) return CATEGORY_ICONS[categoryId];
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat && customCat.icon) {
-      // Try to find the icon in LucideIcons
       const iconName = customCat.icon;
       const IconComponent = (LucideIcons as any)[iconName];
-      if (IconComponent) {
-        return IconComponent;
-      }
+      if (IconComponent) return IconComponent;
     }
-    // Fallback to default
     return MoreHorizontal;
-  };
+  }, [customCategories]);
 
-  // Helper to get category color
-  const getCategoryColor = (categoryId: string): string => {
-    // First check default category colors
-    if (CATEGORY_COLORS[categoryId]) {
-      return CATEGORY_COLORS[categoryId];
-    }
-    // Then check custom categories
+  const getCategoryColor = useCallback((categoryId: string): string => {
+    if (CATEGORY_COLORS[categoryId]) return CATEGORY_COLORS[categoryId];
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat && customCat.color) {
-      // Convert Tailwind color name to hex (approximate)
       const colorMap: Record<string, string> = {
         'slate': '#64748b', 'gray': '#6b7280', 'zinc': '#71717a', 'neutral': '#737373', 'stone': '#78716c',
         'red': '#ef4444', 'orange': '#f97316', 'amber': '#f59e0b', 'yellow': '#eab308',
@@ -93,15 +156,13 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
       };
       return colorMap[customCat.color] || '#94a3b8';
     }
-    // Fallback to slate
     return '#94a3b8';
-  };
+  }, [customCategories]);
 
   // Sort transactions based on selected option
   const sorted = useMemo(() => {
     let copy = [...transactions];
 
-    // Apply recurrence filter
     if (recurrenceFilter === 'recurring') {
       copy = copy.filter(tx => tx.isRecurring);
     } else if (recurrenceFilter === 'non-recurring') {
@@ -129,18 +190,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
   }, [transactions, sortBy, recurrenceFilter]);
 
   const sortLabels = {
-    en: {
-      'date-desc': 'Newest first',
-      'date-asc': 'Oldest first',
-      'amount-desc': 'Highest amount',
-      'amount-asc': 'Lowest amount',
-    },
-    es: {
-      'date-desc': 'Más reciente',
-      'date-asc': 'Más antiguo',
-      'amount-desc': 'Mayor monto',
-      'amount-asc': 'Menor monto',
-    }
+    en: { 'date-desc': 'Newest first', 'date-asc': 'Oldest first', 'amount-desc': 'Highest amount', 'amount-asc': 'Lowest amount' },
+    es: { 'date-desc': 'Más reciente', 'date-asc': 'Más antiguo', 'amount-desc': 'Mayor monto', 'amount-asc': 'Menor monto' }
   };
 
   const locale = language === 'es' ? 'es-ES' : 'en-US';
@@ -155,15 +206,10 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
           {activeFilter ? t.transactions.noResults : t.transactions.noTransactions}
         </h3>
         <p className="text-slate-500 dark:text-slate-400 text-sm mt-1 max-w-xs">
-          {activeFilter
-            ? t.transactions.noResultsDesc
-            : t.transactions.noTransactionsDesc}
+          {activeFilter ? t.transactions.noResultsDesc : t.transactions.noTransactionsDesc}
         </p>
         {activeFilter && onClearFilter && (
-          <button
-            onClick={onClearFilter}
-            className="mt-4 text-indigo-600 dark:text-indigo-400 font-bold text-sm bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-xl"
-          >
+          <button onClick={onClearFilter} className="mt-4 text-indigo-600 dark:text-indigo-400 font-bold text-sm bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 rounded-xl">
             {t.transactions.clearFilter}
           </button>
         )}
@@ -205,7 +251,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
         </button>
 
         <span className="flex items-center text-[10px] text-slate-400 dark:text-slate-500 font-medium px-2">
-          {sortLabels[language][sortBy]}
+          {sortLabels[language as 'es' | 'en'][sortBy]}
         </span>
       </div>
 
@@ -288,65 +334,24 @@ export const TransactionList: React.FC<TransactionListProps> = ({ transactions, 
               </p>
             </div>
           </div>
-          <button
-            onClick={onClearFilter}
-            className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-          >
+          <button onClick={onClearFilter} className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {sorted.map((tx) => {
-        const Icon = getCategoryIcon(tx.category);
-        const color = getCategoryColor(tx.category);
-        const dateObj = parseLocalDate(tx.date);
-
-        return (
-          <div key={tx.id} className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-between group hover:shadow-md transition-shadow duration-200">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
-              <div
-                className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm"
-                style={{ backgroundColor: color }}
-              >
-                <Icon className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2.5} />
-              </div>
-              <div className="flex flex-col min-w-0 flex-1">
-                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs sm:text-sm mb-0.5 truncate">{tx.description || getCategoryName(tx.category)}</h4>
-                <div className="flex items-center gap-2 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
-                  <span className="font-medium">{dateObj.toLocaleDateString(locale, { day: 'numeric', month: 'short' })}</span>
-                  {tx.isRecurring && (
-                    <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-semibold border border-indigo-100 dark:border-indigo-800">
-                      <RefreshCcw className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> {tx.frequency}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 sm:gap-3 ml-2">
-              <span className={`font-bold text-sm sm:text-base whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
-                {tx.type === 'income' ? '+' : '-'}{tx.amount.toLocaleString(locale, { minimumFractionDigits: 2 })} {currencyCode}
-              </span>
-
-              <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={(e) => { e.stopPropagation(); onEdit(tx); }}
-                  className="p-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(tx.id); }}
-                  className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {sorted.map((tx) => (
+        <TransactionRow
+          key={tx.id}
+          tx={tx}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          getCategoryIcon={getCategoryIcon}
+          getCategoryColor={getCategoryColor}
+          getCategoryName={getCategoryName}
+          locale={language === 'es' ? 'es-ES' : 'en-US'}
+        />
+      ))}
     </div>
   );
 };

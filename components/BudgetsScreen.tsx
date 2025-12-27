@@ -20,11 +20,10 @@ import { useI18n } from '../contexts/I18nContext';
 import { storageService } from '../services/storageService';
 import { DynamicIcon, getColorClasses } from './IconPicker';
 import { parseLocalDate } from '../utils/dateHelpers';
-
+import { useCurrency } from '../hooks/useCurrency';
 interface BudgetsScreenProps {
   budgets: Budget[];
   transactions: Transaction[];
-  currencySymbol: string;
   onCreateBudget: () => void;
   onEditBudget: (budget: Budget) => void;
   onDeleteBudget: (budgetId: string) => void;
@@ -35,7 +34,6 @@ interface BudgetsScreenProps {
 export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   budgets,
   transactions,
-  currencySymbol,
   onCreateBudget,
   onEditBudget,
   onDeleteBudget,
@@ -43,6 +41,7 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   onDeleteTransaction,
 }) => {
   const { language } = useI18n();
+  const { formatAmount, convertAmount } = useCurrency();
   const [showAlerts, setShowAlerts] = useState(true);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
@@ -88,11 +87,11 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
   const summaryStats = useMemo(() => {
     const totalBudgeted = updatedBudgets
       .filter(b => b.isActive)
-      .reduce((sum, b) => sum + b.limit, 0);
+      .reduce((sum, b) => sum + convertAmount(b.limit), 0);
 
     const expensesTotal = updatedBudgets
       .filter(b => b.isActive)
-      .reduce((sum, b) => sum + (b.spent || 0), 0);
+      .reduce((sum, b) => sum + convertAmount(b.spent || 0), 0);
 
     const totalRemaining = totalBudgeted - expensesTotal;
 
@@ -102,15 +101,12 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
       totalRemaining,
       percentage: totalBudgeted > 0 ? (expensesTotal / totalBudgeted) * 100 : 0,
     };
-  }, [updatedBudgets]);
+  }, [updatedBudgets, convertAmount]);
 
   const activeBudgets = updatedBudgets.filter(b => b.isActive);
 
   const formatCurrency = (amount: number) => {
-    return `${currencySymbol} ${Math.abs(amount).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
+    return formatAmount(amount);
   };
 
   const getAlertIcon = (type: 'saving' | 'overspending' | 'warning') => {
@@ -269,8 +265,8 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                     {suggestion.suggestedAmount && (
                       <p className="text-xs sm:text-sm text-violet-600 dark:text-violet-400 mt-1">
                         {language === 'es'
-                          ? `Sugerencia: ${currencySymbol}${suggestion.suggestedAmount.toLocaleString()}`
-                          : `Suggested: ${currencySymbol}${suggestion.suggestedAmount.toLocaleString()}`}
+                          ? `Sugerencia: ${formatAmount(suggestion.suggestedAmount)}`
+                          : `Suggested: ${formatAmount(suggestion.suggestedAmount)}`}
                       </p>
                     )}
                     {suggestion.action && (
@@ -440,13 +436,13 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
                         <div className="flex items-start gap-3">
                           <div className="text-right">
                             <div className="text-base sm:text-lg font-bold text-slate-800 dark:text-white">
-                              {formatCurrency(budget.limit)}
+                              {formatAmount(convertAmount(budget.limit))}
                             </div>
                             <div className={`text-[10px] sm:text-xs font-medium ${remaining >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
                               }`}>
                               {remaining >= 0
-                                ? (language === 'es' ? `Quedan ${formatCurrency(remaining)}` : `${formatCurrency(remaining)} left`)
-                                : (language === 'es' ? `Excedido ${formatCurrency(Math.abs(remaining))}` : `${formatCurrency(Math.abs(remaining))} over`)}
+                                ? (language === 'es' ? `Quedan ${formatAmount(convertAmount(remaining))}` : `${formatAmount(convertAmount(remaining))} left`)
+                                : (language === 'es' ? `Excedido ${formatAmount(convertAmount(Math.abs(remaining)))}` : `${formatAmount(convertAmount(Math.abs(remaining)))} over`)}
                             </div>
                           </div>
                           {isExpanded ? (

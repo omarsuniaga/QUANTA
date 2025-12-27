@@ -119,17 +119,28 @@ export const createGoalsFromPlan = async (
       
       // Solo crear meta si el monto es > 0
       if (amount > 0) {
+        // --- 1. Crear Meta ---
         const docRef = goalsCollection.doc(); // Generate ID
+        const now = new Date();
+        const dateString = now.toISOString();
+
         const goalData: Partial<Goal> = {
           name: getAllocationCategoryName(category, planId, language),
           targetAmount: amount,
-          currentAmount: 0,
+          // Lógica Natural: El dinero ya "se mueve" a la meta
+          currentAmount: amount, 
           icon: getAllocationCategoryIcon(category),
           color: getAllocationCategoryColor(category),
           contributionAmount: 0,
           contributionFrequency: 'monthly',
           calculationMode: 'time',
-          autoDeduct: false
+          autoDeduct: false,
+          
+          // Registrar el primer aporte
+          lastContributionDate: dateString,
+          contributionHistory: [
+            { date: dateString, amount: amount }
+          ]
         };
 
         batch.set(docRef, {
@@ -144,6 +155,29 @@ export const createGoalsFromPlan = async (
         });
 
         createdIds.push(docRef.id);
+
+        // --- 2. Crear Transacción (Aporte) ---
+        // Esto deduce el dinero del "Disponible" y lo registra como movimiento
+        const transactionRef = db.collection('transactions').doc();
+        const transactionData = {
+          userId: user.uid,
+          amount: amount,
+          type: 'expense',
+          category: 'savings', // Categoría especial para ahorros
+          description: language === 'es' 
+            ? `Distribución Inicial: ${goalData.name}` 
+            : `Initial Distribution: ${goalData.name}`,
+          date: dateString.split('T')[0], // YYYY-MM-DD
+          paymentMethod: 'system', // Marcado como sistema
+          isRecurring: false,
+          notes: language === 'es' 
+            ? `Aporte automático del plan de excedente` 
+            : `Automatic surplus plan contribution`,
+          relatedGoalId: docRef.id,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        batch.set(transactionRef, transactionData);
       }
     }
 

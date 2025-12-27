@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-export type TabType = 'dashboard' | 'income' | 'expenses' | 'budgets' | 'transactions' | 'settings';
+export type TabType = 'dashboard' | 'income' | 'expenses' | 'budgets' | 'transactions' | 'settings' | 'admin';
 
 export interface SwipeHandlers {
   onTouchStart: (e: React.TouchEvent) => void;

@@ -1,4 +1,4 @@
-export type PlanId = 'conservative' | 'balanced' | 'aggressive';
+export type PlanId = 'conservative' | 'balanced' | 'aggressive' | 'growth' | 'secure';
 export type AllocationCategory = 'savings' | 'goals' | 'personal';
 
 export interface PlanAllocation {
@@ -28,6 +28,14 @@ export const PLAN_DEFINITIONS: Record<PlanId, PlanDefinition> = {
   aggressive: {
     id: 'aggressive',
     percentages: { savings: 0.3, goals: 0.4, personal: 0.3 }
+  },
+  growth: {
+    id: 'growth',
+    percentages: { savings: 0.4, goals: 0.35, personal: 0.25 }
+  },
+  secure: {
+    id: 'secure',
+    percentages: { savings: 0.6, goals: 0.25, personal: 0.15 }
   }
 };
 
@@ -48,6 +56,12 @@ export const calculatePlanAllocations = (
   }
 
   const plan = PLAN_DEFINITIONS[planId];
+
+  if (!plan) {
+    console.error(`Critical Error: Plan definition not found for id: "${planId}". Available plans:`, Object.keys(PLAN_DEFINITIONS));
+    // Emergency fallback to prevent crash
+    return { savings: 0, goals: 0, personal: 0 };
+  }
   
   // Redondear a 2 decimales los primeros dos buckets
   const savings = Math.round(available * plan.percentages.savings * 100) / 100;
@@ -71,17 +85,23 @@ export const getAllocationCategoryName = (
     savings: {
       conservative: { es: 'Ahorro de Emergencia', en: 'Emergency Savings' },
       balanced: { es: 'Fondo de Ahorro', en: 'Savings Fund' },
-      aggressive: { es: 'Reserva Financiera', en: 'Financial Reserve' }
+      aggressive: { es: 'Reserva Financiera', en: 'Financial Reserve' },
+      growth: { es: 'Fondo de Estabilidad', en: 'Stability Fund' },
+      secure: { es: 'Blindaje Financiero', en: 'Financial Shield' }
     },
     goals: {
       conservative: { es: 'Metas a Corto Plazo', en: 'Short-term Goals' },
       balanced: { es: 'Objetivos Financieros', en: 'Financial Objectives' },
-      aggressive: { es: 'Metas Prioritarias', en: 'Priority Goals' }
+      aggressive: { es: 'Metas Prioritarias', en: 'Priority Goals' },
+      growth: { es: 'Metas de Expansión', en: 'Expansion Goals' },
+      secure: { es: 'Metas Seguras', en: 'Safe Goals' }
     },
     personal: {
       conservative: { es: 'Desarrollo Personal', en: 'Personal Development' },
       balanced: { es: 'Inversión Personal', en: 'Personal Investment' },
-      aggressive: { es: 'Inversión y Crecimiento', en: 'Investment & Growth' }
+      aggressive: { es: 'Inversión y Crecimiento', en: 'Investment & Growth' },
+      growth: { es: 'Estilo de Vida', en: 'Lifestyle' },
+      secure: { es: 'Ocio Controlado', en: 'Controlled Leisure' }
     }
   };
 

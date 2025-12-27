@@ -1,9 +1,9 @@
 
-import React, { useMemo, useState, useEffect, useCallback, memo } from 'react';
-import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
-} from 'recharts';
+import React, { useMemo, useState, useEffect, useCallback, memo, lazy, Suspense } from 'react';
+// Lazy loaded heavy components
+const ExpensePie = lazy(() => import('./Dashboard_ExpensePie'));
+const TrendBar = lazy(() => import('./Dashboard_TrendBar'));
+
 import { Transaction, DashboardStats, Category, AppSettings, Goal, Subscription, CustomCategory, Account } from '../types';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { calculateDashboardInfo } from '../utils/dashboardCalculations';
@@ -42,6 +42,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 import { BudgetInfoModal, SurplusInfoModal } from './Dashboard_InfoModals';
 import CommissionsReport from './CommissionsReport';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface DashboardProps {
   stats: DashboardStats;
@@ -91,19 +92,8 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     [transactions]
   );
 
-  const symbol = currencyConfig?.localSymbol || '$';
-  const code = currencyConfig?.localCode || 'USD';
-
-  // Helper to format currency as "RD$ 1,234.56" (memoized with useCallback)
-  const formatCurrency = useCallback((amount: number) =>
-    `${symbol} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    [symbol]
-  );
-
-  const formatCurrencyShort = useCallback((amount: number) =>
-    `${symbol} ${amount.toLocaleString('en-US')}`,
-    [symbol]
-  );
+  const { formatAmount, convertAmount } = useCurrency();
+  const formatCurrencyShort = formatAmount; // Alias for compatibility with existing props
 
   if (showCommissionsReport) {
     return (
@@ -219,12 +209,12 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
             color: categoryColor
           };
         }
-        acc[curr.category].value += curr.amount;
+        acc[curr.category].value += convertAmount(curr.amount);
       }
       return acc;
     }, {} as Record<string, any>);
     return Object.values(data).sort((a: any, b: any) => b.value - a.value);
-  }, [transactions, t.categories, customCategories, language]);
+  }, [transactions, t.categories, customCategories, language, convertAmount]);
 
   // Calculate income breakdown
   const incomeBreakdown = useMemo((): AmountBreakdownItem[] => {
@@ -232,11 +222,11 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
 
     const salaryIncome = transactions
       .filter(t => t.type === 'income' && (t as any).incomeType === 'salary')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
 
     const extraIncome = transactions
       .filter(t => t.type === 'income' && (t as any).incomeType === 'extra')
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
 
     if (salaryIncome > 0) {
       breakdown.push({
@@ -260,7 +250,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
 
     const recurringIncome = transactions
       .filter(t => t.type === 'income' && t.isRecurring)
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
 
     if (recurringIncome > 0) {
       breakdown.push({
@@ -273,7 +263,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     }
 
     return breakdown;
-  }, [transactions, language]);
+  }, [transactions, language, convertAmount]);
 
   // Calculate expense breakdown (depends on categoryData)
   const expenseBreakdown = useMemo((): AmountBreakdownItem[] => {
@@ -294,7 +284,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
 
     const recurringExpenses = transactions
       .filter(t => t.type === 'expense' && t.isRecurring)
-      .reduce((sum, t) => sum + t.amount, 0);
+      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
 
     if (recurringExpenses > 0) {
       breakdown.push({
@@ -307,7 +297,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     }
 
     return breakdown;
-  }, [transactions, categoryData, language]);
+  }, [transactions, categoryData, language, convertAmount]);
 
   // --- EMOTIONAL DASHBOARD: Mood Correlation ---
   const moodStats = useMemo(() => {
@@ -316,11 +306,11 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
     transactions.forEach(t => {
       if (t.type === 'expense' && t.mood) {
         hasMoods = true;
-        moods[t.mood] = (moods[t.mood] || 0) + t.amount;
+        moods[t.mood] = (moods[t.mood] || 0) + convertAmount(t.amount);
       }
     });
     return hasMoods ? moods : null;
-  }, [transactions]);
+  }, [transactions, convertAmount]);
 
   // --- CHART DATA: Real Monthly Aggregation ---
   const barData = useMemo(() => {
@@ -333,8 +323,8 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
       const name = d.toLocaleString(locale, { month: 'short' });
 
       const monthTx = transactions.filter(t => t.date.startsWith(key));
-      const income = monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-      const expense = monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+      const income = monthTx.filter(t => t.type === 'income').reduce((sum, t) => sum + convertAmount(t.amount), 0);
+      const expense = monthTx.filter(t => t.type === 'expense').reduce((sum, t) => sum + convertAmount(t.amount), 0);
 
       data.push({
         name: name.charAt(0).toUpperCase() + name.slice(1),
@@ -344,7 +334,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
       });
     }
     return data;
-  }, [transactions, language]);
+  }, [transactions, language, convertAmount]);
 
   const financialHealthMetrics = useMemo(() => {
     return calculateFinancialHealthMetrics(
@@ -387,7 +377,7 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
         <FinancialHealthCard
           budgetPeriodData={budgetPeriodData}
           financialHealthMetrics={financialHealthMetrics}
-          currencySymbol={symbol}
+          currencySymbol={settings?.currency?.localSymbol || '$'}
           language={language as 'es' | 'en'}
           onManageSurplus={onManageSurplus}
         />
@@ -650,33 +640,21 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
           {/* Pie Chart - Solo renderizar cuando la vista está activa */}
           <div className="w-full md:w-1/2 relative min-h-[200px]">
             {isActive && categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={false}
-                    outerRadius="70%"
-                    fill="#8884d8"
-                    dataKey="value"
-                    onClick={(_, index) => {
-                      const cat = categoryData[index];
-                      if (cat && cat.name) onFilter('category', cat.name);
-                    }}
-                    cursor="pointer"
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip
-                    content={({ active, payload }) => active && payload?.[0] ? CustomTooltip({ active, payload }) : null}
-                    formatter={(value: number) => formatCurrencyShort(value)}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <Suspense fallback={
+                <div className="w-full h-[200px] flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-800/30 rounded-xl animate-pulse">
+                  <div className="w-12 h-12 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-2" />
+                  <span className="text-[10px] text-slate-400 font-medium">Cargando gráfico...</span>
+                </div>
+              }>
+                <ExpensePie
+                  data={categoryData}
+                  onFilter={onFilter}
+                  formatCurrency={formatCurrencyShort}
+                  tooltipContent={({ active, payload, label }: any) => (
+                    active && payload?.length ? CustomTooltip({ active, payload, label }) : null
+                  )}
+                />
+              </Suspense>
             ) : (
               // Placeholder mientras la vista no está activa o sin datos
               <div className="w-full h-[200px] flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 rounded-xl">
@@ -748,24 +726,18 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
         </div>
         <div className="w-full min-h-[200px]">
           {isActive && barData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart
+            <Suspense fallback={
+              <div className="w-full h-[200px] flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-800/30 rounded-xl animate-pulse">
+                <div className="w-12 h-12 rounded-full border-2 border-slate-200 border-t-indigo-500 animate-spin mb-2" />
+                <span className="text-[10px] text-slate-400 font-medium">Cargando tendencias...</span>
+              </div>
+            }>
+              <TrendBar
                 data={barData}
-                barGap={4}
-                margin={{ left: -20, right: 0 }}
-                onClick={(data: any) => {
-                  if (data && data.activePayload && data.activePayload[0]) {
-                    onFilter('date', data.activePayload[0].payload.key);
-                  }
-                }}
-              >
-                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(val) => `${(val / 1000).toFixed(0)}k ${code}`} />
-                <Bar dataKey="income" fill="#10b981" radius={[4, 4, 4, 4]} barSize={8} />
-                <Bar dataKey="expense" fill="#f43f5e" radius={[4, 4, 4, 4]} barSize={8} />
-              </BarChart>
-            </ResponsiveContainer>
+                onFilter={onFilter}
+                language={language}
+              />
+            </Suspense>
           ) : (
             <div className="w-full h-[200px] flex items-center justify-center bg-slate-50 dark:bg-slate-800/50 rounded-xl">
               <svg className="w-12 h-12 text-slate-300 dark:text-slate-600 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
