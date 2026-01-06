@@ -191,7 +191,11 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
             <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
           </button>
           <span className="font-bold text-slate-700 dark:text-slate-200 capitalize">
-            {new Date(currentPeriod + '-01').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+            {(() => {
+              const [y, m] = currentPeriod.split('-').map(Number);
+              const date = new Date(y, m - 1, 1);
+              return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            })()}
           </span>
           <button
             onClick={() => changeMonth('next')}
@@ -258,8 +262,8 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
         <button
           onClick={() => setQuickFilter('all')}
           className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${quickFilter === 'all'
-              ? 'bg-slate-800 text-white shadow-md'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            ? 'bg-slate-800 text-white shadow-md'
+            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
             }`}
         >
           Todos
@@ -267,8 +271,8 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
         <button
           onClick={() => setQuickFilter('recurring')}
           className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${quickFilter === 'recurring'
-              ? 'bg-slate-800 text-white shadow-md'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            ? 'bg-slate-800 text-white shadow-md'
+            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
             }`}
         >
           Recurrentes
@@ -276,8 +280,8 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
         <button
           onClick={() => setQuickFilter('unique')}
           className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${quickFilter === 'unique'
-              ? 'bg-slate-800 text-white shadow-md'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            ? 'bg-slate-800 text-white shadow-md'
+            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
             }`}
         >
           Únicos
@@ -286,8 +290,8 @@ export const TransactionsScreen: React.FC<TransactionsScreenProps> = ({
         <button
           onClick={() => setShowFilterModal(true)}
           className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${(filters.category || filters.type !== 'all' || filters.paymentMethod)
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+            ? 'bg-indigo-600 text-white shadow-md'
+            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
             }`}
         >
           <Filter className="w-3 h-3" />

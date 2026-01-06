@@ -217,7 +217,11 @@ export const BudgetsScreen: React.FC<BudgetsScreenProps> = ({
             <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
           </button>
           <span className="font-bold text-slate-700 dark:text-slate-200 capitalize">
-            {new Date(currentPeriod + '-01').toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { month: 'long', year: 'numeric' })}
+            {(() => {
+              const [y, m] = currentPeriod.split('-').map(Number);
+              const date = new Date(y, m - 1, 1);
+              return date.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { month: 'long', year: 'numeric' });
+            })()}
           </span>
           <button
             onClick={() => changeMonth('next')}

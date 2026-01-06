@@ -314,7 +314,9 @@ export const expenseService = {
     
     if (db && navigator.onLine) {
       try {
-        await getUserRef(uid).collection('expense_monthly').doc(doc.period).set(doc);
+        // Remove undefined fields for Firestore (it doesn't accept undefined values)
+        const sanitized = JSON.parse(JSON.stringify(doc));
+        await getUserRef(uid).collection('expense_monthly').doc(doc.period).set(sanitized);
       } catch (e) {
         console.error("Error saving monthly expense doc", e);
       }

@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  ArrowLeft, ArrowRight, TrendingUp, Calendar, AlertCircle,
-  CheckCircle2, Clock, Plus, DollarSign, Edit, Trash2, MoreVertical, Info, Save, X,
-  ChevronLeft, ChevronRight
+  TrendingUp, Calendar, AlertCircle, Info,
+  CheckCircle2, Clock, Plus, DollarSign, Edit, Trash2, MoreVertical, Save, X
 } from 'lucide-react';
+import { PageHeader, PeriodSelector, StatsCard, SectionHeader } from './base';
+import { colors } from '../styles/tokens';
 import { useIncomeManager } from '../hooks/useIncomeManager';
 import { useBudgetPeriod } from '../hooks/useBudgetPeriod';
 import { useSettings } from '../contexts/SettingsContext';
@@ -72,6 +73,13 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   // Quick Filter for Fixed Items (Parity with Expenses)
   const [filter, setFilter] = useState<'all' | 'pending'>('all');
 
+  // Check if viewing current month
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date();
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return hookPeriod === current;
+  }, [hookPeriod]);
+
   // Filter the items
   const filteredFixedItems = useMemo(() => {
     if (!hookMonthData?.fixedItems) return [];
@@ -112,39 +120,30 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
 
   return (
     <div className="pb-20">
-      {/* 1. STICKY HEADER (Design System Aligned) */}
-      <div className="bg-white dark:bg-slate-800 pb-6 pt-2 px-4 shadow-sm sticky top-0 z-10 transition-colors">
-        <div className="flex items-center justify-between mb-4 h-[40px]">
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
-              <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            Mis Ingresos
-          </h1>
-        </div>
+      {/* 1. STICKY HEADER (Design System) */}
+      <div className="bg-white dark:bg-slate-800 pb-6 pt-2 shadow-sm sticky top-0 z-10 transition-colors">
+        <PageHeader
+          title="Mis Ingresos"
+          icon={TrendingUp}
+          iconColor="emerald"
+        />
 
-        {/* Period Selector */}
-        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1">
-          <button onClick={handlePrevMonth} className="p-1 hover:bg-white dark:hover:bg-slate-600 rounded-md transition-colors">
-            <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-          </button>
-          <span className="font-bold text-slate-700 dark:text-slate-200 capitalize">
-            {(() => {
-              const date = new Date(pYear, pMonth - 1, 1);
-              return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-            })()}
-          </span>
-          <button onClick={handleNextMonth} className="p-1 hover:bg-white dark:hover:bg-slate-600 rounded-md transition-colors">
-            <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-          </button>
+        <div className="px-4">
+          <PeriodSelector
+            currentPeriod={hookPeriod}
+            onPrevious={handlePrevMonth}
+            onNext={handleNextMonth}
+            isCurrentMonth={isCurrentMonth}
+            language="es"
+          />
         </div>
       </div>
 
       {/* 2. MAIN STATE CARD (Financial Health) */}
       <div className="px-4 mt-4">
         <div className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-lg transition-colors ${periodData.incomeSurplus >= 0
-            ? 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200 dark:shadow-none'
-            : 'bg-gradient-to-br from-yellow-500 to-amber-600 shadow-yellow-200 dark:shadow-none'
+          ? 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200 dark:shadow-none'
+          : 'bg-gradient-to-br from-yellow-500 to-amber-600 shadow-yellow-200 dark:shadow-none'
           }`}>
           <div className="flex justify-between items-start mb-4">
             <div>
