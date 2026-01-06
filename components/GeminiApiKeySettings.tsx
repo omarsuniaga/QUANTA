@@ -31,7 +31,7 @@ export const GeminiApiKeySettings: React.FC<GeminiApiKeySettingsProps> = ({
     try {
       const result = await geminiService.testApiKey(apiKey);
       setTestResult(result);
-      
+
       // Si es exitoso, guardar automáticamente
       if (result.success) {
         setTimeout(() => {
@@ -112,11 +112,10 @@ export const GeminiApiKeySettings: React.FC<GeminiApiKeySettingsProps> = ({
       {/* Test Result */}
       {testResult && (
         <div
-          className={`p-3 rounded-lg flex items-center gap-2 text-sm animate-in fade-in slide-in-from-top-2 ${
-            testResult.success
+          className={`p-3 rounded-lg flex items-center gap-2 text-sm animate-in fade-in slide-in-from-top-2 ${testResult.success
               ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
               : 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
-          }`}
+            }`}
         >
           {testResult.success ? (
             <Check className="w-5 h-5 shrink-0" />
@@ -167,9 +166,16 @@ export const GeminiApiKeySettings: React.FC<GeminiApiKeySettingsProps> = ({
       </div>
 
       {/* Info Box */}
+      {/* 
+        SECURITY NOTE (Threat Model):
+        The API key is stored in localStorage. 
+        - QUANTA is a client-side only application; keys are never sent to a QUANTA server.
+        - Risk is limited to local access: anyone with access to the browser dev tools on this machine could retrieve it.
+        - This is acceptable as transaction data shares the same local-only security profile.
+      */}
       <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
         <p className="text-xs text-blue-700 dark:text-blue-400">
-          <strong>💡 Nota:</strong> Tu API key se guarda de forma segura en tu dispositivo y solo se usa para las funcionalidades de IA de QUANTA. Nunca se comparte con terceros.
+          <strong>💡 Nota:</strong> Tu API key se guarda localmente en tu navegador y solo se usa para las funcionalidades de IA de QUANTA. Nunca se comparte con servidores externos.
         </p>
       </div>
     </div>

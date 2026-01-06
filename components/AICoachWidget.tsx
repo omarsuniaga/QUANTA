@@ -10,11 +10,13 @@ import {
   Flame,
   Award,
   Info,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { Transaction, DashboardStats, Goal, SavingsChallenge } from '../types';
 import { aiCoachService } from '../services/aiCoachService';
 import { useI18n } from '../contexts/I18nContext';
+import { useAuth } from '../contexts';
 
 interface AICoachWidgetProps {
   transactions: Transaction[];
@@ -36,6 +38,7 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
   onOpenStrategies
 }) => {
   const { language } = useI18n();
+  const { user } = useAuth(); // CRITICAL: Get user for cache isolation
   const [quickTips, setQuickTips] = useState<string[]>([]);
   const [activeChallenges, setActiveChallenges] = useState<number>(0);
   const [loading, setLoading] = useState(false);
@@ -43,8 +46,34 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
   const [showInfoModal, setShowInfoModal] = useState(false);
 
   useEffect(() => {
-    loadData();
-  }, [transactions.length]);
+    // Only load non-AI data on mount/change
+    const stored = localStorage.getItem('active_challenges');
+    if (stored) {
+      try {
+        const challenges = JSON.parse(stored) as SavingsChallenge[];
+        setActiveChallenges(challenges.filter(c => c.status === 'active').length);
+      } catch (e) {
+        setActiveChallenges(0);
+      }
+    }
+
+    // CRITICAL: Only load cache if user is authenticated
+    if (!user?.uid) {
+      console.log('[AICoachWidget] No authenticated user - skipping cache load');
+      return;
+    }
+
+    // CRITICAL: Attempt to load cached tips with userId isolation
+    const cachedTips = localStorage.getItem(`quanta_ai_cache_${user.uid}_quicktips_v3`);
+    if (cachedTips) {
+      try {
+        const entry = JSON.parse(cachedTips);
+        setQuickTips(entry.data);
+      } catch (e) {
+        console.warn('[AICoachWidget] Failed to parse cached tips', e);
+      }
+    }
+  }, [user?.uid, transactions.length]);
 
   useEffect(() => {
     // Rotate tips every 5 seconds
@@ -56,32 +85,21 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
     }
   }, [quickTips.length]);
 
-  const loadData = async () => {
-    // Load active challenges count
-    const stored = localStorage.getItem('active_challenges');
-    if (stored) {
-      try {
-        const challenges = JSON.parse(stored) as SavingsChallenge[];
-        setActiveChallenges(challenges.filter(c => c.status === 'active').length);
-      } catch (e) {
-        setActiveChallenges(0);
-      }
-    }
-
-    // Load quick tips if we have an API key
-    if (transactions.length > 5) {
-      setLoading(true);
-      try {
-        const tips = await aiCoachService.getQuickTips(transactions, stats);
+  const refreshTips = async () => {
+    if (loading || transactions.length <= 5) return;
+    setLoading(true);
+    try {
+      const tips = await aiCoachService.getQuickTips(transactions, stats, true); // forceRefresh
+      if (tips) {
         setQuickTips(tips);
-      } catch (error: any) {
-        // Silenciar errores de rate limit - mostrar tips anteriores del cache
-        if (!error.message?.includes('Rate limit')) {
-          console.error('[AICoachWidget] Error loading tips:', error);
-        }
-      } finally {
-        setLoading(false);
+        setCurrentTipIndex(0);
       }
+    } catch (error: any) {
+      if (!error.message?.includes('Rate limit')) {
+        console.error('[AICoachWidget] Error refreshing tips:', error);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -134,19 +152,19 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
     <div className="space-y-4">
       {/* Info Modal */}
       {showInfoModal && (
-        <div 
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto" 
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto"
           onClick={() => setShowInfoModal(false)}
         >
-          <div 
-            className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full shadow-xl my-auto" 
+          <div
+            className="bg-white dark:bg-slate-800 rounded-3xl p-6 max-w-md w-full shadow-xl my-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-between items-start mb-4">
               <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-900/40 dark:to-violet-900/40 text-indigo-600 dark:text-indigo-400">
                 <Brain className="w-6 h-6" />
               </div>
-              <button 
+              <button
                 onClick={() => setShowInfoModal(false)}
                 className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
               >
@@ -155,7 +173,7 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
             </div>
             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">{content.title}</h3>
             <p className="text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">{content.description}</p>
-            
+
             <div className="space-y-2 mb-4">
               {content.features.map((feature, index) => (
                 <div key={index} className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
@@ -184,7 +202,7 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
         {/* Decorative elements */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-20 transition-opacity" />
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-violet-400 opacity-20 rounded-full blur-2xl -ml-12 -mb-12" />
-        
+
         <div className="relative z-10">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -197,6 +215,14 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); refreshTips(); }}
+                disabled={loading}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+                title="Actualizar Tips"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setShowInfoModal(true); }}
                 className="w-8 h-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
@@ -232,7 +258,7 @@ export const AICoachWidget: React.FC<AICoachWidgetProps> = ({
               <TrendingUp className="w-4 h-4 mx-auto mb-1 text-emerald-300" />
               <p className="text-xs text-indigo-200">Tasa Ahorro</p>
               <p className="text-sm font-bold">
-                {stats.totalIncome > 0 
+                {stats.totalIncome > 0
                   ? Math.round(((stats.totalIncome - stats.totalExpense) / stats.totalIncome) * 100)
                   : 0}%
               </p>

@@ -21,6 +21,7 @@ import { AVAILABLE_CURRENCIES, CurrencyOption } from '../constants';
 import { ModalWrapper } from './ModalWrapper';
 import { CurrencyModal } from './CurrencyModal';
 import { AccountsHelpModal } from './AccountsHelpModal';
+import { IconPicker, DynamicIcon, getColorClasses } from './IconPicker';
 
 // Common financial institutions
 const FINANCIAL_INSTITUTIONS = [
@@ -73,6 +74,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState<any>(null);
+
+  // Quick Actions IconPicker
+  const [editingAction, setEditingAction] = useState<QuickAction | null>(null);
+  const [showQuickActionPicker, setShowQuickActionPicker] = useState(false);
 
   // Filter currencies by search
   const filteredCurrencies = AVAILABLE_CURRENCIES.filter(c => {
@@ -604,10 +609,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <div key={action.id} className="bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-slate-100 dark:border-slate-700 shadow-sm flex items-center justify-between group">
                   <div className="flex items-center gap-2 sm:gap-3">
                     <GripVertical className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300 dark:text-slate-600 cursor-grab" />
-                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center bg-${action.color}-50 dark:bg-${action.color}-900/30 text-${action.color}-600 dark:text-${action.color}-400`}>
-                      {action.type === 'income' && <ArrowUpRight className="w-4 h-4 sm:w-5 sm:h-5" />}
-                      {action.type === 'expense' && <ArrowDownRight className="w-4 h-4 sm:w-5 sm:h-5" />}
-                      {action.type === 'service' && <Zap className="w-4 h-4 sm:w-5 sm:h-5" />}
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl flex items-center justify-center ${getColorClasses(action.color || 'blue').bg}`}>
+                      <DynamicIcon name={action.icon || 'Target'} className={`w-4 h-4 sm:w-5 sm:h-5 ${getColorClasses(action.color || 'blue').text}`} />
                     </div>
                     <div>
                       <input
@@ -624,12 +627,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteAction(action.id)}
-                    className="p-1.5 sm:p-2 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingAction(action);
+                        setShowQuickActionPicker(true);
+                      }}
+                      className="p-1.5 sm:p-2 text-slate-400 dark:text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                      title="Personalizar icono y color"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteAction(action.id)}
+                      className="p-1.5 sm:p-2 text-slate-300 dark:text-slate-600 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1319,6 +1335,34 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
         )}
       </ModalWrapper>
+
+      {/* Quick Actions IconPicker */}
+      {showQuickActionPicker && editingAction && (
+        <IconPicker
+          selectedIcon={editingAction.icon || 'Target'}
+          selectedColor={editingAction.color || 'blue'}
+          onIconChange={(icon) => {
+            const updated = quickActions.map(qa =>
+              qa.id === editingAction.id ? { ...qa, icon } : qa
+            );
+            onUpdateQuickActions(updated);
+            storageService.saveQuickActions(updated);
+            setEditingAction({ ...editingAction, icon });
+          }}
+          onColorChange={(color) => {
+            const updated = quickActions.map(qa =>
+              qa.id === editingAction.id ? { ...qa, color } : qa
+            );
+            onUpdateQuickActions(updated);
+            storageService.saveQuickActions(updated);
+            setEditingAction({ ...editingAction, color });
+          }}
+          onClose={() => {
+            setShowQuickActionPicker(false);
+            setEditingAction(null);
+          }}
+        />
+      )}
     </div>
   );
 };

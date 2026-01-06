@@ -1,15 +1,22 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { Transaction, Category, Goal, DashboardStats, AIInsight, FinancialHealthMetrics } from '../types';
 import { geminiRateLimiter } from './apiRateLimiter';
 import { classifyByKeywords } from '../utils/categoryKeywords';
 import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
+import { aiGateway } from './aiGateway';
+import { auth } from '../firebaseConfig';
 
 // Store for user's API key
 let userApiKey: string = '';
+// Cache for the best available model ID
+let resolvedModelId: string | null = null;
 
 // Safely retrieve API key
 const getApiKey = (): string => {
   if (userApiKey && userApiKey.trim() !== '') return userApiKey;
+  if (typeof window !== 'undefined') {
+    const storedKey = localStorage.getItem('gemini_api_key');
+    if (storedKey) return storedKey;
+  }
   if (typeof process !== 'undefined' && process.env.IS_PRODUCTION !== 'true') {
     if (process.env.API_KEY && process.env.API_KEY !== 'undefined') return process.env.API_KEY;
   }
@@ -19,6 +26,7 @@ const getApiKey = (): string => {
 // Function to set user's API key
 export const setUserGeminiApiKey = (apiKey: string) => {
   userApiKey = apiKey;
+  resolvedModelId = null; // Reset model cache when key changes
 };
 
 // Function to get current API key (for testing)
@@ -26,34 +34,96 @@ export const hasValidApiKey = (): boolean => {
   return getApiKey().length > 0;
 };
 
-// Helper to generate cache keys
-const generateCacheKey = (prefix: string, data: Record<string, unknown>): string => {
+// Get current user ID (CRITICAL for user isolation)
+const getUserId = (): string | null => {
+  return auth?.currentUser?.uid || null;
+};
+
+// Helper to generate cache keys with userId isolation
+const generateCacheKey = (userId: string, prefix: string, data: Record<string, unknown>): string => {
   const hash = JSON.stringify(data).slice(0, 100);
-  return `${prefix}_${hash}`;
+  return `${userId}_${prefix}_${hash}`;
+};
+
+/**
+ * PRODUCTION HARDENING: Dynamic Model Discovery via REST API
+ * The stable SDK might not expose listModels directly for all environments.
+ */
+export const resolveBestModel = async (forceInit: boolean = false): Promise<string> => {
+  if (resolvedModelId && !forceInit) return resolvedModelId;
+
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('API Key missing');
+
+  try {
+    // Implement model discovery via direct REST call to v1beta as per requirements
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (!response.ok) {
+      throw new Error(`Failed to list models: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    const models = data.models || [];
+
+    // Filter for models that support content generation
+    const availableModels = models.filter((m: any) => m.supportedGenerationMethods.includes('generateContent'));
+    
+    if (availableModels.length === 0) {
+      throw new Error('No compatible Gemini models found for this API key');
+    }
+
+    /**
+     * DYNAMIC SELECTION STRATEGY (Updated to avoid experimental models):
+     * 1. 1.5-flash-8b (Latest high-speed)
+     * 2. 1.5-flash (Standard, most stable)
+     * 3. 1.5-pro (Fallback)
+     * 99. 2.0-flash (AVOID - experimental, low quotas)
+     */
+    const getPriority = (name: string) => {
+      const n = name.toLowerCase();
+      if (n.includes('gemini-1.5-flash-8b')) return 1;
+      if (n.includes('gemini-1.5-flash') && !n.includes('8b')) return 2;
+      if (n.includes('gemini-1.5-pro')) return 3;
+      // EVITAR modelos 2.0 experimentales
+      if (n.includes('gemini-2.0')) return 99;
+      return 50;
+    };
+
+    const bestModel = availableModels.sort((a: any, b: any) => getPriority(a.name) - getPriority(b.name))[0];
+    
+    resolvedModelId = bestModel.name;
+    console.log(`[Gemini] Resolved best model: ${resolvedModelId}`);
+    return resolvedModelId;
+  } catch (error) {
+    console.error('[Gemini] Model resolution failed:', error);
+    // Anti-fragility fallback
+    return 'models/gemini-1.5-flash';
+  }
 };
 
 export const geminiService = {
   /**
-   * Test if the current API key works
+   * Test if the current API key works via REST models endpoint
    */
   async testApiKey(apiKey?: string): Promise<{ success: boolean; message: string }> {
     const testKey = apiKey || getApiKey();
     if (!testKey || testKey.trim() === '') return { success: false, message: 'No se proporcionó una API key' };
 
     try {
-      const testAi = new GoogleGenAI({ apiKey: testKey });
-      const response = await testAi.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: 'Responde solo con "OK" si puedes leer esto.',
-      });
-      
-      const text = response.text;
-      return (text && text.length > 0) 
-        ? { success: true, message: '✅ API Key válida y funcional' }
-        : { success: false, message: 'La API key no generó una respuesta válida' };
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('AI call failed:', message);
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${testKey}`);
+      if (response.ok) {
+        const data = await response.json();
+        return (data.models && data.models.length > 0)
+          ? { success: true, message: '✅ API Key válida y funcional' }
+          : { success: false, message: 'La API key es válida pero no tiene modelos asociados' };
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        const message = errorData.error?.message || response.statusText;
+        throw new Error(message);
+      }
+    } catch (error: any) {
+      const message = error.message || 'Error desconocido';
+      console.error('API key test failed:', message);
       const isRateLimit = message.includes('429') || message.includes('RESOURCE_EXHAUSTED');
       return { 
         success: false, 
@@ -70,19 +140,12 @@ export const geminiService = {
 
   /**
    * Parses natural language input into a structured transaction object.
-   * Hybrid Logic: Checks keywords locally first, falls back to AI.
    */
   async parseTransaction(input: string): Promise<Partial<Transaction> | null> {
-    // 1. LAYER 2: Try Keyword-based classification (Local/Fast/Free)
     const localCategory = classifyByKeywords(input);
-    
-    // Extract amount from input if possible (simple regex for "number")
     const amountMatch = input.match(/(\d+([.,]\d+)?)/);
     const estimatedAmount = amountMatch ? parseFloat(amountMatch[0].replace(',', '.')) : undefined;
 
-    // If we have both, and the input is simple, we could theoretically return early
-    // but Gemini handles complex dates and descriptions better.
-    // However, if the input is ONLY a keyword + amount, we save the API call.
     const words = input.split(' ');
     if (localCategory && estimatedAmount && words.length <= 3) {
       return {
@@ -94,42 +157,29 @@ export const geminiService = {
       };
     }
 
-    // 2. LAYER 3: Fallback to Gemini AI
     const apiKey = getApiKey();
     if (!apiKey) return localCategory ? { category: localCategory, amount: estimatedAmount } : null;
     
-    const ai = new GoogleGenAI({ apiKey });
     const cacheKey = generateCacheKey('parse', { input, date: new Date().toISOString().split('T')[0] });
 
     try {
       return await geminiRateLimiter.execute(
         cacheKey,
         async () => {
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Extract transaction details from: "${input}". 
+          const modelId = await resolveBestModel();
+          const genAI = aiGateway.getClient(apiKey);
+          const model = genAI.getGenerativeModel({ model: modelId });
+
+          const prompt = `Extract transaction details from: "${input}". 
             Today: ${new Date().toISOString().split('T')[0]}.
             Known Categories: ${Object.values(Category).join(', ')}.
-            Return JSON.`,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  type: { type: Type.STRING, enum: ['income', 'expense'] },
-                  amount: { type: Type.NUMBER },
-                  category: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  date: { type: Type.STRING },
-                  isRecurring: { type: Type.BOOLEAN },
-                  frequency: { type: Type.STRING, enum: ['monthly', 'weekly', 'yearly'] }
-                },
-                required: ['type', 'amount', 'category', 'date']
-              }
-            }
-          });
+            Return JSON only.`;
+
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const text = response.text();
           
-          return JSON.parse(response.text || 'null');
+          return JSON.parse(text || 'null');
         },
         { cacheDurationMs: 60 * 1000, priority: 'high' }
       );
@@ -142,7 +192,6 @@ export const geminiService = {
 
   /**
    * Generates structured financial insights (The AI Coach).
-   * Hybrid Logic: Uses MathCore for hard numbers, AI for qualitative advice.
    */
   async getFinancialInsights(
     transactions: Transaction[], 
@@ -153,7 +202,6 @@ export const geminiService = {
     const apiKey = getApiKey();
     if (!apiKey || transactions.length === 0) return [];
 
-    // 1. LAYER 1: Hard Mathematics (Precise/Free)
     const metrics: FinancialHealthMetrics = calculateFinancialHealthMetrics(
       transactions,
       stats.balance,
@@ -161,7 +209,6 @@ export const geminiService = {
       stats.totalExpense
     );
 
-    // 2. Prepare Context for AI
     const contextData: Record<string, unknown> = {
       ...metrics,
       currentBalance: stats.balance,
@@ -175,7 +222,6 @@ export const geminiService = {
         }, {})
     };
 
-    const ai = new GoogleGenAI({ apiKey });
     const cacheKey = generateCacheKey('insights_v3', {
       balance: Math.round(stats.balance / 100),
       metricsHash: Math.round(metrics.savingsRate),
@@ -186,43 +232,23 @@ export const geminiService = {
       return await geminiRateLimiter.execute(
         cacheKey,
         async () => {
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Act as "QUANTA CFO", a sophisticated financial strategist.
-            Current Financial Model: ${selectedPlanId || 'essentialist'}
-            
-            Analyze these PRECISE mathematical metrics and provide 3-4 strategic insights.
-            
-            Metrics: ${JSON.stringify(contextData)}
-            
-            Strategy Guidelines:
-            - If runwayMonths < 3: Priority is Emergency Fund (alert).
-            - If savingsRate < 20%: Suggest specific expense cuts based on categories (tip).
-            - If debtToIncomeRatio > 35%: Focus on debt reduction (alert).
-            - If metrics are good: Suggest investing or accelerating goals (kudos/tip).
-            
-            Tailor your advice to the "${selectedPlanId || 'essentialist'}" plan philosophy.
-            Format: JSON only. Language: Spanish (Neutral, Professional).`,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    type: { type: Type.STRING, enum: ['alert', 'tip', 'kudos', 'prediction'] },
-                    title: { type: Type.STRING },
-                    message: { type: Type.STRING },
-                    action: { type: Type.STRING },
-                    score: { type: Type.NUMBER }
-                  },
-                  required: ['type', 'title', 'message']
-                }
-              }
-            }
+          const modelId = await resolveBestModel();
+          const genAI = aiGateway.getClient(apiKey);
+          const model = genAI.getGenerativeModel({ 
+            model: modelId,
+            generationConfig: { responseMimeType: "application/json" }
           });
 
-          return JSON.parse(response.text || '[]');
+          const prompt = `Act as "QUANTA CFO". Analyze these metrics and provide 3-4 strategic insights in JSON.
+            Model: ${selectedPlanId || 'essentialist'}
+            Metrics: ${JSON.stringify(contextData)}
+            Language: Spanish (Neutral).`;
+
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const text = response.text();
+
+          return JSON.parse(text || '[]');
         },
         { cacheDurationMs: 30 * 60 * 1000, priority: 'normal' }
       );
@@ -234,7 +260,7 @@ export const geminiService = {
   },
 
   /**
-   * Fetches banking commissions for a specific bank in the Dominican Republic (2025).
+   * Fetches banking commissions for a specific bank in the Dominican Republic.
    */
   async fetchBankCommissions(bankName: string): Promise<{
     transferCommissionPercentage: number;
@@ -247,8 +273,6 @@ export const geminiService = {
     if (!apiKey || !bankName) return null;
 
     const cacheKey = `ai_bank_fees_${bankName.toLowerCase().replace(/\s+/g, '_')}`;
-    
-    // 1. Check Development/Session Cache
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
       try {
@@ -258,46 +282,31 @@ export const geminiService = {
       }
     }
 
-    const ai = new GoogleGenAI({ apiKey });
-
     try {
       return await geminiRateLimiter.execute(
         cacheKey,
         async () => {
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: `Retrieve current (2025) banking fees for "${bankName}" in the Dominican Republic.
-            Context: The user is setting up this bank in their financial app.
-            
-            Find:
-            1. Transfer Commission Percentage (MUST include the 0.15% DGII tax plus any bank-specific fee).
-            2. Card Payment Commission Percentage (Merchant/User usage fee).
-            3. ACH Transfer Fixed Fee (RD$ amount).
-            4. LBTR Transfer Fixed Fee (RD$ amount).
-            
-            Return JSON only.`,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  transferCommissionPercentage: { type: Type.NUMBER },
-                  cardCommissionPercentage: { type: Type.NUMBER },
-                  achFeeFixed: { type: Type.NUMBER },
-                  lbtrFeeFixed: { type: Type.NUMBER },
-                  disclaimer: { type: Type.STRING }
-                },
-                required: ['transferCommissionPercentage', 'cardCommissionPercentage', 'achFeeFixed', 'lbtrFeeFixed']
-              }
-            }
+          const modelId = await resolveBestModel();
+          const genAI = aiGateway.getClient(apiKey);
+          const model = genAI.getGenerativeModel({ 
+            model: modelId,
+            generationConfig: { responseMimeType: "application/json" }
           });
 
-          const result = JSON.parse(response.text || 'null');
-          if (result) {
-            result.disclaimer = "Fees are estimated based on 2025 public bank tariffs.";
-            sessionStorage.setItem(cacheKey, JSON.stringify(result));
+          const prompt = `Retrieve current banking fees for "${bankName}" in the Dominican Republic (DOP).
+            Include 0.15% DGII tax in transfer commission.
+            Return JSON only.`;
+
+          const result = await model.generateContent(prompt);
+          const response = await result.response;
+          const text = response.text();
+
+          const data = JSON.parse(text || 'null');
+          if (data) {
+            data.disclaimer = "Fees are estimated based on 2025 public bank tariffs.";
+            sessionStorage.setItem(cacheKey, JSON.stringify(data));
           }
-          return result;
+          return data;
         },
         { cacheDurationMs: 24 * 60 * 60 * 1000, priority: 'high' }
       );

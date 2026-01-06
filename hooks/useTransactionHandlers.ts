@@ -87,6 +87,122 @@ export function useTransactionHandlers({
 
         await addTransaction(transactionData);
         toast.success(t.common.serviceSaved, `${data.name} - ${t.common.remindersActive}`);
+      } else if (modalMode === 'expense' && data.isRecurring && !transactionToEdit) {
+        // === RECURRING EXPENSE CREATION ===
+        // Create ExpenseFixedTemplate so it appears in "Recurring Expenses" section
+        
+        try {
+          const { expenseService } = await import('../services/expenseService');
+          
+          // Generate ID (fallback for older browsers)
+          const templateId = typeof crypto !== 'undefined' && crypto.randomUUID 
+            ? crypto.randomUUID() 
+            : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          
+          const newTemplate: any = {
+            id: templateId,
+            name: data.description || 'Gasto Recurrente',
+            defaultAmount: data.amount || 0,
+            category: data.category || 'Other',
+            active: true,
+            frequency: data.frequency || 'monthly',
+            dayOfMonth: data.date ? new Date(data.date).getDate() : 1,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          };
+
+          // Save template - updates localStorage immediately
+          await expenseService.saveFixedTemplate(newTemplate);
+          
+          console.log('[DEBUG] Template saved to localStorage');
+          
+          // Determine period from date
+          const txDate = data.date ? new Date(data.date) : new Date();
+          const period = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+          
+          // CRITICAL FIX: Read templates DIRECTLY from localStorage
+          const LS_PREFIX = 'quanta_';
+          const templatesKey = `${LS_PREFIX}expense_templates`;
+          const templatesRaw = localStorage.getItem(templatesKey);
+          const allTemplates = templatesRaw ? JSON.parse(templatesRaw) : [];
+          
+          console.log('[DEBUG] Templates from localStorage:', {
+            count: allTemplates.length,
+            templateIds: allTemplates.map((t: any) => t.id),
+            ourTemplateExists: allTemplates.some((t: any) => t.id === templateId)
+          });
+          
+          // Verify our template exists
+          if (!allTemplates.some((t: any) => t.id === templateId)) {
+            throw new Error('Template not found in localStorage - saveFixedTemplate failed');
+          }
+          
+          // Clear monthly doc cache
+          localStorage.removeItem(`${LS_PREFIX}expense_monthly_${period}`);
+          
+          // PASS templates directly to avoid Firestore latency
+          const monthlyDoc = await expenseService.initializeMonth(period, allTemplates);
+          
+          console.log('[DEBUG] Monthly doc created:', {
+            period,
+            itemCount: monthlyDoc.fixedItems.length,
+            itemTemplateIds: monthlyDoc.fixedItems.map(i => i.templateId),
+            ourItemExists: monthlyDoc.fixedItems.some(i => i.templateId === templateId)
+          });
+
+          // AUTO-PAY LOGIC
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          txDate.setHours(0, 0, 0, 0);
+          const shouldAutoPay = txDate <= today;
+          
+          if (shouldAutoPay) {
+            const item = monthlyDoc.fixedItems.find(i => i.templateId === newTemplate.id);
+            if (item) {
+              console.log('[DEBUG] Auto-paying item:', item.id);
+              
+              // Pay the item
+              await expenseService.payFixedItem(period, item.id, data.amount);
+              
+              // Update payment method
+              if (data.paymentMethodId && data.paymentMethodId !== 'cash') {
+                const transactions = await storageService.getTransactions();
+                const newTx = transactions.find(t => 
+                  t.recurringMonthlyItemId === item.id && 
+                  t.recurringTemplateId === newTemplate.id
+                );
+                if (newTx) {
+                  await storageService.updateTransaction(newTx.id, {
+                    paymentMethodId: data.paymentMethodId,
+                    paymentMethodType: data.paymentMethodType,
+                    bankTransferType: data.bankTransferType
+                  });
+                }
+              }
+              
+              // Dispatch event to refresh ExpensesScreen
+              window.dispatchEvent(new CustomEvent('expenseRecurringCreated', { detail: { period } }));
+              
+              toast.success('¡Gasto recurrente creado!', `${data.description} registrado y pagado`);
+            } else {
+              console.error('[CRITICAL] Item not found in monthly doc', { 
+                searchedTemplateId: templateId,
+                availableTemplateIds: monthlyDoc.fixedItems.map(i => i.templateId),
+                fullMonthlyDoc: monthlyDoc
+              });
+              toast.error('Error crítico: el item no se agregó al mes', 'Revisa la consola (F12)');
+            }
+          } else {
+            // Dispatch event even for future items
+            window.dispatchEvent(new CustomEvent('expenseRecurringCreated', { detail: { period } }));
+            toast.success('Gasto recurrente programado', `Aparecerá como pendiente en ${period}`);
+          }
+
+        } catch (e: any) {
+          console.error("[ERROR] Creating recurring expense:", e);
+          toast.error("Error al crear gasto recurrente", e.message || 'Revisa la consola (F12)');
+        }
+
       } else {
         // Manejar transacción normal (income/expense)
         if (transactionToEdit) {

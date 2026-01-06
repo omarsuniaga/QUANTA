@@ -146,19 +146,59 @@ export default function App() {
   });
 
   // === EFFECTS ===
-  // Load custom categories
+  // Load custom categories and run migrations
   useEffect(() => {
     if (user) {
       storageService.getCategories().then(screenManager.setCustomCategories).catch(console.error);
+
+      // Run Income Module Migration
+      import('./services/incomeService').then(({ incomeService }) => {
+        incomeService.migrateLegacyData().catch(console.error);
+      });
     }
   }, [user]);
 
-  // Sync API key to localStorage for aiCoachService
+  // Sync API key to localStorage for aiCoachService AND invalidate aiGateway when it changes
   useEffect(() => {
-    if (settings?.aiConfig?.userGeminiApiKey) {
-      localStorage.setItem('gemini_api_key', settings.aiConfig.userGeminiApiKey);
+    const newKey = settings?.aiConfig?.userGeminiApiKey;
+
+    if (newKey) {
+      const currentKey = localStorage.getItem('gemini_api_key');
+
+      // Si cambió la key, invalidar el cliente de Gemini
+      if (currentKey !== newKey) {
+        console.log('[App] API key changed, invalidating aiGateway');
+        // Importar dinámicamente para evitar dependencia circular
+        import('./services/aiGateway').then(({ aiGateway }) => {
+          aiGateway.invalidate();
+        });
+
+        // Limpiar caches de AI cuando cambia la key
+        localStorage.removeItem('quanta_ai_cache_analysis_v5_contextual');
+        localStorage.removeItem('quanta_ai_cache_quicktips_v4_contextual');
+        localStorage.removeItem('quanta_ai_cache_quicktips_v3');
+        localStorage.removeItem('gemini_resolved_model');
+      }
+
+      localStorage.setItem('gemini_api_key', newKey);
+    } else {
+      // Si se removió la key, limpiar todo
+      console.log('[App] API key removed, cleaning up');
+      localStorage.removeItem('gemini_api_key');
+      import('./services/aiGateway').then(({ aiGateway }) => {
+        aiGateway.invalidate();
+      });
     }
   }, [settings?.aiConfig?.userGeminiApiKey]);
+
+  // === DARK MODE SIDE EFFECT ===
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   // === LOADING STATE ===
   if (authLoading || txLoading || settingsLoading) {
@@ -186,7 +226,7 @@ export default function App() {
 
   // === MAIN APP ===
   return (
-    <div className={`${isDarkMode ? 'dark' : ''} min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300`}>
+    <div className={`min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300`}>
       <AppLayout
         user={user}
         stats={stats}

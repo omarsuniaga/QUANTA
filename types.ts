@@ -139,6 +139,13 @@ export interface Transaction {
   lastPaidDate?: string; // ISO Date of the last time this recurring transaction was processed/paid
 
   createdAt: number;
+  
+  // Link to Recurring Parent in new System
+  source?: 'quick' | 'recurring';
+  recurringTemplateId?: string;
+  recurringMonthlyItemId?: string;
+  period?: string; // YYYY-MM
+  status?: 'active' | 'voided';
 }
 
 export interface Goal {
@@ -306,6 +313,33 @@ export interface AIRecommendation {
   actionLabel?: string;
   category?: string;
 }
+
+// --- AI CACHE ISOLATION & SECURITY ---
+
+/**
+ * Metadata attached to every AI result to ensure user isolation and cache validity
+ */
+export interface AIResultMetadata {
+  userId: string;           // User ID who owns this result
+  period: string;           // YYYY-MM period for time-based data
+  datasetHash: string;      // Hash of the dataset used to generate this result
+  txCount: number;          // Number of transactions in the dataset
+  createdAt: number;        // Timestamp when this result was created
+  model?: string;           // AI model used (e.g., "gemini-1.5-flash")
+  version?: string;         // Schema version for future compatibility
+}
+
+/**
+ * State wrapper for AI insights that enforces "no data" guard rails
+ */
+export type AIInsightState<T> =
+  | { status: 'empty'; message: string; required: string[] }
+  | {
+      status: 'ready';
+      data: T;
+      metadata: AIResultMetadata;
+      dataRange?: { from: string; to: string };
+    };
 
 export interface SavingsPlan {
   id: string;
@@ -527,4 +561,78 @@ export function getErrorMessage(error: unknown): string {
   if (isErrorWithMessage(error)) return error.message;
   if (typeof error === 'string') return error;
   return 'Unknown error occurred';
+}
+
+// --- INCOME MODULE REFACTOR ---
+
+export interface IncomeFixedTemplate {
+  id: string;
+  name: string;
+  defaultAmount: number;
+  active: boolean;
+  frequency: 'monthly' | 'weekly' | 'biweekly' | 'yearly';
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type FixedIncomeStatus = "pending" | "received";
+
+export interface IncomeFixedItem {
+  id: string; // Unique ID for the item within the month (e.g., templateId + period)
+  templateId: string;
+  nameSnapshot: string;
+  amount: number;
+  status: FixedIncomeStatus;
+  receivedAt: number | null;
+}
+
+export interface IncomeExtraItem {
+  id: string;
+  description: string;
+  amount: number;
+  date: number; // timestamp
+  createdAt: number;
+}
+
+export interface IncomeMonthlyDocument {
+  period: string; // "YYYY-MM"
+  fixedItems: IncomeFixedItem[];
+  extras: IncomeExtraItem[];
+  initializedFromTemplatesAt: number;
+}
+
+// ==========================================
+// EXPENSE MODULE TYPES (Mirroring Income)
+// ==========================================
+
+export type ExpenseStatus = 'pending' | 'paid' | 'skipped';
+
+export interface ExpenseFixedTemplate {
+  id: string;
+  name: string;
+  defaultAmount: number;
+  category: string; // Category ID
+  active: boolean;
+  frequency: 'monthly' | 'weekly'; 
+  dayOfMonth: number; // 1-31
+  icon?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ExpenseMonthlyItem {
+  id: string;
+  templateId: string;
+  nameSnapshot: string;
+  amount: number;
+  category: string;
+  status: ExpenseStatus;
+  paymentDate?: number; // timestamp when paid
+  transactionId?: string; // Link to the REAL transaction that affects budget
+}
+
+export interface ExpenseMonthlyDocument {
+  period: string; // YYYY-MM
+  fixedItems: ExpenseMonthlyItem[];
+  initializedAt: number;
 }

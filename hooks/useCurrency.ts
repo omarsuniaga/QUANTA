@@ -60,10 +60,28 @@ export const useCurrency = () => {
     return forceShowSymbol ? `${symbol} ${formattedNumber}` : formattedNumber;
   }, [displayMode, fromBase, targetCurrencySymbol]);
 
+  /**
+   * Limpia y parsea un string de monto (con comas, símbolos, etc) a número.
+   */
+  const parseAmount = useCallback((input: string | number): number => {
+    if (typeof input === 'number') return input;
+    if (!input) return 0;
+
+    // Eliminar todo lo que no sea número, punto o signo negativo
+    // Pero primero quitamos las comas de miles para no confundir con decimales
+    const cleanString = input.toString()
+      .replace(/[,]/g, '') // Eliminar comas
+      .replace(/[^0-9.-]/g, ''); // Eliminar símbolos de moneda y espacios
+
+    const parsed = parseFloat(cleanString);
+    return isNaN(parsed) ? 0 : parsed;
+  }, []);
+
   return {
     formatAmount,
     fromBase,
     toBase,
+    parseAmount,
     convertAmount: fromBase, // Mantener por compatibilidad temporal
     currencySymbol: displayMode === 'usd' ? '$' : targetCurrencySymbol,
     currencyCode: displayMode === 'usd' ? 'USD' : targetCurrencyCode

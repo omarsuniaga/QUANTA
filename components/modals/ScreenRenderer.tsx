@@ -8,9 +8,10 @@ import { NotificationCenter } from '../NotificationCenter';
 import { NotificationPreferences } from '../NotificationPreferences';
 import { GoalsManagement } from '../GoalsManagement';
 import { CategoryProfileScreen } from '../CategoryProfileScreen';
-import { GoalView } from '../GoalView';
+import { GoalModal } from '../GoalModal';
 import { PromoView } from '../PromoView';
-import { BudgetView } from '../BudgetView';
+import { BudgetModal } from '../BudgetModal';
+import { ModalWrapper } from '../ModalWrapper';
 import { Transaction, Goal, DashboardStats, CustomCategory, Promo, Budget, AppSettings } from '../../types';
 
 interface ScreenRendererProps {
@@ -146,22 +147,24 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
 
       {/* Savings Planner Full Screen */}
       {savingsPlannerScreen.show && (
-        <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 overflow-y-auto">
-          <SavingsPlanner
-            goals={goals}
-            transactions={transactions}
-            stats={stats}
-            onBack={onCloseScreens.savingsPlanner}
-            onEditGoal={(goal) => {
-              onCloseScreens.savingsPlanner();
-              onEditGoal(goal);
-            }}
-            onAddGoal={() => {
-              onCloseScreens.savingsPlanner();
-              onAddGoal();
-            }}
-          />
-        </div>
+        <ModalWrapper isOpen={savingsPlannerScreen.show} onClose={onCloseScreens.savingsPlanner}>
+          <div className="bg-slate-50 dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl">
+            <SavingsPlanner
+              goals={goals}
+              transactions={transactions}
+              stats={stats}
+              onBack={onCloseScreens.savingsPlanner}
+              onEditGoal={(goal) => {
+                onCloseScreens.savingsPlanner();
+                onEditGoal(goal);
+              }}
+              onAddGoal={() => {
+                onCloseScreens.savingsPlanner();
+                onAddGoal();
+              }}
+            />
+          </div>
+        </ModalWrapper>
       )}
 
       {/* Challenges Full Screen */}
@@ -233,14 +236,20 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
         />
       )}
 
-      {/* Goal View Full Screen */}
+      {/* Goal Modal */}
       {goalViewScreen.show && (
-        <GoalView
+        <GoalModal
           goal={goalViewScreen.goal}
-          transactions={transactions}
-          onSave={onSaveGoal}
-          onDelete={onDeleteGoal}
-          onBack={onCloseScreens.goalView}
+          onSave={async (goal) => {
+            await onSaveGoal(goal);
+            onCloseScreens.goalView();
+          }}
+          onDelete={async (id) => {
+            await onDeleteGoal(id);
+            onCloseScreens.goalView();
+          }}
+          onClose={onCloseScreens.goalView}
+          availableBalance={availableBalance}
         />
       )}
 
@@ -254,13 +263,14 @@ export const ScreenRenderer: React.FC<ScreenRendererProps> = ({
         />
       )}
 
-      {/* Budget View Full Screen */}
+      {/* Budget Modal - Replaces BudgetView for modal experience */}
       {budgetViewScreen.show && (
-        <BudgetView
+        <BudgetModal
+          isOpen={budgetViewScreen.show}
           budget={budgetViewScreen.budget}
           categories={customCategories.map(c => c.id)}
           onSave={onSaveBudget}
-          onBack={onCloseScreens.budgetView}
+          onClose={onCloseScreens.budgetView}
         />
       )}
 

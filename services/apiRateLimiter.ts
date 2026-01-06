@@ -42,6 +42,7 @@ class APIRateLimiter {
   private consecutiveErrors = 0;
   private isInCooldown = false;
   private cooldownEndTime = 0;
+  private inflightRequests: Map<string, Promise<any>> = new Map();
 
   constructor(config: Partial<RateLimiterConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -94,8 +95,14 @@ class APIRateLimiter {
       }
     }
 
-    // 3. Encolar la petición
-    return new Promise<T>((resolve, reject) => {
+    // 3. Request Deduplication: If a request for this key is already in progress, reuse it
+    if (this.inflightRequests.has(cacheKey)) {
+      console.log(`[RateLimiter] Deduplicating request: ${cacheKey.substring(0, 50)}...`);
+      return this.inflightRequests.get(cacheKey) as Promise<T>;
+    }
+
+    // 4. Encolar la petición
+    const promise = new Promise<T>((resolve, reject) => {
       const request: QueuedRequest<T> = {
         id: `${cacheKey}_${Date.now()}`,
         execute: async () => {
@@ -128,6 +135,14 @@ class APIRateLimiter {
 
       this.processQueue();
     });
+
+    // Track the inflight promise and remove it once finished
+    this.inflightRequests.set(cacheKey, promise);
+    promise.finally(() => {
+      this.inflightRequests.delete(cacheKey);
+    });
+
+    return promise;
   }
 
   /**
@@ -360,7 +375,8 @@ class APIRateLimiter {
   private saveCacheToStorage(): void {
     try {
       const cacheData: Record<string, CacheEntry<any>> = {};
-      for (const [key, value] of this.cache.entries()) {
+      const entries = Array.from(this.cache.entries());
+      for (const [key, value] of entries) {
         cacheData[key] = value;
       }
       localStorage.setItem('gemini_api_cache', JSON.stringify(cacheData));
@@ -393,7 +409,7 @@ class APIRateLimiter {
 
 // Instancia singleton
 export const geminiRateLimiter = new APIRateLimiter({
-  maxRequestsPerMinute: 10,
+  maxRequestsPerMinute: 15,  // Aumentado de 8 a 15 para free tier realista
   maxRetries: 3,
   baseCacheDurationMs: 5 * 60 * 1000, // 5 minutos
   enableCache: true

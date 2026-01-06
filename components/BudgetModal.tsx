@@ -209,8 +209,9 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 pt-2 pb-24">
-          <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5 pb-4">
+        {/* Content - Scrolleable */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <form id="budget-form" onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
 
             {/* Amount Field */}
             <div className="text-center py-1 sm:py-2">
@@ -242,7 +243,7 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
             <div>
               <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">
                 {language === 'es' ? 'Nombre del Presupuesto' : 'Budget Name'}
-                <span className="text-slate-400 font-normal ml-1">({language === 'es' ? 'opcional' : 'optional'})</span>
+                <span className="text-slate-400 dark:text-slate-500 font-normal ml-1">({language === 'es' ? 'opcional' : 'optional'})</span>
               </label>
               <input
                 type="text"
@@ -441,16 +442,20 @@ export const BudgetModal: React.FC<BudgetModalProps> = ({
                 </div>
               </div>
             </div>
-
-            <button
-              type="submit"
-              className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-2xl shadow-lg transition-all"
-            >
-              {budget
-                ? (language === 'es' ? 'Guardar Cambios' : 'Save Changes')
-                : (language === 'es' ? 'Crear Presupuesto' : 'Create Budget')}
-            </button>
           </form>
+        </div>
+
+        {/* Footer - Sticky */}
+        <div className="sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4">
+          <button
+            type="submit"
+            form="budget-form"
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-xl font-bold shadow-lg transition-colors"
+          >
+            {budget
+              ? (language === 'es' ? 'Guardar Cambios' : 'Save Changes')
+              : (language === 'es' ? 'Crear Presupuesto' : 'Create Budget')}
+          </button>
         </div>
       </div>
 

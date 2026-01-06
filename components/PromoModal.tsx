@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Plane, ShoppingBag, Gift, Star, Coffee, Music, Trash2 } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { Promo } from '../types';
 import { Button } from './Button';
 import { ModalWrapper } from './ModalWrapper';
+import { IconPicker, DynamicIcon, getColorClasses } from './IconPicker';
 
 interface PromoModalProps {
   promo?: Promo | null;
@@ -11,20 +12,12 @@ interface PromoModalProps {
   onClose: () => void;
 }
 
-const ICONS = [
-  { name: 'Plane', icon: Plane },
-  { name: 'ShoppingBag', icon: ShoppingBag },
-  { name: 'Gift', icon: Gift },
-  { name: 'Star', icon: Star },
-  { name: 'Coffee', icon: Coffee },
-  { name: 'Music', icon: Music },
-];
 
-const COLORS = ['blue', 'purple', 'rose', 'amber', 'emerald', 'indigo'];
 
 export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete, onClose }) => {
   const [title, setTitle] = useState(promo?.title || '');
   const titleRef = useRef<HTMLInputElement>(null);
+  const [showIconPicker, setShowIconPicker] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -96,35 +89,22 @@ export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete,
           </div>
 
           <div>
-            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 sm:mb-2 block">Icono</label>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2">
-              {ICONS.map((item) => (
-                <button
-                  key={item.name}
-                  type="button"
-                  onClick={() => setIcon(item.name)}
-                  className={`p-2 sm:p-3 rounded-lg sm:rounded-xl transition-all ${icon === item.name ? `bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 shadow-md` : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
-                >
-                  <item.icon className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 sm:mb-2 block">Color</label>
-            <div className="flex gap-1.5 sm:gap-2">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full transition-all ${color === c ? 'ring-2 ring-offset-2 ring-slate-400 scale-110' : 'opacity-60 hover:opacity-100'}`}
-                >
-                  <div className={`w-full h-full rounded-full bg-${c}-500`}></div>
-                </button>
-              ))}
-            </div>
+            <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 sm:mb-2 block">Icono y Color</label>
+            <button
+              type="button"
+              onClick={() => setShowIconPicker(true)}
+              className="w-full p-4 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-colors flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${getColorClasses(color).bg}`}>
+                  <DynamicIcon name={icon} className={`w-5 h-5 ${getColorClasses(color).text}`} />
+                </div>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Personalizar</span>
+              </div>
+              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
           </div>
 
           <div className="flex gap-2 sm:gap-3 pt-2">
@@ -139,6 +119,17 @@ export const PromoModal: React.FC<PromoModalProps> = ({ promo, onSave, onDelete,
           </div>
         </form>
       </div>
+
+      {/* Icon Picker Modal */}
+      {showIconPicker && (
+        <IconPicker
+          selectedIcon={icon}
+          selectedColor={color}
+          onIconChange={setIcon}
+          onColorChange={setColor}
+          onClose={() => setShowIconPicker(false)}
+        />
+      )}
     </ModalWrapper>
   );
 };

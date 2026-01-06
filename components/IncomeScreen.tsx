@@ -1,445 +1,432 @@
-import React, { useState, useMemo } from 'react';
-import { ArrowUpRight, Briefcase, Zap, Edit2, Trash2, TrendingUp, Calendar, MoreVertical } from 'lucide-react';
-import { Transaction, DashboardStats } from '../types';
-import { useI18n } from '../contexts/I18nContext';
-import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
-import { FinancialHealthCard } from './FinancialHealthCard';
-import { SurplusDistributionView } from './SurplusDistributionView';
-import { getFinancialHealth } from '../utils/financialHealth';
-import { storageService } from '../services/storageService';
-import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
-import { parseLocalDate } from '../utils/dateHelpers';
+import React, { useState, useMemo, useEffect } from 'react';
+import {
+  ArrowLeft, ArrowRight, TrendingUp, Calendar, AlertCircle,
+  CheckCircle2, Clock, Plus, DollarSign, Edit, Trash2, MoreVertical, Info, Save, X,
+  ChevronLeft, ChevronRight
+} from 'lucide-react';
+import { useIncomeManager } from '../hooks/useIncomeManager';
+import { useBudgetPeriod } from '../hooks/useBudgetPeriod';
+import { useSettings } from '../contexts/SettingsContext';
+import { Transaction, Budget, MonetaryAmount } from '../types';
+import { formatCurrency } from '../utils/formatters';
+import { getPeriodLabel } from '../hooks/useBudgetPeriod';
 import { ModalWrapper } from './ModalWrapper';
-import { useCurrency } from '../hooks/useCurrency';
+import { ActionModal } from './ActionModal';
+import { parseLocalDate } from '../utils/dateHelpers';
 
 interface IncomeScreenProps {
   transactions: Transaction[];
-  stats: DashboardStats;
-  budgetPeriodData: BudgetPeriodData;
-  onAddFixedIncome: () => void;
-  onAddExtraIncome: () => void;
-  onEditTransaction: (transaction: Transaction) => void;
-  onDeleteTransaction: (id: string) => void;
-  onGoalsCreated?: () => void;
+  stats: any;
+  budgetPeriodData: any; // Legacy prop, we might ignore or use for initial
+  onAddFixedIncome: () => void; // Legacy
+  onAddExtraIncome: () => void; // Legacy
+  onEditTransaction: (tx: Transaction) => void;
+  onDeleteTransaction: (id: string, type: string) => void;
+  onGoalsCreated: () => void;
 }
 
 export const IncomeScreen: React.FC<IncomeScreenProps> = ({
   transactions,
-  stats,
-  budgetPeriodData,
-  onAddFixedIncome,
-  onAddExtraIncome,
   onEditTransaction,
-  onDeleteTransaction,
-  onGoalsCreated
+  onDeleteTransaction
 }) => {
-  const { language } = useI18n();
-  const { formatAmount, convertAmount } = useCurrency();
-  const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'all'>('current');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; type: 'fixed' | 'extra' } | null>(null);
-  const [showSurplusView, setShowSurplusView] = useState(false);
+  const { budgets, currencySymbol, currencyCode } = useSettings();
 
-  // Extract financial health status from SSOT
-  const { status } = getFinancialHealth(budgetPeriodData);
-  const hasSurplus = status === 'healthy_surplus' || status === 'strong_surplus';
+  // Local State for Navigation
+  const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Filtrar solo ingresos
-  const incomeTransactions = useMemo(() =>
-    transactions.filter(t => t.type === 'income'),
-    [transactions]
-  );
+  // Derived Period Strings
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth(); // 0-indexed
+  const selectedPeriod = `${year}-${String(month + 1).padStart(2, '0')}`;
 
-  // Separar ingresos fijos (recurrentes) y variables (extras)
-  const fixedIncomes = useMemo(() =>
-    incomeTransactions.filter(t => t.isRecurring),
-    [incomeTransactions]
-  );
+  // === HOOKS ===
+  // 1. New Income Manager (The SSOT for Income)
+  const {
+    selectedPeriod: hookPeriod,
+    monthData: hookMonthData,
+    totals: hookTotals,
+    loading: hookLoading,
+    actions: hookActions
+  } = useIncomeManager();
 
-  const extraIncomes = useMemo(() =>
-    incomeTransactions.filter(t => !t.isRecurring),
-    [incomeTransactions]
-  );
+  // Parse hook period back to date for display
+  const [pYear, pMonth] = hookPeriod.split('-').map(Number);
+  const periodDate = new Date(pYear, pMonth - 1, 1);
 
-  // Calcular totales del mes actual
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
+  // 2. Budget Period (For Expenses/Budget Context)
+  // We pass the Hook's INCOME TOTAL to useBudgetPeriod to get the correct Surplus/Gap
+  const periodData = useBudgetPeriod(budgets, transactions, {
+    year: pYear,
+    month: pMonth - 1,
+    period: 'monthly',
+    externalIncomeTotal: hookTotals.received // SSOT!
+  });
 
-  const thisMonthIncome = useMemo(() => {
-    return incomeTransactions
-      .filter(t => {
-        const date = parseLocalDate(t.date);
-        return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-      })
-      .reduce((sum, t) => sum + convertAmount(t.amount), 0);
-  }, [incomeTransactions, currentMonth, currentYear, convertAmount]);
+  // === MODAL STATE ===
+  const [showAddModal, setShowAddModal] = useState<'fixed' | 'extra' | null>(null);
+  const [editingExtraId, setEditingExtraId] = useState<string | null>(null);
+  const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
+  const [tempAmount, setTempAmount] = useState('');
 
-  // Calcular promedio mensual (últimos 6 meses)
-  const averageMonthlyIncome = useMemo(() => {
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  // Quick Filter for Fixed Items (Parity with Expenses)
+  const [filter, setFilter] = useState<'all' | 'pending'>('all');
 
-    const recentIncomes = incomeTransactions.filter(t => parseLocalDate(t.date) >= sixMonthsAgo);
-    const monthsCount = Math.min(6, new Date().getMonth() + 1);
+  // Filter the items
+  const filteredFixedItems = useMemo(() => {
+    if (!hookMonthData?.fixedItems) return [];
+    if (filter === 'all') return hookMonthData.fixedItems;
+    return hookMonthData.fixedItems.filter(i => i.status !== 'received');
+  }, [hookMonthData, filter]);
 
-    return recentIncomes.reduce((sum, t) => sum + convertAmount(t.amount), 0) / (monthsCount || 1);
-  }, [incomeTransactions, convertAmount]);
+  // === HANDLERS ===
+  const handlePrevMonth = () => hookActions.changePeriod(-1);
+  const handleNextMonth = () => hookActions.changePeriod(1);
 
-  // Calculate Deep Health Metrics
-  const financialHealthMetrics = useMemo(() => {
-    return calculateFinancialHealthMetrics(
-      transactions,
-      stats.balance,
-      budgetPeriodData.incomeTotal,
-      budgetPeriodData.expensesTotal
-    );
-  }, [transactions, stats.balance, budgetPeriodData.incomeTotal, budgetPeriodData.expensesTotal]);
+  const handleSaveIncome = async (data: any) => {
+    // data comes from ActionModal
+    if (showAddModal === 'fixed') {
+      await hookActions.saveFixedTemplate({
+        id: 'temp_' + Date.now(), // Service replaces this
+        name: data.description,
+        defaultAmount: data.amount,
+        active: true,
+        frequency: data.frequency || 'monthly',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
+      // Refresh handled by action
 
-  const formatCurrency = formatAmount;
+    } else if (showAddModal === 'extra') {
+      if (editingExtraId) {
+        await hookActions.addExtra(data.description, data.amount); // Fallback
+        if (editingExtraId) await hookActions.deleteExtra(editingExtraId);
+      } else {
+        await hookActions.addExtra(data.description, data.amount);
+      }
+    }
 
-  const formatDate = (dateStr: string) => {
-    const date = parseLocalDate(dateStr);
-    const locale = language === 'es' ? 'es-ES' : 'en-US';
-    return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' });
-  };
-
-  const getFrequencyLabel = (frequency?: string) => {
-    const labels: Record<string, string> = {
-      'weekly': 'Semanal',
-      'biweekly': 'Quincenal',
-      'monthly': 'Mensual',
-      'yearly': 'Anual'
-    };
-    return labels[frequency || 'monthly'] || 'Mensual';
+    setShowAddModal(null);
+    setEditingExtraId(null);
   };
 
   return (
-    <div className="flex-1 overflow-y-auto pb-20">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 dark:from-emerald-600 dark:to-emerald-700 p-4 sm:p-6 pb-6 sm:pb-8">
-        <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2 flex items-center gap-2">
-          <ArrowUpRight className="w-6 h-6 sm:w-7 sm:h-7" />
-          Mis Ingresos
-        </h1>
-        <p className="text-emerald-100 text-xs sm:text-sm">Gestiona tu dinero que entra</p>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="px-3 sm:px-4 -mt-5 sm:-mt-6 mb-4 sm:mb-6">
-        <div className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-5 space-y-3 sm:space-y-4">
-          {/* Este Mes */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                Este Mes
-              </span>
-              <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
+    <div className="pb-20">
+      {/* 1. STICKY HEADER (Design System Aligned) */}
+      <div className="bg-white dark:bg-slate-800 pb-6 pt-2 px-4 shadow-sm sticky top-0 z-10 transition-colors">
+        <div className="flex items-center justify-between mb-4 h-[40px]">
+          <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-xl">
+              <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-              {formatAmount(thisMonthIncome)}
-            </div>
-          </div>
-
-          {/* Promedio */}
-          <div className="pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-700">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">
-                Promedio Mensual (6 meses)
-              </span>
-              <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200">
-                {formatCurrency(averageMonthlyIncome)}
-              </span>
-            </div>
-          </div>
+            Mis Ingresos
+          </h1>
         </div>
-      </div>
 
-      {/* Action Buttons */}
-      <div className="px-3 sm:px-4 mb-4 sm:mb-6 grid grid-cols-2 gap-2 sm:gap-3">
-        <button
-          onClick={onAddFixedIncome}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl transition-colors shadow-lg shadow-emerald-200 dark:shadow-none"
-        >
-          <Briefcase className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="text-xs sm:text-sm">Ingreso Fijo</span>
-        </button>
-        <button
-          onClick={onAddExtraIncome}
-          className="flex items-center justify-center gap-1.5 sm:gap-2 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg sm:rounded-xl transition-colors shadow-lg shadow-amber-200 dark:shadow-none"
-        >
-          <Zap className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="text-xs sm:text-sm">Ingreso Extra</span>
-        </button>
-      </div>
-
-      {/* Financial Health Card - Compact by default */}
-      <FinancialHealthCard
-        budgetPeriodData={budgetPeriodData}
-        financialHealthMetrics={financialHealthMetrics}
-        language={language}
-        onManageSurplus={hasSurplus ? () => setShowSurplusView(true) : undefined}
-      />
-
-      {/* Fixed Incomes Section */}
-      <div className="px-3 sm:px-4 mb-4 sm:mb-6">
-        <div className="flex items-center justify-between mb-2 sm:mb-3">
-          <h2 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-            Ingresos Fijos (Recurrentes)
-          </h2>
-          <span className="text-[10px] sm:text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 sm:py-1 rounded-full">
-            {fixedIncomes.length}
+        {/* Period Selector */}
+        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1">
+          <button onClick={handlePrevMonth} className="p-1 hover:bg-white dark:hover:bg-slate-600 rounded-md transition-colors">
+            <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          </button>
+          <span className="font-bold text-slate-700 dark:text-slate-200 capitalize">
+            {(() => {
+              const date = new Date(pYear, pMonth - 1, 1);
+              return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+            })()}
           </span>
+          <button onClick={handleNextMonth} className="p-1 hover:bg-white dark:hover:bg-slate-600 rounded-md transition-colors">
+            <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          </button>
         </div>
+      </div>
 
-        {fixedIncomes.length === 0 ? (
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl p-4 sm:p-6 text-center">
-            <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 text-slate-300 dark:text-slate-600" />
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-1 sm:mb-2">
-              No tienes ingresos fijos registrados
-            </p>
-            <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">
-              Los ingresos fijos se registran automáticamente cada mes
-            </p>
+      {/* 2. MAIN STATE CARD (Financial Health) */}
+      <div className="px-4 mt-4">
+        <div className={`relative overflow-hidden rounded-2xl p-5 text-white shadow-lg transition-colors ${periodData.incomeSurplus >= 0
+            ? 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-200 dark:shadow-none'
+            : 'bg-gradient-to-br from-yellow-500 to-amber-600 shadow-yellow-200 dark:shadow-none'
+          }`}>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <div className="flex items-center gap-1 group relative cursor-help">
+                <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-1">
+                  Margen Disponible (Mes)
+                </p>
+                <Info className="w-3 h-3 text-white/70" />
+                {/* Tooltip */}
+                <div className="absolute left-0 top-6 w-56 p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 text-xs rounded-lg shadow-xl border border-slate-100 dark:border-slate-600 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                  Este valor es un indicador del mes y no representa el saldo real en cuentas.
+                </div>
+              </div>
+              <h3 className="text-3xl font-extrabold tracking-tight">
+                {formatCurrency(periodData.incomeSurplus, currencyCode)}
+              </h3>
+            </div>
+
+            <div className="text-right">
+              <p className="text-white/80 text-[10px] font-bold uppercase tracking-wider mb-1">
+                Ingresos Recibidos
+              </p>
+              <div className="text-xl font-bold text-white/90">
+                {formatCurrency(hookTotals.received, currencyCode)}
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-2 sm:space-y-3">
-            {fixedIncomes.map(income => (
+
+          {/* Progress Bar */}
+          <div className="mb-3 relative">
+            <div className="h-2.5 bg-black/20 rounded-full overflow-hidden backdrop-blur-sm">
               <div
-                key={income.id}
-                className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-700 shadow-sm relative"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
-                      <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
-                      <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                        {income.description}
-                      </h3>
-                    </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
-                      <Calendar className="w-3 h-3" />
-                      <span>{getFrequencyLabel(income.frequency)}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <div className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400">
-                        {formatCurrency(income.amount)}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenu(activeMenu === income.id ? null : income.id);
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                className="h-full transition-all duration-300 shadow-sm bg-white/90"
+                style={{ width: `${Math.min((hookTotals.received / periodData.budgetTotal) * 100, 100)}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] sm:text-xs font-medium text-white/80">
+            <span>
+              {periodData.incomeSurplus >= 0
+                ? `Margen libre: ${formatCurrency(periodData.incomeSurplus, currencyCode)}`
+                : `Déficit: ${formatCurrency(Math.abs(periodData.incomeSurplus), currencyCode)}`
+              }
+            </span>
+            <span>
+              {hookTotals.pending > 0 && `Pendiente: ${formatCurrency(hookTotals.pending, currencyCode)}`}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-6 space-y-8 max-w-3xl mx-auto">
+
+        {/* SECTION 1: FIXED INCOMES */}
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-800 dark:text-white leading-none">Ingresos Fijos</h3>
+                <div className="flex items-center gap-1 mt-1 group relative cursor-help">
+                  <Info className="w-3 h-3 text-indigo-500" />
+                  <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 border-b border-dotted border-slate-400">
+                    Ayuda: Estados
+                  </p>
+                  {/* Tooltip for Status Help */}
+                  <div className="absolute left-0 top-6 w-56 p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-200 text-xs rounded-lg shadow-xl border border-slate-100 dark:border-slate-600 z-20 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+                    Haz clic en el botón de estado (Pendiente/Pagado) para marcar el ingreso. Solo los ingresos pagados suman al total del mes.
                   </div>
                 </div>
-
-                {/* Dropdown Menu */}
-                {activeMenu === income.id && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setActiveMenu(null)}
-                    />
-                    <div className="absolute right-3 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden min-w-[140px]">
-                      <button
-                        onClick={() => {
-                          onEditTransaction(income);
-                          setActiveMenu(null);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4 text-indigo-500" />
-                        {language === 'es' ? 'Editar' : 'Edit'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDeleteConfirm({
-                            id: income.id,
-                            name: income.description,
-                            type: 'fixed'
-                          });
-                          setActiveMenu(null);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        {language === 'es' ? 'Eliminar' : 'Delete'}
-                      </button>
-                    </div>
-                  </>
-                )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
 
-      {/* Extra Incomes Section */}
-      <div className="px-3 sm:px-4 mb-4 sm:mb-6">
-        <div className="flex items-center justify-between mb-2 sm:mb-3">
-          <h2 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-            Ingresos Variables (Extras)
-          </h2>
-          <span className="text-[10px] sm:text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 sm:py-1 rounded-full">
-            {extraIncomes.length}
-          </span>
-        </div>
-
-        {extraIncomes.length === 0 ? (
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-lg sm:rounded-xl p-4 sm:p-6 text-center">
-            <Zap className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 text-slate-300 dark:text-slate-600" />
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-1 sm:mb-2">
-              No tienes ingresos extras registrados
-            </p>
-            <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500">
-              Freelance, bonos, ventas, etc.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2 sm:space-y-3">
-            {extraIncomes.slice(0, 10).map(income => (
-              <div
-                key={income.id}
-                className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-100 dark:border-slate-700 shadow-sm relative"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
-                      <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
-                      <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                        {income.description}
-                      </h3>
-                    </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
-                      <Calendar className="w-3 h-3" />
-                      <span>{formatDate(income.date)}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      <div className="text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400">
-                        {formatCurrency(income.amount)}
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenu(activeMenu === income.id ? null : income.id);
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Dropdown Menu */}
-                {activeMenu === income.id && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setActiveMenu(null)}
-                    />
-                    <div className="absolute right-3 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden min-w-[140px]">
-                      <button
-                        onClick={() => {
-                          onEditTransaction(income);
-                          setActiveMenu(null);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4 text-indigo-500" />
-                        {language === 'es' ? 'Editar' : 'Edit'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setDeleteConfirm({
-                            id: income.id,
-                            name: income.description,
-                            type: 'extra'
-                          });
-                          setActiveMenu(null);
-                        }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        {language === 'es' ? 'Eliminar' : 'Delete'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-
-            {extraIncomes.length > 10 && (
-              <div className="text-center pt-1 sm:pt-2">
-                <button className="text-[10px] sm:text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
-                  {language === 'es' ? 'Ver todos' : 'See all'} ({extraIncomes.length})
+            <div className="flex items-center gap-2">
+              {/* Quick Filter Pills */}
+              <div className="flex bg-slate-100 dark:bg-slate-700/50 p-1 rounded-lg">
+                <button
+                  onClick={() => setFilter('all')}
+                  className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all ${filter === 'all'
+                    ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+                    }`}
+                >
+                  Todos
                 </button>
+                <button
+                  onClick={() => setFilter('pending')}
+                  className={`px-3 py-1 rounded-md text-[10px] sm:text-xs font-bold transition-all ${filter === 'pending'
+                    ? 'bg-white dark:bg-slate-600 text-indigo-600 dark:text-indigo-400 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-700'
+                    }`}
+                >
+                  Pendientes
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowAddModal('fixed')}
+                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 rounded-full hover:bg-indigo-100 transition-colors"
+                title="Nuevo Ingreso Fijo"
+              >
+                + Nuevo
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {filteredFixedItems.map(item => {
+              const isEditing = editingAmountId === item.id;
+
+              return (
+                <div key={item.id} className={`p-4 rounded-2xl border transition-all ${item.status === 'received'
+                  ? 'bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-800/50'
+                  : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                  }`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+
+                    {/* Left: Info & Amount */}
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between sm:justify-start gap-2 mb-1">
+                        <h4 className={`font-bold text-lg ${item.status === 'received' ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-700 dark:text-slate-200'}`}>
+                          {item.nameSnapshot}
+                        </h4>
+                        {!isEditing && (
+                          <button
+                            onClick={() => {
+                              setEditingAmountId(item.id);
+                              setTempAmount(item.amount.toString());
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors"
+                            title="Editar monto"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                          <div className="relative">
+                            <span className="absolute left-2 top-1.5 text-slate-400 text-xs">$</span>
+                            <input
+                              type="number"
+                              value={tempAmount}
+                              onChange={(e) => setTempAmount(e.target.value)}
+                              className="w-24 pl-5 py-1 text-sm font-bold border rounded-lg outline-none focus:ring-2 ring-indigo-500 dark:bg-slate-700 dark:border-slate-600"
+                              autoFocus
+                            />
+                          </div>
+                          <button
+                            onClick={() => {
+                              const val = parseFloat(tempAmount);
+                              if (!isNaN(val)) {
+                                hookActions.updateFixedAmount(item.id, val, false);
+                              }
+                              setEditingAmountId(null);
+                            }}
+                            className="p-1.5 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setEditingAmountId(null)}
+                            className="p-1.5 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className={`text-2xl font-bold tracking-tight ${item.status === 'received' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                            {formatCurrency(item.amount, currencyCode)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right: Status Button (Big & Interactive) */}
+                    <button
+                      onClick={() => hookActions.toggleFixedStatus(item)}
+                      className={`group relative overflow-hidden flex items-center gap-3 px-5 py-3 rounded-xl border-2 transition-all duration-200 ${item.status === 'received'
+                        ? 'bg-emerald-100/50 dark:bg-emerald-900/30 border-emerald-500 dark:border-emerald-500/50 text-emerald-800 dark:text-emerald-200 hover:bg-emerald-200/50'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-indigo-300 hover:bg-white dark:hover:bg-slate-700'
+                        }`}
+                    >
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors ${item.status === 'received'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-700'
+                        }`}>
+                        {item.status === 'received' ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                      </div>
+
+                      <div className="flex flex-col items-start min-w-[80px]">
+                        <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">
+                          Estado
+                        </span>
+                        <span className={`text-sm font-bold ${item.status === 'received' ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-700 dark:text-slate-300'}`}>
+                          {item.status === 'received' ? 'Pagado' : 'Pendiente'}
+                        </span>
+                      </div>
+
+                      {/* Hover Effect Hint */}
+                      <div className="absolute inset-0 bg-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                    </button>
+
+                  </div>
+                </div>
+              );
+            })}
+
+            {(!filteredFixedItems || filteredFixedItems.length === 0) && (
+              <div className="text-center p-8 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                <p className="text-slate-400 text-sm">No tienes ingresos fijos configurados.</p>
               </div>
             )}
           </div>
-        )}
+        </div>
+
+        {/* SECTION 2: EXTRA INCOMES */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-amber-100 dark:bg-amber-900/30 rounded-lg text-amber-600 dark:text-amber-400">
+                <DollarSign className="w-4 h-4" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 dark:text-white">Ingresos Extras</h3>
+            </div>
+            <button
+              onClick={() => setShowAddModal('extra')}
+              className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-1.5 rounded-full hover:bg-amber-100 transition-colors"
+            >
+              + Agregar Extra
+            </button>
+          </div>
+
+          <div className="grid gap-3">
+            {hookMonthData?.extras.map(item => (
+              <div key={item.id} className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 flex justify-between items-center group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-500 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-white">{item.description}</h4>
+                    <span className="text-xs text-slate-400">{new Date(item.date).toLocaleDateString()}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.amount, currencyCode)}</span>
+                  <button
+                    onClick={() => hookActions.deleteExtra(item.id)}
+                    className="p-2 bg-slate-50 dark:bg-slate-700 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors opacity-0 group-hover:opacity-100"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {(!hookMonthData?.extras || hookMonthData.extras.length === 0) && (
+              <div className="text-center p-8 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                <p className="text-slate-400 text-sm">No hay ingresos extras este mes.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Surplus Distribution View */}
-      {showSurplusView && (
-        <SurplusDistributionView
-          budgetPeriodData={budgetPeriodData}
-          language={language}
-          onBack={() => setShowSurplusView(false)}
-          onGoalsCreated={onGoalsCreated}
-        />
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <ModalWrapper isOpen={true} onClose={() => setDeleteConfirm(null)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-                <Trash2 className="w-7 h-7 text-rose-600 dark:text-rose-400" />
-              </div>
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">
-              {language === 'es'
-                ? `¿Eliminar ingreso ${deleteConfirm.type === 'fixed' ? 'fijo' : 'extra'}?`
-                : `Delete ${deleteConfirm.type === 'fixed' ? 'fixed' : 'extra'} income?`}
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-2">
-              {language === 'es'
-                ? '¿Estás seguro de que deseas eliminar este ingreso?'
-                : 'Are you sure you want to delete this income?'}
-            </p>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center mb-6 bg-slate-100 dark:bg-slate-700/50 rounded-lg py-2 px-3">
-              "{deleteConfirm.name}"
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="flex-1 py-2.5 px-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-              >
-                {language === 'es' ? 'Cancelar' : 'Cancel'}
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteTransaction(deleteConfirm.id);
-                  setDeleteConfirm(null);
-                }}
-                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl transition-colors"
-              >
-                {language === 'es' ? 'Eliminar' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </ModalWrapper>
-      )}
-    </div>
+      {/* ADD MODAL */}
+      {
+        showAddModal && (
+          <ActionModal
+            mode="income"
+            onClose={() => setShowAddModal(null)}
+            onSave={handleSaveIncome}
+            initialValues={{}}
+          />
+        )
+      }
+    </div >
   );
 };

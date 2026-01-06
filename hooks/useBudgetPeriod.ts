@@ -43,6 +43,7 @@ interface UseBudgetPeriodOptions {
   year?: number;
   month?: number; // 0-indexed (0 = January)
   period?: 'monthly' | 'yearly';
+  externalIncomeTotal?: number; // Override for SSOT from IncomeService
 }
 
 /**
@@ -100,8 +101,13 @@ export const useBudgetPeriod = (
     const remainingPercentage = budgetTotal > 0 ? (spentBudgeted / budgetTotal) * 100 : 0;
 
     // 7. Calculate income for the period
-    const incomes = periodTransactions.filter(t => t.type === 'income');
-    const incomeTotal = incomes.reduce((sum, t) => sum + t.amount, 0);
+    let incomeTotal: number;
+    if (options.externalIncomeTotal !== undefined) {
+      incomeTotal = options.externalIncomeTotal;
+    } else {
+      const incomes = periodTransactions.filter(t => t.type === 'income');
+      incomeTotal = incomes.reduce((sum, t) => sum + t.amount, 0);
+    }
 
     // 8. Income vs Budget validation
     const incomeSurplus = incomeTotal - budgetTotal;

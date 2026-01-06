@@ -23,7 +23,7 @@ const ICON_LIST = [
   // Education & Work
   'GraduationCap', 'Book', 'BookOpen', 'Briefcase', 'FileText', 'Pencil', 'Calculator',
   // Family & Social
-  'Users', 'Baby', 'Dog', 'Cat', 'Heart', 'Gift', 'Cake',
+  'Users', 'Baby', 'Dog', 'Cat', 'Cake',
   // Other
   'Star', 'Shield', 'Trophy', 'Target', 'Flag', 'Clock', 'Calendar', 'Bell', 'AlertCircle', 'HelpCircle'
 ];
@@ -70,7 +70,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'icons' | 'colors'>('icons');
 
-  const filteredIcons = ICON_LIST.filter(icon => 
+  const filteredIcons = ICON_LIST.filter(icon =>
     icon.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -85,7 +85,7 @@ export const IconPicker: React.FC<IconPickerProps> = ({
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
           <h3 className="font-bold text-lg text-slate-800 dark:text-white">Personalizar Categoría</h3>
@@ -107,21 +107,19 @@ export const IconPicker: React.FC<IconPickerProps> = ({
         <div className="flex gap-2 px-4">
           <button
             onClick={() => setActiveTab('icons')}
-            className={`flex-1 py-2 rounded-xl font-semibold text-sm transition-all ${
-              activeTab === 'icons'
+            className={`flex-1 py-2 rounded-xl font-semibold text-sm transition-all ${activeTab === 'icons'
                 ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-            }`}
+              }`}
           >
             Iconos
           </button>
           <button
             onClick={() => setActiveTab('colors')}
-            className={`flex-1 py-2 rounded-xl font-semibold text-sm transition-all ${
-              activeTab === 'colors'
+            className={`flex-1 py-2 rounded-xl font-semibold text-sm transition-all ${activeTab === 'colors'
                 ? 'bg-slate-800 dark:bg-white text-white dark:text-slate-900'
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-            }`}
+              }`}
           >
             Colores
           </button>
@@ -149,11 +147,10 @@ export const IconPicker: React.FC<IconPickerProps> = ({
                   <button
                     key={iconName}
                     onClick={() => onIconChange(iconName)}
-                    className={`p-2.5 rounded-xl transition-all ${
-                      selectedIcon === iconName
+                    className={`p-2.5 rounded-xl transition-all ${selectedIcon === iconName
                         ? `${colorClasses.bg} ${colorClasses.text} ring-2 ${colorClasses.ring}`
                         : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
+                      }`}
                     title={iconName}
                   >
                     {renderIcon(iconName)}
@@ -169,11 +166,10 @@ export const IconPicker: React.FC<IconPickerProps> = ({
                 <button
                   key={color.name}
                   onClick={() => onColorChange(color.name)}
-                  className={`p-4 rounded-xl transition-all ${color.bg} ${
-                    selectedColor === color.name
+                  className={`p-4 rounded-xl transition-all ${color.bg} ${selectedColor === color.name
                       ? `ring-2 ${color.ring} ring-offset-2 dark:ring-offset-slate-900`
                       : 'hover:scale-105'
-                  }`}
+                    }`}
                 >
                   <div className={`w-6 h-6 mx-auto rounded-full ${color.text}`}>
                     {renderIcon(selectedIcon)}

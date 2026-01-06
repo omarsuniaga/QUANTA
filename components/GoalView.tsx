@@ -22,13 +22,22 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
   onSave,
   onDelete
 }) => {
-  const { formatAmount, fromBase, toBase, currencySymbol } = useCurrency();
+  const { formatAmount, fromBase, toBase, parseAmount, currencySymbol } = useCurrency();
   const { t, language } = useI18n();
-  const [editingGoal, setEditingGoal] = useState<Goal>({ ...goal });
+  const [editingGoal, setEditingGoal] = useState<Goal>(goal ? { ...goal } : {
+    id: Math.random().toString(36).substring(2, 9),
+    name: '',
+    targetAmount: 0,
+    currentAmount: 0,
+    icon: 'target',
+    color: 'indigo',
+    autoDeduct: true,
+    contributionFrequency: 'monthly'
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [targetMonths, setTargetMonths] = useState<string>('');
   const [calculationMode, setCalculationMode] = useState<'monthly' | 'targetDate'>(
-    goal.targetDate ? 'targetDate' : 'monthly'
+    goal?.targetDate ? 'targetDate' : 'monthly'
   );
 
   // Initialize targetMonths from goal's targetDate
@@ -118,7 +127,7 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
     return icons[iconName] || Target;
   };
 
-  const Icon = getIconComponent(goal.icon || 'target');
+  const Icon = getIconComponent(goal?.icon || 'target');
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 overflow-hidden">
@@ -226,7 +235,7 @@ export const GoalView: React.FC<GoalViewProps> = memo(({
                 <input
                   type="number"
                   value={fromBase(editingGoal.targetAmount)}
-                  onChange={(e) => setEditingGoal({ ...editingGoal, targetAmount: toBase(parseFloat(e.target.value) || 0) })}
+                  onChange={(e) => setEditingGoal({ ...editingGoal, targetAmount: toBase(parseAmount(e.target.value)) })}
                   className="w-24 text-right font-bold text-slate-800 dark:text-white bg-transparent border-b-2 border-slate-100 focus:border-indigo-500 transition-colors focus:outline-none"
                 />
               </div>

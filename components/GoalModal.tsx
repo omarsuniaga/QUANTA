@@ -40,7 +40,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
   availableBalance = 0
 }) => {
   const { t, language } = useI18n();
-  const { formatAmount, currencySymbol } = useCurrency();
+  const { formatAmount, currencySymbol, parseAmount } = useCurrency();
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -90,20 +90,20 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
 
   // Calculate remaining amount
   const remainingAmount = useMemo(() => {
-    const targetNum = parseFloat(target) || 0;
-    const currentNum = parseFloat(current) || 0;
+    const targetNum = parseAmount(target) || 0;
+    const currentNum = parseAmount(current) || 0;
     return Math.max(0, targetNum - currentNum);
-  }, [target, current]);
+  }, [target, current, parseAmount]);
 
   // Calculate time to reach goal (in months)
   const calculatedTime = useMemo(() => {
-    const contribution = parseFloat(contributionAmount) || 0;
+    const contribution = parseAmount(contributionAmount) || 0;
     if (contribution <= 0 || remainingAmount <= 0) return null;
 
     const monthlyContribution = contribution * getFrequencyMultiplier(contributionFrequency);
     const months = remainingAmount / monthlyContribution;
     return Math.ceil(months);
-  }, [contributionAmount, contributionFrequency, remainingAmount]);
+  }, [contributionAmount, contributionFrequency, remainingAmount, getFrequencyMultiplier, parseAmount]);
 
   // Calculate required contribution to reach goal in target time
   const calculatedContribution = useMemo(() => {
@@ -135,15 +135,15 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
 
   // Check if contribution is feasible with available balance
   const isFeasible = useMemo(() => {
-    const contribution = parseFloat(contributionAmount) || 0;
+    const contribution = parseAmount(contributionAmount) || 0;
     return contribution <= availableBalance;
-  }, [contributionAmount, availableBalance]);
+  }, [contributionAmount, availableBalance, parseAmount]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
 
     const finalContribution = calculationMode === 'time'
-      ? parseFloat(contributionAmount) || 0
+      ? parseAmount(contributionAmount) || 0
       : calculatedContribution || 0;
 
     const finalTargetDate = calculationMode === 'amount'
@@ -155,8 +155,8 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
     onSave({
       id: goal?.id || Math.random().toString(36).substr(2, 9),
       name,
-      targetAmount: parseFloat(target) || 0,
-      currentAmount: parseFloat(current) || 0,
+      targetAmount: parseAmount(target) || 0,
+      currentAmount: parseAmount(current) || 0,
       icon,
       color,
       contributionAmount: finalContribution,
@@ -166,7 +166,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
       autoDeduct,
     });
     onClose();
-  }, [calculationMode, contributionAmount, calculatedContribution, targetMonths, calculatedTime, goal, name, target, current, icon, color, contributionFrequency, autoDeduct, onSave, onClose, getTargetDateFromMonths]);
+  }, [calculationMode, contributionAmount, calculatedContribution, targetMonths, calculatedTime, goal, name, target, current, icon, color, contributionFrequency, autoDeduct, onSave, onClose, getTargetDateFromMonths, parseAmount]);
 
   const handleDelete = useCallback(() => {
     const confirmMsg = language === 'es' ? '¿Eliminar esta meta?' : 'Delete this goal?';
@@ -250,7 +250,7 @@ const GoalModalComponent: React.FC<GoalModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-5 pb-4">
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5 pb-4">
           {/* Goal Name */}
           <div>
             <label className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 sm:mb-1.5 block">

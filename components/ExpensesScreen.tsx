@@ -2,18 +2,20 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowDownRight, Zap, Calendar, AlertCircle, Coffee, ShoppingBag, Car, Home,
   Bell, Clock, Edit3, Trash2, Filter, Check, X, ChevronDown, ChevronUp,
-  CreditCard, AlertTriangle, CalendarClock, History, Banknote, MoreVertical, Info
+  CreditCard, AlertTriangle, CalendarClock, History, Banknote, MoreVertical,
+  Info, ChevronLeft, ChevronRight, CheckCircle, Smartphone
 } from 'lucide-react';
 import { Transaction, CustomCategory } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useI18n } from '../contexts/I18nContext';
+import { useToast } from '../contexts/ToastContext';
 import { storageService } from '../services/storageService';
-import { smartNotificationService } from '../services/smartNotificationService';
 import { parseLocalDate } from '../utils/dateHelpers';
 import { AmountInfoModal, AmountBreakdownItem } from './AmountInfoModal';
 import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { ModalWrapper } from './ModalWrapper';
 import { useCurrency } from '../hooks/useCurrency';
+import { useExpenseManager } from '../hooks/useExpenseManager';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
@@ -27,41 +29,35 @@ interface ExpensesScreenProps {
   onPaymentConfirmed?: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => Promise<void>;
 }
 
-type FilterType = 'all' | 'quick' | 'recurring' | 'planned';
-type SortOrder = 'newest' | 'oldest' | 'highest' | 'lowest';
-
-interface PendingPayment {
-  id: string;
-  transaction: Transaction;
-  dueDate: Date;
-  daysUntilDue: number;
-  status: 'pending' | 'paid' | 'postponed' | 'rejected';
-}
+type FilterType = 'all' | 'pending' | 'paid' | 'skipped';
 
 export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   transactions,
   budgetPeriodData,
   onQuickExpense,
   onRecurringExpense,
-  onPlannedExpense,
   onEditTransaction,
   onDeleteTransaction,
-  onUpdateTransaction,
-  onPaymentConfirmed
 }) => {
-  const { settings } = useSettings();
   const { t, language } = useI18n();
-  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
+  const { formatAmount, convertAmount } = useCurrency();
+  const formatCurrency = formatAmount;
+  const toast = useToast();
+
+  const [currentPeriod, setCurrentPeriod] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  const { monthlyDoc, loading: managerLoading, actions: expenseActions, totals } = useExpenseManager(currentPeriod);
+
   const [filter, setFilter] = useState<FilterType>('all');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
-  const [showFilters, setShowFilters] = useState(false);
-  const [pendingPayments, setPendingPayments] = useState<Map<string, 'paid' | 'postponed' | 'rejected'>>(new Map());
-  const [expandedSection, setExpandedSection] = useState<'pending' | 'history' | null>('pending');
-  const [activeMenu, setActiveMenu] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
-  const [showCategoryBreakdown, setShowCategoryBreakdown] = useState(false);
-  const [showMonthExpenseInfo, setShowMonthExpenseInfo] = useState(false);
+  const [customCategories, setCustomCategories] = useState<CustomCategory[]>([]);
   const [showBudgetInfo, setShowBudgetInfo] = useState(false);
+  const [showMonthExpenseInfo, setShowMonthExpenseInfo] = useState(false);
+  const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
+  const [tempAmount, setTempAmount] = useState<string>('');
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null); // NEW: for dropdown menu
 
   // Load custom categories
   useEffect(() => {
@@ -71,993 +67,504 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   // Helper to get category display name
   const getCategoryName = (categoryId: string): string => {
     if (categoryId === 'express') return 'Express';
-
     const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
     if (customCat) {
       return customCat.name[language as 'es' | 'en'] || customCat.name.es || customCat.name.en || customCat.key || (language === 'es' ? 'Sin categoría' : 'No category');
     }
-
     const translated = (t.categories as Record<string, string>)?.[categoryId];
     if (translated && translated !== categoryId) return translated;
-
-    // If no translation or it's an ID (long string), return generic name
     return language === 'es' ? 'Otra categoría' : 'Other category';
   };
 
-  // Filter only expenses
-  const expenses = useMemo(() =>
-    transactions.filter(t => t.type === 'expense'),
-    [transactions]
-  );
-
-  // Current month expenses total
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
-
-  const { formatAmount, convertAmount } = useCurrency();
-  const formatCurrency = formatAmount;
-
-  const thisMonthExpenses = useMemo(() => {
-    return expenses
-      .filter(t => {
-        const date = parseLocalDate(t.date);
-        return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-      })
-      .reduce((sum, t) => sum + t.amount, 0);
-  }, [expenses, currentMonth, currentYear]);
-
-  // Category breakdown for current month
-  const categoryBreakdown = useMemo(() => {
-    const currentMonthExpenses = expenses.filter(t => {
-      const date = parseLocalDate(t.date);
-      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    });
-
-    const breakdown: { category: string; amount: number; count: number }[] = [];
-    const categoryMap = new Map<string, { amount: number; count: number }>();
-
-    currentMonthExpenses.forEach(expense => {
-      const existing = categoryMap.get(expense.category) || { amount: 0, count: 0 };
-      categoryMap.set(expense.category, {
-        amount: existing.amount + expense.amount,
-        count: existing.count + 1
-      });
-    });
-
-    categoryMap.forEach((data, category) => {
-      breakdown.push({ category, amount: data.amount, count: data.count });
-    });
-
-    // Sort by amount descending
-    return breakdown.sort((a, b) => b.amount - a.amount);
-  }, [expenses, currentMonth, currentYear]);
-
-  // Budget calculations from centralized hook (Single Source of Truth)
-  const {
-    budgetTotal,
-    spentBudgeted,
-    spentUnbudgeted,
-    expensesTotal,
-    remaining,
-    remainingPercentage,
-    incomeTotal,
-    incomeSurplus,
-    hasIncomeBudgetGap
-  } = budgetPeriodData;
-
-  const budgetUsedPercent = remainingPercentage;
-  const budgetRemaining = remaining;
-
-  // Month expense breakdown for info modal
-  const monthExpenseBreakdown = useMemo((): AmountBreakdownItem[] => {
-    const breakdown: AmountBreakdownItem[] = [];
-
-    // Group by category for top 5
-    categoryBreakdown.slice(0, 5).forEach(item => {
-      const categoryName = getCategoryName(item.category);
-      const percentage = thisMonthExpenses > 0 ? (item.amount / thisMonthExpenses) * 100 : 0;
-
-      breakdown.push({
-        label: categoryName,
-        amount: item.amount,
-        type: 'subtraction',
-        icon: 'expense',
-        description: language === 'es'
-          ? `${item.count} gasto(s) - ${percentage.toFixed(1)}% del total`
-          : `${item.count} expense(s) - ${percentage.toFixed(1)}% of total`
-      });
-    });
-
-    // Add recurring expenses info
-    const recurringExpenses = expenses.filter(t => {
-      const date = parseLocalDate(t.date);
-      return t.isRecurring && date.getMonth() === currentMonth && date.getFullYear() === currentYear;
-    });
-
-    if (recurringExpenses.length > 0) {
-      const recurringTotal = recurringExpenses.reduce((sum, t) => sum + t.amount, 0);
-      breakdown.push({
-        label: language === 'es' ? 'Gastos Recurrentes' : 'Recurring Expenses',
-        amount: recurringTotal,
-        type: 'neutral',
-        icon: 'recurring',
-        description: language === 'es'
-          ? `${recurringExpenses.length} gasto(s) recurrente(s) este mes`
-          : `${recurringExpenses.length} recurring expense(s) this month`
-      });
-    }
-
-    return breakdown;
-  }, [categoryBreakdown, thisMonthExpenses, expenses, currentMonth, currentYear, language, getCategoryName, convertAmount]);
-
-  // Budget breakdown for info modal
-  const budgetBreakdown = useMemo((): AmountBreakdownItem[] => {
-    const breakdown: AmountBreakdownItem[] = [];
-
-    breakdown.push({
-      label: language === 'es' ? 'Presupuesto Total' : 'Total Budget',
-      amount: budgetTotal,
-      type: 'neutral',
-      icon: 'info',
-      description: language === 'es'
-        ? 'Suma de todos los presupuestos activos definidos en Presupuestos'
-        : 'Sum of all active budgets defined in Budgets'
-    });
-
-    breakdown.push({
-      label: language === 'es' ? 'Gastado Dentro de Presupuesto' : 'Spent Within Budget',
-      amount: spentBudgeted,
-      type: 'subtraction',
-      icon: 'expense',
-      description: language === 'es'
-        ? `Gastos vinculados a categorías presupuestadas - ${budgetUsedPercent.toFixed(1)}% del presupuesto`
-        : `Expenses linked to budgeted categories - ${budgetUsedPercent.toFixed(1)}% of budget`
-    });
-
-    if (spentUnbudgeted > 0) {
-      breakdown.push({
-        label: language === 'es' ? 'Gastado Fuera de Presupuesto' : 'Spent Outside Budget',
-        amount: spentUnbudgeted,
-        type: 'subtraction',
-        icon: 'info',
-        description: language === 'es'
-          ? 'Gastos sin categoría presupuestada asociada'
-          : 'Expenses without associated budget category'
-      });
-    }
-
-    breakdown.push({
-      label: language === 'es' ? 'Restante' : 'Remaining',
-      amount: budgetRemaining,
-      type: budgetRemaining >= 0 ? 'addition' : 'subtraction',
-      icon: budgetRemaining >= 0 ? 'savings' : 'info',
-      description: budgetRemaining >= 0
-        ? (language === 'es' ? 'Disponible para gastar dentro del presupuesto' : 'Available to spend within budget')
-        : (language === 'es' ? '¡Has excedido tu presupuesto!' : 'You have exceeded your budget!')
-    });
-
-    return breakdown;
-  }, [budgetTotal, spentBudgeted, spentUnbudgeted, budgetRemaining, budgetUsedPercent, language]);
-
-  // Helper to check if same month and year
-  const isSameMonth = (date1: Date, date2: Date) => {
-    return date1.getMonth() === date2.getMonth() && date1.getFullYear() === date2.getFullYear();
+  // --- PERIOD NAVIGATION ---
+  const changeMonth = (direction: 'next' | 'prev') => {
+    const [year, month] = currentPeriod.split('-').map(Number);
+    const date = new Date(year, month - 1 + (direction === 'next' ? 1 : -1), 1);
+    setCurrentPeriod(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
   };
 
-  // Get pending recurring payments (upcoming payments that need confirmation)
-  const pendingRecurringPayments = useMemo((): PendingPayment[] => {
+  const isCurrentMonth = useMemo(() => {
     const now = new Date();
-    const upcoming: PendingPayment[] = [];
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return currentPeriod === current;
+  }, [currentPeriod]);
 
-    const recurringExpenses = expenses.filter(t => t.isRecurring);
+  // --- DATA PROCESSING ---
 
-    recurringExpenses.forEach(expense => {
-      const chargeDay = parseLocalDate(expense.date).getDate();
-      const nextDueDate = new Date(now.getFullYear(), now.getMonth(), chargeDay);
+  // 1. Recurring Items (from hook)
+  const filteredRecurringItems = useMemo(() => {
+    if (!monthlyDoc) return [];
 
-      // If charge day has passed this month, look at next month
-      if (nextDueDate < now) {
-        nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-      }
-
-      // PRIMARY CHECK: Explicit lastPaidDate
-      if (expense.lastPaidDate) {
-        const lastPaid = parseLocalDate(expense.lastPaidDate);
-        // If same month as next due date, it's paid
-        if (isSameMonth(lastPaid, nextDueDate)) {
-          return;
-        }
-
-        // Also check proximity (early payment)
-        const diffTime = Math.abs(lastPaid.getTime() - nextDueDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays < 20) return;
-      }
-
-      // 1. Check if already marked as processed (Paid) in actual transactions
-      // Look for a transaction that links to this recurring definition AND is close to due date
-      // We check for payments within +/- 25 days to handle early/late payments (e.g. paying Jan 1st bill on Dec 27th)
-      const isAlreadyPaid = expenses.some(t => {
-        if (!t.relatedRecurringId) return false;
-        if (t.relatedRecurringId !== expense.id) return false;
-
-        const txDate = parseLocalDate(t.date);
-        const diffTime = Math.abs(txDate.getTime() - nextDueDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-        return diffDays < 25; // 25 day buffer handles most monthly billing anomalies
-      });
-
-      if (isAlreadyPaid) return;
-
-      // 2. Check LocalStorage for Skipped/Postponed status
-      // We use a key that includes year-month for skips, and just ID + timestamp for postpones (24h)
-      const skipKey = `skip_${expense.id}_${nextDueDate.toISOString().slice(0, 7)}`; // skip_ID_YYYY-MM
-      const postponeKey = `postpone_${expense.id}`;
-
-      const isSkipped = localStorage.getItem(skipKey) === 'true';
-      let isPostponed = false;
-
-      const postponeData = localStorage.getItem(postponeKey);
-      if (postponeData) {
-        const { timestamp } = JSON.parse(postponeData);
-        const hoursDiff = (now.getTime() - timestamp) / (1000 * 60 * 60);
-        if (hoursDiff < 24) { // Hidden for 24 hours
-          isPostponed = true;
-        }
-      }
-
-      if (isSkipped || isPostponed) return;
-
-      // Calculate days until due
-      const daysUntilDue = Math.ceil((nextDueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-      // Show payments due within next 7 days
-      if (daysUntilDue <= 7 && daysUntilDue >= 0) {
-        const status = pendingPayments.get(expense.id) || 'pending';
-        upcoming.push({
-          id: expense.id,
-          transaction: expense,
-          dueDate: nextDueDate,
-          daysUntilDue,
-          status
-        });
-      }
+    // Sort logic: Pending first -> Paid/Skipped last
+    // Within Pending: Active -> Postponed
+    return monthlyDoc.fixedItems.filter(item => {
+      if (filter === 'all') return true;
+      return item.status === filter;
+    }).sort((a, b) => {
+      // Custom sort: Pending first
+      if (a.status === 'pending' && b.status !== 'pending') return -1;
+      if (a.status !== 'pending' && b.status === 'pending') return 1;
+      return 0;
     });
+  }, [monthlyDoc, filter]);
 
-    return upcoming.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
-  }, [expenses, pendingPayments]);
+  // 2. Quick Expenses (Transactions in this month that are NOT linked to recurring items)
+  const quickExpenses = useMemo(() => {
+    return transactions.filter(tx => {
+      if (tx.type !== 'expense') return false;
+      const txPeriod = tx.date.substring(0, 7); // YYYY-MM
 
-  const handlePayment = async (payment: PendingPayment, action: 'paid' | 'postponed' | 'rejected') => {
-    // Update local UI state
-    setPendingPayments(prev => new Map(prev).set(payment.id, action));
+      // Must be in this period
+      if (txPeriod !== currentPeriod) return false;
 
-    if (action === 'rejected') { // Omitir / Skip
-      const skipKey = `skip_${payment.id}_${payment.dueDate.toISOString().slice(0, 7)}`;
-      localStorage.setItem(skipKey, 'true');
-    } else if (action === 'postponed') { // Posponer
-      localStorage.setItem(`postpone_${payment.id}`, JSON.stringify({ timestamp: Date.now() }));
-    } else if (action === 'paid') {
-      // Explicitly update the recurring parent transaction with lastPaidDate
-      if (onUpdateTransaction) {
-        await onUpdateTransaction(payment.id, {
-          lastPaidDate: payment.dueDate.toISOString()
-        });
-      }
-    }
+      // Must NOT be a recurring payment (source='recurring' or isRecurring=true for legacy)
+      // Note: In new system, recurring payments have source='recurring'. 
+      // Legacy might just have isRecurring=true. 
+      // We want to show "Quick Expenses" here, which are one-off expenses.
+      if (tx.source === 'recurring') return false;
+      if (tx.isRecurring && !tx.source) return false; // Hide legacy recurring if migrated
 
-    // Handle notification service action
-    const pendingNotification = smartNotificationService.hasPendingNotification(payment.id);
-    if (pendingNotification) {
-      await smartNotificationService.handleScheduledPaymentAction(
-        pendingNotification.id,
-        action === 'rejected' ? 'cancel' : action === 'paid' ? 'pay' : 'postpone',
-        async (transactionId, amount, dueDate) => {
-          // When user confirms payment, create a new expense transaction
-          if (onPaymentConfirmed) {
-            const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
-              type: 'expense',
-              amount: payment.transaction.amount,
-              category: payment.transaction.category,
-              description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
-              date: new Date().toISOString().split('T')[0],
+      return true;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, currentPeriod]);
 
-              // CRITICAL: Link this new one-off payment to the recurring definition
-              isRecurring: false,
-              relatedRecurringId: payment.id,
+  // --- HANDLERS ---
+  const handlePay = async (itemId: string, defaultAmount: number) => {
+    const amountToPay = editingAmountId === itemId ? parseFloat(tempAmount) : defaultAmount;
+    if (isNaN(amountToPay) || amountToPay <= 0) return;
 
-              notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
-            };
-            await onPaymentConfirmed(newTransaction);
-          }
-        }
-      );
-    } else if (action === 'paid' && onPaymentConfirmed) {
-      // No notification exists, but user still wants to pay - create transaction directly
-      const newTransaction: Omit<Transaction, 'id' | 'createdAt'> = {
-        type: 'expense',
-        amount: payment.transaction.amount,
-        category: payment.transaction.category,
-        description: `${payment.transaction.description} (${language === 'es' ? 'Pago confirmado' : 'Payment confirmed'})`,
-        date: new Date().toISOString().split('T')[0],
-
-        // CRITICAL: Link this new one-off payment to the recurring definition
-        isRecurring: false,
-        relatedRecurringId: payment.id,
-
-        notes: `${language === 'es' ? 'Pago de gasto recurrente:' : 'Recurring expense payment:'} ${payment.transaction.description}`
-      };
-      await onPaymentConfirmed(newTransaction);
-    }
-  };
-
-  // Filter and sort history
-  const filteredHistory = useMemo(() => {
-    let filtered = [...expenses];
-
-    // Apply filter
-    switch (filter) {
-      case 'quick':
-        filtered = filtered.filter(t => !t.isRecurring && !t.isPlanned);
-        break;
-      case 'recurring':
-        filtered = filtered.filter(t => t.isRecurring);
-        break;
-      case 'planned':
-        filtered = filtered.filter(t => t.isPlanned);
-        break;
-    }
-
-    // Apply sort
-    switch (sortOrder) {
-      case 'newest':
-        filtered.sort((a, b) => parseLocalDate(b.date).getTime() - parseLocalDate(a.date).getTime());
-        break;
-      case 'oldest':
-        filtered.sort((a, b) => parseLocalDate(a.date).getTime() - parseLocalDate(b.date).getTime());
-        break;
-      case 'highest':
-        filtered.sort((a, b) => b.amount - a.amount);
-        break;
-      case 'lowest':
-        filtered.sort((a, b) => a.amount - b.amount);
-        break;
-    }
-
-    return filtered;
-  }, [expenses, filter, sortOrder]);
-
-  // Group history by date
-  const groupedHistory = useMemo(() => {
-    const groups: { [key: string]: Transaction[] } = {};
-
-    filteredHistory.forEach(expense => {
-      const date = parseLocalDate(expense.date);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Normalize today
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      let key: string;
-      if (date.toDateString() === today.toDateString()) {
-        key = 'Hoy';
-      } else if (date.toDateString() === yesterday.toDateString()) {
-        key = 'Ayer';
-      } else {
-        key = date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-        key = key.charAt(0).toUpperCase() + key.slice(1);
-      }
-
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(expense);
-    });
-
-    return groups;
-  }, [filteredHistory]);
-
-
-
-  const formatTime = (dateStr: string, timeStr?: string) => {
-    if (timeStr) return timeStr;
-    const date = parseLocalDate(dateStr);
-    return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const getDueDateLabel = (daysUntilDue: number): { text: string; color: string } => {
-    if (daysUntilDue === 0) return { text: 'Vence hoy', color: 'text-rose-600 dark:text-rose-400' };
-    if (daysUntilDue === 1) return { text: 'Vence mañana', color: 'text-amber-600 dark:text-amber-400' };
-    if (daysUntilDue <= 3) return { text: `Vence en ${daysUntilDue} días`, color: 'text-amber-600 dark:text-amber-400' };
-    return { text: `Vence en ${daysUntilDue} días`, color: 'text-slate-500 dark:text-slate-400' };
-  };
-
-  const getExpenseTypeIcon = (expense: Transaction) => {
-    if (expense.isRecurring) return Calendar;
-    if (expense.isPlanned) return Clock;
-    return Zap;
-  };
-
-  const getExpenseTypeBadge = (expense: Transaction) => {
-    if (expense.isRecurring) return { text: 'Recurrente', color: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' };
-    if (expense.isPlanned) return { text: 'Planificado', color: 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' };
-    return { text: 'Rápido', color: 'bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400' };
+    await expenseActions.payItem(itemId, amountToPay);
+    setEditingAmountId(null);
   };
 
   return (
-    <div className="flex-1 overflow-y-auto pb-20">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-rose-500 to-rose-600 dark:from-rose-600 dark:to-rose-700 p-4 sm:p-6 pb-6 sm:pb-8">
-        <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2 flex items-center gap-2">
-          <ArrowDownRight className="w-6 h-6 sm:w-7 sm:h-7" />
-          {language === 'es' ? 'Mis Gastos' : 'My Expenses'}
-        </h1>
-        <p className="text-rose-100 text-xs sm:text-sm">
-          {language === 'es' ? 'Controla tu dinero que sale' : 'Track your spending'}
-        </p>
+    <div className="flex-1 overflow-y-auto pb-20 bg-slate-50 dark:bg-slate-900">
+
+      {/* 1. STICKY HEADER (Design System Aligned) */}
+      <div className="bg-white dark:bg-slate-800 pb-6 pt-2 px-4 shadow-sm sticky top-0 z-10 transition-colors">
+        <div className="flex items-center justify-between mb-4 h-[40px]">
+          <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl">
+              <ArrowDownRight className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+            </div>
+            {language === 'es' ? 'Mis Gastos' : 'My Expenses'}
+          </h1>
+        </div>
+
+        {/* Period Selector */}
+        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1">
+          <button onClick={() => changeMonth('prev')} className="p-1 hover:bg-white dark:hover:bg-slate-600 rounded-md transition-colors">
+            <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          </button>
+          <span className="font-bold text-slate-700 dark:text-slate-200 capitalize">
+            {(() => {
+              const [year, month] = currentPeriod.split('-').map(Number);
+              // Create date in LOCAL timezone by passing year, month (0-indexed), day
+              const date = new Date(year, month - 1, 1);
+              return date.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { month: 'long', year: 'numeric' });
+            })()}
+          </span>
+          <button
+            onClick={() => changeMonth('next')}
+            disabled={isCurrentMonth}
+            className={`p-1 rounded-md transition-colors ${isCurrentMonth ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white dark:hover:bg-slate-600'}`}
+          >
+            <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+          </button>
+        </div>
       </div>
 
-      {/* Budget Card - Clickable */}
-      <div className="px-3 sm:px-4 -mt-5 sm:-mt-6 mb-4 sm:mb-6">
-        <div
-          onClick={() => setShowCategoryBreakdown(true)}
-          className="bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-5 cursor-pointer hover:shadow-xl transition-shadow"
-        >
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
+      {/* 2. MAIN STATE CARD (Budget for this month) */}
+      <div className="px-4 mt-4">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-500 to-orange-600 p-5 text-white shadow-lg shadow-rose-200 dark:shadow-none">
+          <div className="flex justify-between items-start mb-4">
             <div>
-              <div className="flex items-center gap-2 mb-0.5 sm:mb-1">
-                <div className="text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                  {language === 'es' ? 'Gastado Este Mes' : 'Spent This Month'}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMonthExpenseInfo(true);
-                  }}
-                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                  aria-label="Info"
-                >
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
-                </button>
+              <div className="flex items-center gap-1 group relative cursor-help" onClick={() => setShowMonthExpenseInfo(true)}>
+                <p className="text-white/80 text-xs font-bold uppercase tracking-wider mb-1">
+                  {language === 'es' ? 'Gastado este Mes' : 'Spent This Month'}
+                </p>
+                <Info className="w-3 h-3 text-white/70" />
               </div>
-              <div className="text-2xl sm:text-3xl font-bold text-rose-600 dark:text-rose-400">
-                {formatCurrency(thisMonthExpenses)}
-              </div>
+              <h3 className="text-3xl font-extrabold tracking-tight">
+                {formatCurrency(budgetPeriodData.expensesTotal)}
+              </h3>
             </div>
+
             <div className="text-right">
-              <div className="flex items-center justify-end gap-2 mb-0.5 sm:mb-1">
-                <div className="text-[10px] sm:text-xs font-medium text-slate-500 dark:text-slate-400">
+              <div className="flex items-center justify-end gap-1 group relative cursor-help" onClick={() => setShowBudgetInfo(true)}>
+                <p className="text-white/80 text-[10px] font-bold uppercase tracking-wider mb-1">
                   {language === 'es' ? 'Presupuesto' : 'Budget'}
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowBudgetInfo(true);
-                  }}
-                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                  aria-label="Info"
-                >
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
-                </button>
+                </p>
+                <Info className="w-3 h-3 text-white/70" />
               </div>
-              <div className="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200">
-                {formatCurrency(budgetTotal)}
+              <div className="text-xl font-bold text-white/90">
+                {formatCurrency(budgetPeriodData.budgetTotal)}
               </div>
             </div>
           </div>
 
           {/* Progress Bar */}
-          <div className="mb-1.5 sm:mb-2">
-            <div className="h-2 sm:h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+          <div className="mb-3 relative">
+            <div className="h-2.5 bg-black/20 rounded-full overflow-hidden backdrop-blur-sm">
               <div
-                className={`h-full transition-all duration-300 ${budgetUsedPercent >= 90 ? 'bg-rose-500' :
-                  budgetUsedPercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-                  }`}
-                style={{ width: `${Math.min(budgetUsedPercent, 100)}%` }}
+                className={`h-full transition-all duration-300 shadow-sm ${budgetPeriodData.remainingPercentage > 90 ? 'bg-white' : 'bg-white/90'}`}
+                style={{ width: `${Math.min(budgetPeriodData.remainingPercentage, 100)}%` }}
               />
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[10px] sm:text-xs">
-            <span className={`font-medium ${budgetRemaining < 0 ? 'text-rose-600' : 'text-slate-600'} dark:text-slate-400`}>
-              {language === 'es' ? 'Restante' : 'Remaining'}: {formatCurrency(budgetRemaining)}
+          <div className="flex items-center justify-between text-[10px] sm:text-xs font-medium text-white/80">
+            <span>
+              {budgetPeriodData.remaining >= 0
+                ? (language === 'es' ? `Quedan ${formatCurrency(budgetPeriodData.remaining)}` : `${formatCurrency(budgetPeriodData.remaining)} Left`)
+                : (language === 'es' ? `Excedido por ${formatCurrency(Math.abs(budgetPeriodData.remaining))}` : `Over by ${formatCurrency(Math.abs(budgetPeriodData.remaining))}`)
+              }
             </span>
-            <span className="font-bold text-slate-500 dark:text-slate-400">
-              {budgetUsedPercent.toFixed(0)}%
+            <span>
+              {budgetPeriodData.remainingPercentage.toFixed(0)}%
             </span>
-          </div>
-
-          {/* Hint to tap */}
-          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center flex items-center justify-center gap-1">
-              <AlertCircle className="w-3 h-3" />
-              {language === 'es' ? 'Toca para ver desglose por categoría' : 'Tap to view category breakdown'}
-            </p>
           </div>
         </div>
       </div>
 
-      {/* Quick Expense Button */}
-      <div className="px-3 sm:px-4 mb-4 sm:mb-6">
-        <button
-          onClick={onQuickExpense}
-          className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-xl sm:rounded-2xl transition-all shadow-xl shadow-rose-200 dark:shadow-none"
-        >
-          <Zap className="w-5 h-5 sm:w-6 sm:h-6" />
-          <span className="text-base sm:text-lg">{language === 'es' ? 'Gasto Rápido' : 'Quick Expense'}</span>
-        </button>
-      </div>
-
-      {/* Pending Payments Section */}
-      {pendingRecurringPayments.filter(p => p.status === 'pending').length > 0 && (
-        <div className="px-3 sm:px-4 mb-4 sm:mb-6">
-          <button
-            onClick={() => setExpandedSection(expandedSection === 'pending' ? null : 'pending')}
-            className="w-full flex items-center justify-between mb-2 sm:mb-3"
-          >
-            <h2 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5 sm:gap-2">
-              <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
-              {language === 'es' ? 'Pagos Próximos' : 'Upcoming Payments'}
+      {/* 3. RECURRING EXPENSES SECTION (Renamed & Refactored) */}
+      <div className="px-4 mt-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            <h2 className="text-lg font-bold text-slate-800 dark:text-white">
+              {language === 'es' ? 'Gastos Recurrentes' : 'Recurring Expenses'}
             </h2>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] sm:text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-0.5 sm:py-1 rounded-full">
-                {pendingRecurringPayments.filter(p => p.status === 'pending').length}
-              </span>
-              {expandedSection === 'pending' ? (
-                <ChevronUp className="w-4 h-4 text-slate-400" />
-              ) : (
-                <ChevronDown className="w-4 h-4 text-slate-400" />
-              )}
+          </div>
+          {/* Quick Filter */}
+          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+            <button onClick={() => setFilter('all')} className={`px-2 py-1 text-[10px] rounded-md font-bold transition-all ${filter === 'all' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>
+              {language === 'es' ? 'Todos' : 'All'}
+            </button>
+            <button onClick={() => setFilter('pending')} className={`px-2 py-1 text-[10px] rounded-md font-bold transition-all ${filter === 'pending' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500'}`}>
+              {language === 'es' ? 'Pendientes' : 'Pending'}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {managerLoading ? (
+            <div className="text-center py-4 text-slate-400 text-sm">Cargando...</div>
+          ) : filteredRecurringItems.length === 0 ? (
+            <div className="text-center py-6 bg-slate-50 border border-dashed border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 rounded-2xl">
+              <CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">
+                {language === 'es' ? 'No hay gastos recurrentes para este filtro.' : 'No recurring expenses found.'}
+              </p>
             </div>
-          </button>
-
-          {expandedSection === 'pending' && (
-            <div className="space-y-2 sm:space-y-3">
-              {pendingRecurringPayments.filter(p => p.status === 'pending').map(payment => {
-                const dueLabel = getDueDateLabel(payment.daysUntilDue);
-                return (
-                  <div
-                    key={payment.id}
-                    className="bg-white dark:bg-slate-800 rounded-xl p-3 sm:p-4 border-2 border-amber-200 dark:border-amber-800/50 shadow-sm"
-                  >
-                    <div className="flex items-center justify-between mb-2 sm:mb-3">
-                      <div className="flex items-center gap-2 sm:gap-3 flex-1">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
-                          <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600 dark:text-amber-400" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white truncate">
-                            {payment.transaction.description}
-                          </h3>
-                          <p className={`text-xs sm:text-sm font-medium ${dueLabel.color}`}>
-                            {dueLabel.text}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right ml-2">
-                        <div className="text-lg sm:text-xl font-bold text-slate-800 dark:text-white">
-                          {formatCurrency(payment.transaction.amount)}
-                        </div>
-                      </div>
+          ) : (
+            filteredRecurringItems.map(item => (
+              <div key={item.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 shadow-sm transition-all hover:shadow-md">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.status === 'paid' ? 'bg-emerald-100 text-emerald-600' :
+                      item.status === 'skipped' ? 'bg-slate-100 text-slate-400' :
+                        'bg-amber-100 text-amber-600'
+                      }`}>
+                      {item.status === 'paid' ? <CheckCircle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
                     </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex items-center gap-2 pt-2 sm:pt-3 border-t border-slate-100 dark:border-slate-700">
-                      <button
-                        onClick={() => handlePayment(payment, 'paid')}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors text-xs sm:text-sm"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>{language === 'es' ? 'Pagar' : 'Pay'}</span>
-                      </button>
-                      <button
-                        onClick={() => handlePayment(payment, 'postponed')}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors text-xs sm:text-sm"
-                      >
-                        <Clock className="w-4 h-4" />
-                        <span>{language === 'es' ? 'Posponer' : 'Postpone'}</span>
-                      </button>
-                      <button
-                        onClick={() => handlePayment(payment, 'rejected')}
-                        className="flex-1 flex items-center justify-center gap-1.5 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-semibold py-2 px-3 rounded-lg transition-colors text-xs sm:text-sm"
-                      >
-                        <X className="w-4 h-4" />
-                        <span>{language === 'es' ? 'Omitir' : 'Skip'}</span>
-                      </button>
+                    <div>
+                      <h3 className={`font-bold text-slate-800 dark:text-white ${item.status === 'skipped' ? 'line-through opacity-60' : ''}`}>
+                        {item.nameSnapshot}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${item.status === 'paid' ? 'bg-emerald-50 text-emerald-600' :
+                          item.status === 'skipped' ? 'bg-slate-100 text-slate-500' :
+                            'bg-amber-50 text-amber-600'
+                          }`}>
+                          {item.status === 'paid' ? (language === 'es' ? 'PAGADO' : 'PAID') :
+                            item.status === 'skipped' ? (language === 'es' ? 'OMITIDO' : 'SKIPPED') :
+                              (language === 'es' ? 'PENDIENTE' : 'PENDING')}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Income vs Budget Gap Warning */}
-      {hasIncomeBudgetGap && budgetTotal > 0 && (
-        <div className="px-3 sm:px-4 mb-4 sm:mb-6">
-          <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
-            <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-bold text-amber-900 dark:text-amber-100 text-xs sm:text-sm mb-0.5">
-                {language === 'es' ? '⚠️ Presupuesto Mayor a Ingresos' : '⚠️ Budget Exceeds Income'}
-              </h3>
-              <p className="text-[10px] sm:text-xs text-amber-700 dark:text-amber-300">
-                {language === 'es'
-                  ? `Tu presupuesto (${formatCurrency(budgetTotal)}) supera tus ingresos del mes (${formatCurrency(incomeTotal)}). Déficit: ${formatCurrency(Math.abs(incomeSurplus))}`
-                  : `Your budget (${formatCurrency(budgetTotal)}) exceeds your monthly income (${formatCurrency(incomeTotal)}). Deficit: ${formatCurrency(Math.abs(incomeSurplus))}`}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Budget Usage Alert */}
-      {budgetUsedPercent >= 90 && (
-        <div className="px-3 sm:px-4 mb-4 sm:mb-6">
-          <div className="bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded-xl p-3 sm:p-4 flex items-start gap-2 sm:gap-3">
-            <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-rose-500 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-bold text-rose-900 dark:text-rose-100 text-xs sm:text-sm mb-0.5">
-                {language === 'es' ? '¡Cuidado con tu presupuesto!' : 'Watch your budget!'}
-              </h3>
-              <p className="text-[10px] sm:text-xs text-rose-700 dark:text-rose-300">
-                {language === 'es'
-                  ? `Has gastado el ${budgetUsedPercent.toFixed(0)}% de tu presupuesto mensual.`
-                  : `You've spent ${budgetUsedPercent.toFixed(0)}% of your monthly budget.`}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Expense History */}
-      <div className="px-3 sm:px-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide flex items-center gap-1.5 sm:gap-2">
-            <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
-            {language === 'es' ? 'Historial de Gastos' : 'Expense History'}
-          </h2>
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${showFilters
-              ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-              : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'
-              }`}
-          >
-            <Filter className="w-3.5 h-3.5" />
-            {language === 'es' ? 'Filtros' : 'Filters'}
-          </button>
-        </div>
-
-        {/* Filters */}
-        {showFilters && (
-          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 mb-3 space-y-3">
-            {/* Filter Type */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">
-                {language === 'es' ? 'Tipo' : 'Type'}
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { value: 'all', label: language === 'es' ? 'Todos' : 'All' },
-                  { value: 'quick', label: language === 'es' ? 'Rápidos' : 'Quick' },
-                  { value: 'recurring', label: language === 'es' ? 'Recurrentes' : 'Recurring' },
-                  { value: 'planned', label: language === 'es' ? 'Planificados' : 'Planned' },
-                ].map(option => (
-                  <button
-                    key={option.value}
-                    onClick={() => setFilter(option.value as FilterType)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${filter === option.value
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600'
-                      }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Sort Order */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5 block">
-                {language === 'es' ? 'Ordenar por' : 'Sort by'}
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { value: 'newest', label: language === 'es' ? 'Más recientes' : 'Newest' },
-                  { value: 'oldest', label: language === 'es' ? 'Más antiguos' : 'Oldest' },
-                  { value: 'highest', label: language === 'es' ? 'Mayor monto' : 'Highest' },
-                  { value: 'lowest', label: language === 'es' ? 'Menor monto' : 'Lowest' },
-                ].map(option => (
-                  <button
-                    key={option.value}
-                    onClick={() => setSortOrder(option.value as SortOrder)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${sortOrder === option.value
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-600'
-                      }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Grouped History */}
-        {Object.keys(groupedHistory).length === 0 ? (
-          <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 text-center">
-            <Banknote className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              {language === 'es' ? 'No hay gastos registrados' : 'No expenses recorded'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {Object.entries(groupedHistory).map(([date, dayExpenses]) => (
-              <div key={date}>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    {date}
-                  </h3>
-                  <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-                    -{formatCurrency(dayExpenses.reduce((sum, e) => sum + e.amount, 0))}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {dayExpenses.map(expense => {
-                    const TypeIcon = getExpenseTypeIcon(expense);
-                    const typeBadge = getExpenseTypeBadge(expense);
-                    return (
-                      <div
-                        key={expense.id}
-                        className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-100 dark:border-slate-700 shadow-sm relative"
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${expense.isRecurring
-                            ? 'bg-indigo-50 dark:bg-indigo-900/30'
-                            : expense.isPlanned
-                              ? 'bg-purple-50 dark:bg-purple-900/30'
-                              : 'bg-rose-50 dark:bg-rose-900/30'
-                            }`}>
-                            <TypeIcon className={`w-5 h-5 ${expense.isRecurring
-                              ? 'text-indigo-500'
-                              : expense.isPlanned
-                                ? 'text-purple-500'
-                                : 'text-rose-500'
-                              }`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="font-semibold text-sm text-slate-900 dark:text-white">
-                                    {expense.description || getCategoryName(expense.category)}
-                                  </h4>
-                                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${typeBadge.color}`}>
-                                    {typeBadge.text}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                  {formatTime(expense.date, (expense as any).time)} • {getCategoryName(expense.category)}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                <span className="text-sm font-bold text-rose-600 dark:text-rose-400">
-                                  -{formatCurrency(expense.amount)}
-                                </span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveMenu(activeMenu === expense.id ? null : expense.id);
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Dropdown Menu */}
-                        {activeMenu === expense.id && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-40"
-                              onClick={() => setActiveMenu(null)}
-                            />
-                            <div className="absolute right-3 top-12 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-100 dark:border-slate-700 z-50 overflow-hidden min-w-[140px]">
-                              <button
-                                onClick={() => {
-                                  onEditTransaction?.(expense);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                              >
-                                <Edit3 className="w-4 h-4 text-indigo-500" />
-                                {language === 'es' ? 'Editar' : 'Edit'}
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setDeleteConfirm({
-                                    id: expense.id,
-                                    name: expense.description || getCategoryName(expense.category)
-                                  });
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                {language === 'es' ? 'Eliminar' : 'Delete'}
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Category Breakdown Modal */}
-      {showCategoryBreakdown && (
-        <ModalWrapper isOpen={true} onClose={() => setShowCategoryBreakdown(false)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[80vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-700">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
-                  {language === 'es' ? 'Gastos por Categoría' : 'Expenses by Category'}
-                </h3>
-                <button
-                  onClick={() => setShowCategoryBreakdown(false)}
-                  className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-slate-400" />
-                </button>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                {language === 'es'
-                  ? `Total del mes: ${formatCurrency(thisMonthExpenses)}`
-                  : `Month total: ${formatCurrency(thisMonthExpenses)}`}
-              </p>
-            </div>
-
-            {/* Category List */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-              {categoryBreakdown.length === 0 ? (
-                <div className="text-center py-8">
-                  <Banknote className="w-12 h-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {language === 'es' ? 'No hay gastos este mes' : 'No expenses this month'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {categoryBreakdown.map((item, index) => {
-                    const percentage = thisMonthExpenses > 0 ? (item.amount / thisMonthExpenses) * 100 : 0;
-                    const categoryName = getCategoryName(item.category);
-
-                    return (
-                      <div
-                        key={item.category}
-                        className="bg-slate-50 dark:bg-slate-700/50 rounded-xl p-3 sm:p-4"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                                {categoryName}
-                              </span>
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                ({item.count} {item.count === 1 ? (language === 'es' ? 'gasto' : 'expense') : (language === 'es' ? 'gastos' : 'expenses')})
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="text-base sm:text-lg font-bold text-rose-600 dark:text-rose-400">
-                                {formatCurrency(item.amount)}
-                              </div>
-                              <div className="text-sm font-semibold text-slate-600 dark:text-slate-300">
-                                {percentage.toFixed(1)}%
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Progress bar */}
-                        <div className="h-2 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-rose-500 to-rose-600 transition-all duration-300"
-                            style={{ width: `${Math.min(percentage, 100)}%` }}
+                  {/* Amount & Actions Menu */}
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      {editingAmountId === item.id ? (
+                        <div className="flex items-center gap-1 justify-end">
+                          <input
+                            type="number"
+                            autoFocus
+                            value={tempAmount}
+                            onChange={(e) => setTempAmount(e.target.value)}
+                            className="w-20 text-right text-sm border-b-2 border-indigo-500 bg-transparent outline-none font-bold text-slate-800 dark:text-white"
                           />
                         </div>
-                      </div>
-                    );
-                  })}
+                      ) : (
+                        <div className={`text-lg font-bold ${item.status === 'skipped' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-white'}`}>
+                          {formatCurrency(item.amount)}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Menu Dropdown for Edit/Delete */}
+                    <div className="relative">
+                      <button
+                        onClick={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      >
+                        <MoreVertical className="w-4 h-4 text-slate-400" />
+                      </button>
+
+                      {menuOpenId === item.id && (
+                        <>
+                          {/* Backdrop to close menu */}
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setMenuOpenId(null)}
+                          />
+
+                          {/* Dropdown Menu */}
+                          <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
+                            <button
+                              onClick={async () => {
+                                setMenuOpenId(null);
+                                // Update only this month's item amount (not the base template)
+                                const newAmount = prompt(
+                                  language === 'es'
+                                    ? `Nuevo monto para "${item.nameSnapshot}":`
+                                    : `New amount for "${item.nameSnapshot}":`,
+                                  item.amount.toString()
+                                );
+                                if (newAmount && !isNaN(parseFloat(newAmount))) {
+                                  try {
+                                    // Get current monthly doc and update the item
+                                    const doc = await import('../services/expenseService').then(m => m.expenseService.getMonthlyExpenses(currentPeriod));
+                                    const itemIndex = doc.fixedItems.findIndex(i => i.id === item.id);
+
+                                    if (itemIndex >= 0) {
+                                      doc.fixedItems[itemIndex].amount = parseFloat(newAmount);
+                                      await import('../services/expenseService').then(m => m.expenseService.saveMonthlyDoc(doc));
+                                      expenseActions.refresh();
+
+                                      toast.success(
+                                        language === 'es' ? 'Monto actualizado' : 'Amount updated',
+                                        language === 'es' ? 'Solo para este mes' : 'For this month only'
+                                      );
+                                    }
+                                  } catch (error) {
+                                    console.error('Error updating template:', error);
+                                    toast.error(
+                                      language === 'es' ? 'Error al actualizar' : 'Error updating',
+                                      error instanceof Error ? error.message : 'Unknown error'
+                                    );
+                                  }
+                                }
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                              {language === 'es' ? 'Editar Monto' : 'Edit Amount'}
+                            </button>
+                            <button
+                              onClick={async () => {
+                                setMenuOpenId(null);
+                                if (confirm(language === 'es'
+                                  ? `¿Eliminar "${item.nameSnapshot}"?\n\nEsto eliminará:\n• El template del gasto recurrente\n• Todos los items pendientes de meses futuros\n• NO afectará pagos ya realizados`
+                                  : `Delete "${item.nameSnapshot}"?\n\nThis will remove:\n• The recurring expense template\n• All pending items from future months\n• Will NOT affect already paid expenses`
+                                )) {
+                                  try {
+                                    await expenseActions.deleteTemplate(item.templateId);
+                                    toast.success(
+                                      language === 'es' ? 'Template eliminado' : 'Template deleted',
+                                      language === 'es' ? `"${item.nameSnapshot}" se eliminó correctamente` : `"${item.nameSnapshot}" was deleted successfully`
+                                    );
+                                  } catch (error) {
+                                    console.error('Error deleting template:', error);
+                                    toast.error(
+                                      language === 'es' ? 'Error al eliminar' : 'Error deleting',
+                                      error instanceof Error ? error.message : 'Unknown error'
+                                    );
+                                  }
+                                }
+                              }}
+                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors border-t border-slate-100 dark:border-slate-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              {language === 'es' ? 'Eliminar' : 'Delete'}
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {/* Footer */}
-            <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-              <button
-                onClick={() => setShowCategoryBreakdown(false)}
-                className="w-full py-2.5 px-4 bg-slate-600 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors"
-              >
-                {language === 'es' ? 'Cerrar' : 'Close'}
-              </button>
-            </div>
-          </div>
-        </ModalWrapper>
-      )}
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-slate-50 dark:border-slate-700">
+                  {item.status === 'pending' && (
+                    <>
+                      <button
+                        onClick={() => expenseActions.skipItem(item.id)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        {language === 'es' ? 'Omitir' : 'Skip'}
+                      </button>
 
-      {/* Delete Confirmation Modal */}
-      {deleteConfirm && (
-        <ModalWrapper isOpen={true} onClose={() => setDeleteConfirm(null)}>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-center mb-4">
-              <div className="w-14 h-14 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-                <Trash2 className="w-7 h-7 text-rose-600 dark:text-rose-400" />
+                      {editingAmountId === item.id ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setEditingAmountId(null)}
+                            className="p-2 text-slate-400 hover:text-slate-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handlePay(item.id, item.amount)}
+                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm shadow-emerald-200"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            {language === 'es' ? 'Confirmar' : 'Confirm'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            // If simple click, pay default. If long press or edit mode...
+                            // For now just pay default or toggle edit?
+                            // Let's toggle Edit mode as the "Action" to verify amount
+                            setTempAmount(item.amount.toString());
+                            setEditingAmountId(item.id);
+                          }}
+                          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 dark:shadow-none transition-transform active:scale-95"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          {language === 'es' ? 'Pagar' : 'Pay'}
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {item.status === 'paid' && (
+                    <button
+                      onClick={() => expenseActions.undoPayItem(item.id)}
+                      className="text-xs text-rose-500 font-medium hover:underline"
+                    >
+                      {language === 'es' ? 'Deshacer pago' : 'Undo payment'}
+                    </button>
+                  )}
+
+                  {item.status === 'skipped' && (
+                    <button
+                      onClick={async () => {
+                        // Reactivate item to pending status
+                        const doc = await import('../services/expenseService').then(m => m.expenseService.getMonthlyExpenses(currentPeriod));
+                        const targetItem = doc.fixedItems.find(i => i.id === item.id);
+                        if (targetItem) {
+                          targetItem.status = 'pending';
+                          await import('../services/expenseService').then(m => m.expenseService.saveMonthlyDoc(doc));
+                          expenseActions.refresh();
+                        }
+                      }}
+                      className="text-xs text-indigo-500 font-medium hover:underline"
+                    >
+                      {language === 'es' ? 'Reactivar' : 'Reactivate'}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white text-center mb-2">
-              {language === 'es' ? '¿Eliminar transacción?' : 'Delete transaction?'}
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-2">
-              {language === 'es'
-                ? '¿Estás seguro de que deseas eliminar esta transacción?'
-                : 'Are you sure you want to delete this transaction?'}
-            </p>
-            <p className="text-sm font-semibold text-slate-700 dark:text-slate-300 text-center mb-6 bg-slate-100 dark:bg-slate-700/50 rounded-lg py-2 px-3">
-              "{deleteConfirm.name}"
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirm(null)}
-                className="flex-1 py-2.5 px-4 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-              >
-                {language === 'es' ? 'Cancelar' : 'Cancel'}
-              </button>
-              <button
-                onClick={() => {
-                  onDeleteTransaction?.(deleteConfirm.id);
-                  setDeleteConfirm(null);
-                }}
-                className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl transition-colors"
-              >
-                {language === 'es' ? 'Eliminar' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </ModalWrapper>
-      )}
+            ))
+          )}
+        </div>
+      </div>
 
-      {/* Amount Info Modals */}
-      <AmountInfoModal
+      {/* 4. QUICK EXPENSES HISTORY */}
+      <div className="px-4 mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <History className="w-5 h-5 text-slate-400" />
+            <h2 className="text-base font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
+              {language === 'es' ? 'Gastos Rápidos / Extras' : 'Quick / Extra Expenses'}
+            </h2>
+          </div>
+          {isCurrentMonth && (
+            <button onClick={onQuickExpense} className="flex items-center gap-1 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-full px-3 py-1.5 transition-colors">
+              <Zap className="w-3 h-3" />
+              {language === 'es' ? 'Nuevo' : 'New'}
+            </button>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          {quickExpenses.length === 0 ? (
+            <div className="text-center py-6 text-slate-400 text-xs italic">
+              {language === 'es' ? 'No hay gastos extra registrados este mes.' : 'No extra expenses recorded this month.'}
+            </div>
+          ) : (
+            quickExpenses.map(tx => (
+              <div key={tx.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-full">
+                    {/* Here we could look up the category icon */}
+                    <ShoppingBag className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-1">{tx.description}</p>
+                    <p className="text-xs text-slate-500">
+                      {new Date(tx.date).toLocaleDateString()} • {getCategoryName(tx.category)}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-rose-600">-{formatCurrency(tx.amount)}</p>
+                  {onEditTransaction && (
+                    <button onClick={() => onEditTransaction(tx)} className="text-[10px] text-slate-400 hover:text-blue-500">Ed.</button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Info Modals */}
+      <ModalWrapper
         isOpen={showMonthExpenseInfo}
         onClose={() => setShowMonthExpenseInfo(false)}
-        title={language === 'es' ? 'Gastos del Mes' : 'Month Expenses'}
-        subtitle={language === 'es' ? '¿De dónde vienen tus gastos?' : 'Where do your expenses come from?'}
-        totalAmount={thisMonthExpenses}
-        breakdown={monthExpenseBreakdown}
-        language={language as 'es' | 'en'}
-      />
+      >
+        <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-xl w-full">
+          <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700">
+            <h3 className="font-bold text-lg dark:text-white">{language === 'es' ? 'Gastado este Mes' : 'Spent This Month'}</h3>
+            <button onClick={() => setShowMonthExpenseInfo(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
+          </div>
+          <div className="p-4 space-y-4">
+            <p className="text-slate-600 dark:text-slate-300">
+              {language === 'es'
+                ? 'Suma de todos los gastos (recurrentes pagados + rápidos) registrados en el período actual.'
+                : 'Sum of all expenses (paid recurring + quick) recorded in the current period.'}
+            </p>
+          </div>
+        </div>
+      </ModalWrapper>
 
-      <AmountInfoModal
+      <ModalWrapper
         isOpen={showBudgetInfo}
         onClose={() => setShowBudgetInfo(false)}
-        title={language === 'es' ? 'Información del Presupuesto' : 'Budget Information'}
-        subtitle={language === 'es' ? 'Desglose de tu presupuesto mensual' : 'Breakdown of your monthly budget'}
-        totalAmount={budgetTotal}
-        breakdown={budgetBreakdown}
-        language={language as 'es' | 'en'}
-      />
+      >
+        <div className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-xl w-full">
+          <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-700">
+            <h3 className="font-bold text-lg dark:text-white">{language === 'es' ? 'Presupuesto Mensual' : 'Monthly Budget'}</h3>
+            <button onClick={() => setShowBudgetInfo(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full"><X className="w-5 h-5 text-slate-500" /></button>
+          </div>
+          <div className="p-4 space-y-4">
+            <p className="text-slate-600 dark:text-slate-300">
+              {language === 'es'
+                ? 'Límite total de gasto definido en tus presupuestos activos.'
+                : 'Total spending limit defined in your active budgets.'}
+            </p>
+          </div>
+        </div>
+      </ModalWrapper>
+
     </div>
   );
 };

@@ -217,6 +217,7 @@ export const es = {
     coachTools: 'Herramientas del Coach',
     quickTips: 'Tips Rápidos del Coach',
     noAnalysis: 'No hay análisis disponible',
+    topExpenseCategories: 'Top Categorías de Gasto',
   },
 
   // Notifications

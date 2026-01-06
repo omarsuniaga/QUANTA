@@ -3,7 +3,7 @@ import {
     Activity, Database, Server, Smartphone, User, Terminal,
     FileJson, Download, RefreshCw, CheckCircle, XCircle, AlertTriangle,
     Search, Trash2, ArrowLeft, Shield, Clock, Wifi, Hash, Upload, FileText,
-    Save, Key
+    Save, Key, Menu
 } from 'lucide-react';
 import { storageService } from '../services/storageService';
 import { geminiService } from '../services/geminiService';
@@ -24,6 +24,7 @@ interface DiagnosticCheck {
 export const AdminDiagnosticsScreen: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { user } = useAuth();
     const [activeTab, setActiveTab] = useState<'system' | 'user' | 'logs' | 'data'>('system');
+    const [sidebarOpen, setSidebarOpen] = useState(false);
     const [logs, setLogs] = useState<SystemLog[]>([]);
     const [checks, setChecks] = useState<DiagnosticCheck[]>([
         { id: 'network', name: 'Network Connectivity', status: 'pending' },
@@ -191,8 +192,23 @@ export const AdminDiagnosticsScreen: React.FC<{ onClose: () => void }> = ({ onCl
             </header>
 
             <div className="flex flex-1 overflow-hidden">
+                {/* Mobile Hamburger Button */}
+                <button
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white transition-colors"
+                >
+                    <Menu className="w-6 h-6" />
+                </button>
+
                 {/* Sidebar */}
-                <nav className="w-64 border-r border-slate-800 bg-slate-900/30 p-4 space-y-1">
+                <nav className={`
+                    ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+                    fixed lg:relative inset-y-0 left-0 z-40
+                    w-64 border-r border-slate-800 bg-slate-900/95 lg:bg-slate-900/30 
+                    p-4 space-y-1 transition-transform duration-300 ease-in-out
+                    backdrop-blur-md lg:backdrop-blur-none
+                    top-16 lg:top-0
+                `}>
                     {[
                         { id: 'system', icon: Server, label: 'System Health' },
                         { id: 'user', icon: User, label: 'User Inspector' },
@@ -201,7 +217,10 @@ export const AdminDiagnosticsScreen: React.FC<{ onClose: () => void }> = ({ onCl
                     ].map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id as any)}
+                            onClick={() => {
+                                setActiveTab(tab.id as any);
+                                setSidebarOpen(false); // Close on mobile tap
+                            }}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === tab.id
                                 ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-600/20'
                                 : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
@@ -222,6 +241,14 @@ export const AdminDiagnosticsScreen: React.FC<{ onClose: () => void }> = ({ onCl
                         </button>
                     </div>
                 </nav>
+
+                {/* Mobile Overlay */}
+                {sidebarOpen && (
+                    <div
+                        onClick={() => setSidebarOpen(false)}
+                        className="fixed inset-0 bg-black/50 z-30 lg:hidden top-16"
+                    />
+                )}
 
                 {/* Main Content */}
                 <main className="flex-1 overflow-auto p-6 bg-slate-950 relative">

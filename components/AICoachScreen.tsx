@@ -24,7 +24,7 @@ import {
 import { Transaction, DashboardStats, Goal, FinancialAnalysis, AIRecommendation } from '../types';
 import { aiCoachService } from '../services/aiCoachService';
 import { storageService } from '../services/storageService';
-import { useI18n } from '../contexts';
+import { useI18n, useAuth } from '../contexts';
 import { useCurrency } from '../hooks/useCurrency';
 import { Button } from './Button';
 
@@ -52,6 +52,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
 }) => {
   const { language, t } = useI18n();
   const { formatAmount } = useCurrency();
+  const { user } = useAuth(); // CRITICAL: Get user for isolation
   const [analysis, setAnalysis] = useState<FinancialAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [quickTips, setQuickTips] = useState<string[]>([]);
@@ -59,25 +60,115 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   const [customCategories, setCustomCategories] = useState<any[]>([]);
 
   useEffect(() => {
-    loadAnalysis();
+    // Load custom categories
     storageService.getCategories().then(setCustomCategories).catch(console.error);
-  }, []);
 
-  const loadAnalysis = async () => {
+    // CRITICAL: Only load cache if user is authenticated
+    if (!user?.uid) {
+      console.log('[AICoach] No authenticated user - skipping cache load');
+      return;
+    }
+
+    // PERSISTENCE: Load previous analysis from localStorage with TTL validation
+    const ANALYSIS_TTL = 24 * 60 * 60 * 1000; // 24 hours
+    const TIPS_TTL = 12 * 60 * 60 * 1000; // 12 hours
+
+    // CRITICAL: Include userId in cache keys for isolation
+    const cachedAnalysisKey = `quanta_ai_last_analysis_${user.uid}`;
+    const cachedAnalysis = localStorage.getItem(cachedAnalysisKey);
+    if (cachedAnalysis) {
+      try {
+        const { data, timestamp, userId } = JSON.parse(cachedAnalysis);
+        const age = Date.now() - timestamp;
+
+        // VALIDATION: Ensure cache belongs to current user
+        if (userId !== user.uid) {
+          console.warn('[AICoach] Cache userId mismatch - clearing stale cache');
+          localStorage.removeItem(cachedAnalysisKey);
+          return;
+        }
+
+        if (age < ANALYSIS_TTL) {
+          console.log('[AICoach] Restaurando análisis previo desde localStorage (age:', Math.round(age / 1000 / 60), 'min)');
+          setAnalysis(data);
+        } else {
+          console.log('[AICoach] Análisis expirado, limpiando cache');
+          localStorage.removeItem(cachedAnalysisKey);
+        }
+      } catch (e) {
+        console.warn('[AICoach] Failed to parse cached analysis', e);
+        localStorage.removeItem(cachedAnalysisKey);
+      }
+    }
+
+    // Try to load cached tips
+    const cachedTipsKey = `quanta_ai_last_tips_${user.uid}`;
+    const cachedTips = localStorage.getItem(cachedTipsKey);
+    if (cachedTips) {
+      try {
+        const { data, timestamp, userId } = JSON.parse(cachedTips);
+        const age = Date.now() - timestamp;
+
+        // VALIDATION: Ensure cache belongs to current user
+        if (userId !== user.uid) {
+          console.warn('[AICoach] Cache userId mismatch - clearing stale tips');
+          localStorage.removeItem(cachedTipsKey);
+          return;
+        }
+
+        if (age < TIPS_TTL) {
+          console.log('[AICoach] Restaurando tips previos desde localStorage');
+          setQuickTips(data);
+        } else {
+          localStorage.removeItem(cachedTipsKey);
+        }
+      } catch (e) {
+        localStorage.removeItem(cachedTipsKey);
+      }
+    }
+  }, [user?.uid]);
+
+  const loadAnalysis = async (force: boolean = false) => {
+    if (loading) return;
+
+    // CRITICAL: Validate user is authenticated
+    if (!user?.uid) {
+      console.warn('[AICoach] Cannot load analysis - no authenticated user');
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await aiCoachService.analyzeFinances(transactions, stats, goals, selectedPlanId);
+      const result = await aiCoachService.analyzeFinances(transactions, stats, goals, selectedPlanId, force);
       if (result) {
         setAnalysis(result);
+
+        // PERSISTENCE: Save to localStorage with timestamp and userId
+        const cachedAnalysisKey = `quanta_ai_last_analysis_${user.uid}`;
+        localStorage.setItem(cachedAnalysisKey, JSON.stringify({
+          data: result,
+          timestamp: Date.now(),
+          userId: user.uid  // CRITICAL: Include userId for validation
+        }));
       }
-      const tips = await aiCoachService.getQuickTips(transactions, stats);
-      setQuickTips(tips);
+
+      const tips = await aiCoachService.getQuickTips(transactions, stats, language, force);
+      if (tips) {
+        setQuickTips(tips);
+
+        // PERSISTENCE: Save tips with timestamp and userId
+        const cachedTipsKey = `quanta_ai_last_tips_${user.uid}`;
+        localStorage.setItem(cachedTipsKey, JSON.stringify({
+          data: tips,
+          timestamp: Date.now(),
+          userId: user.uid  // CRITICAL: Include userId for validation
+        }));
+      }
     } catch (error: any) {
-      // Silenciar errores de rate limit - el cache se usará automáticamente
       if (error.message?.includes('Rate limit')) {
-        console.log('[AICoach] Usando datos en caché por rate limit');
+        console.log('[AICoach] Rate limited, using cache');
       } else {
-        console.error('[AICoach] Error loading analysis:', error);
+        console.error('[AICoach] Error in analysis:', error);
       }
     } finally {
       setLoading(false);
@@ -95,7 +186,43 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
     if (translated && translated !== categoryId) return translated;
 
     // If no translation or it's an ID (long string), return generic name
-    return language === 'es' ? 'Otra categoría' : 'Other category';
+    return language === 'es' ? 'Otra categoría' : categoryId;
+  };
+
+  // Handle recommendation action clicks
+  const handleRecommendationAction = (rec: AIRecommendation) => {
+    // Log action for analytics
+    console.log('[AICoach] Recommendation action:', rec.type, rec.title);
+
+    // Route based on recommendation type
+    switch (rec.type) {
+      case 'expense_reduction':
+        // If has specific category, could navigate to expenses with filter
+        // For now, open Savings Planner to create a cost-cutting plan
+        onOpenSavingsPlanner();
+        break;
+
+      case 'savings':
+      case 'goal':
+        // Open Savings Planner to create or adjust goals
+        onOpenSavingsPlanner();
+        break;
+
+      case 'budget':
+        // Navigate to Budget tab would require navigation prop
+        // For now, open strategies to see budget models
+        onOpenStrategies();
+        break;
+
+      case 'investment':
+        // Open Strategies for financial models
+        onOpenStrategies();
+        break;
+
+      default:
+        // Default: open challenges for gamified approaches
+        onOpenChallenges();
+    }
   };
 
   // Process recommendation text to replace category IDs with names
@@ -116,46 +243,6 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
     }
 
     return processedText;
-  };
-
-  const getHealthColor = (status: string) => {
-    switch (status) {
-      case 'excellent': return 'emerald';
-      case 'good': return 'blue';
-      case 'warning': return 'amber';
-      case 'critical': return 'rose';
-      default: return 'slate';
-    }
-  };
-
-  const getHealthIcon = (status: string) => {
-    switch (status) {
-      case 'excellent': return ThumbsUp;
-      case 'good': return CheckCircle2;
-      case 'warning': return AlertCircle;
-      case 'critical': return AlertTriangle;
-      default: return Activity;
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'rose';
-      case 'medium': return 'amber';
-      case 'low': return 'blue';
-      default: return 'slate';
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'savings': return Target;
-      case 'budget': return PieChart;
-      case 'investment': return TrendingUp;
-      case 'expense_reduction': return TrendingDown;
-      case 'goal': return Award;
-      default: return Lightbulb;
-    }
   };
 
   return (
@@ -180,7 +267,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
               </p>
             </div>
             <button
-              onClick={loadAnalysis}
+              onClick={() => loadAnalysis(true)}
               disabled={loading}
               className="p-2 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50"
             >
@@ -201,9 +288,9 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                     </span>
                   </div>
                 </div>
-                <div className={`p-4 rounded-2xl bg-${getHealthColor(analysis.healthStatus)}-500/20`}>
+                <div className={`p-4 rounded-2xl ${HEALTH_COLORS[analysis.healthStatus]?.bg || HEALTH_COLORS.slate.bg}`}>
                   {React.createElement(getHealthIcon(analysis.healthStatus), {
-                    className: `w-8 h-8 text-${getHealthColor(analysis.healthStatus)}-300`
+                    className: `w-8 h-8 ${HEALTH_COLORS[analysis.healthStatus]?.text || HEALTH_COLORS.slate.text}`
                   })}
                 </div>
               </div>
@@ -212,7 +299,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
               <div className="mt-4">
                 <div className="h-2 bg-white/20 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-1000 bg-${getHealthColor(analysis.healthStatus)}-400`}
+                    className={`h-full rounded-full transition-all duration-1000 ${HEALTH_COLORS[analysis.healthStatus]?.bar || HEALTH_COLORS.slate.bar}`}
                     style={{ width: `${analysis.healthScore}%` }}
                   />
                 </div>
@@ -434,6 +521,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                       key={rec.id}
                       recommendation={rec}
                       processText={processRecommendationText}
+                      onActionClick={handleRecommendationAction}
                     />
                   ))}
               </div>
@@ -446,7 +534,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                 <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
                   <h3 className="font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                     <PieChart className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    {language === 'es' ? 'Top Categorías de Gasto' : 'Top Expense Categories'}
+                    {t.aiCoach.topExpenseCategories}
                   </h3>
                   <div className="space-y-3">
                     {analysis.topExpenseCategories.map((cat, i) => (
@@ -518,7 +606,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
                   : 'Analysis generation failed. Try again or check your AI settings.';
               })()}
             </p>
-            <Button onClick={loadAnalysis} isLoading={loading}>
+            <Button onClick={() => loadAnalysis(true)} isLoading={loading}>
               {t.aiCoach.analyzeFinances}
             </Button>
           </div>
@@ -528,29 +616,80 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
   );
 };
 
+// --- STYLING HELPERS & CONSTANTS ---
+
+const HEALTH_COLORS: Record<string, { bg: string, text: string, bar: string }> = {
+  excellent: { bg: 'bg-emerald-500/20', text: 'text-emerald-300', bar: 'bg-emerald-400' },
+  good: { bg: 'bg-blue-500/20', text: 'text-blue-300', bar: 'bg-blue-400' },
+  warning: { bg: 'bg-amber-500/20', text: 'text-amber-300', bar: 'bg-amber-400' },
+  critical: { bg: 'bg-rose-500/20', text: 'text-rose-300', bar: 'bg-rose-400' },
+  slate: { bg: 'bg-slate-500/20', text: 'text-slate-300', bar: 'bg-slate-400' }
+};
+
+const getHealthIcon = (status: string) => {
+  switch (status) {
+    case 'excellent': return ThumbsUp;
+    case 'good': return CheckCircle2;
+    case 'warning': return AlertCircle;
+    case 'critical': return AlertTriangle;
+    default: return Activity;
+  }
+};
+
+const getPriorityColors = (priority: string) => {
+  const colors: Record<string, { iconBg: string, iconText: string, tagBg: string, tagText: string }> = {
+    high: {
+      iconBg: 'bg-rose-50 dark:bg-rose-900/30',
+      iconText: 'text-rose-600 dark:text-rose-400',
+      tagBg: 'bg-rose-100 dark:bg-rose-900/50',
+      tagText: 'text-rose-700 dark:text-rose-300'
+    },
+    medium: {
+      iconBg: 'bg-amber-50 dark:bg-amber-900/30',
+      iconText: 'text-amber-600 dark:text-amber-400',
+      tagBg: 'bg-amber-100 dark:bg-amber-900/50',
+      tagText: 'text-amber-700 dark:text-amber-300'
+    },
+    low: {
+      iconBg: 'bg-blue-50 dark:bg-blue-900/30',
+      iconText: 'text-blue-600 dark:text-blue-400',
+      tagBg: 'bg-blue-100 dark:bg-blue-900/50',
+      tagText: 'text-blue-700 dark:text-blue-300'
+    }
+  };
+  return colors[priority] || colors.low;
+};
+
+const getTypeIcon = (type: string) => {
+  switch (type) {
+    case 'savings': return Target;
+    case 'budget': return PieChart;
+    case 'investment': return TrendingUp;
+    case 'expense_reduction': return TrendingDown;
+    case 'goal': return Award;
+    default: return Lightbulb;
+  }
+};
+
 // Recommendation Card Component
 const RecommendationCard: React.FC<{
   recommendation: AIRecommendation;
   processText: (text: string) => string;
-}> = ({ recommendation, processText }) => {
+  onActionClick?: (rec: AIRecommendation) => void;
+}> = ({ recommendation, processText, onActionClick }) => {
   const { formatAmount } = useCurrency();
-  // Hook is needed here too or pass it down. 
-  // RecommendationCard IS a functional component.
-  // It receives currencySymbol and currencyCode as props but we want to use the global context.
-  // Let's rely on global context inside the card.
-
-  const TypeIcon = getTypeIconForRec(recommendation.type);
-  const priorityColor = recommendation.priority === 'high' ? 'rose' : recommendation.priority === 'medium' ? 'amber' : 'blue';
+  const TypeIcon = getTypeIcon(recommendation.type);
+  const colors = getPriorityColors(recommendation.priority);
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700 shadow-sm">
       <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-xl bg-${priorityColor}-50 dark:bg-${priorityColor}-900/30`}>
-          <TypeIcon className={`w-5 h-5 text-${priorityColor}-600 dark:text-${priorityColor}-400`} />
+        <div className={`p-2 rounded-xl ${colors.iconBg}`}>
+          <TypeIcon className={`w-5 h-5 ${colors.iconText}`} />
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-${priorityColor}-100 dark:bg-${priorityColor}-900/50 text-${priorityColor}-700 dark:text-${priorityColor}-300`}>
+            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${colors.tagBg} ${colors.tagText}`}>
               {recommendation.priority === 'high' ? 'Alta' : recommendation.priority === 'medium' ? 'Media' : 'Baja'} prioridad
             </span>
           </div>
@@ -569,7 +708,10 @@ const RecommendationCard: React.FC<{
           )}
 
           {recommendation.actionLabel && (
-            <button className="mt-3 flex items-center gap-1 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
+            <button
+              onClick={() => onActionClick?.(recommendation)}
+              className="mt-3 flex items-center gap-1 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline transition-colors"
+            >
               {recommendation.actionLabel}
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -579,14 +721,3 @@ const RecommendationCard: React.FC<{
     </div>
   );
 };
-
-function getTypeIconForRec(type: string) {
-  switch (type) {
-    case 'savings': return Target;
-    case 'budget': return PieChart;
-    case 'investment': return TrendingUp;
-    case 'expense_reduction': return TrendingDown;
-    case 'goal': return Award;
-    default: return Lightbulb;
-  }
-}

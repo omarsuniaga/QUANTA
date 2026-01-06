@@ -198,7 +198,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900">
       {/* ... (Header same as before) ... */}
       {/* Header content repeated for context stability if needed, or leave unchanged parts */}
       <header className="sticky top-0 z-10 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
@@ -223,7 +223,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto p-4 pb-28">
+      <main className="flex-1 overflow-auto p-4">
         {/* ... (Available Surplus Card same as before) ... */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-6 border border-slate-200 dark:border-slate-700">
           <div className="flex items-center justify-between mb-2">
@@ -370,9 +370,9 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
         {/* Info Section moved out of view, will be replaced by modal on click */}
       </main>
 
-      {/* Fixed Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 z-20 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-4">
-        <div className="max-w-lg mx-auto flex gap-3">
+      {/* Sticky Footer - Inside Modal */}
+      <footer className="sticky bottom-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-4 z-10">
+        <div className="flex gap-3">
           <button
             onClick={onBack}
             className="flex-1 py-3 px-4 rounded-xl font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
@@ -382,7 +382,7 @@ export const SurplusDistributionView: React.FC<SurplusDistributionViewProps> = (
           <button
             onClick={() => setShowConfirmDialog(true)}
             disabled={!selectedPlan || isCreating}
-            className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isCreating
               ? (language === 'es' ? 'Creando...' : 'Creating...')

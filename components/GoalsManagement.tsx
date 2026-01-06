@@ -22,6 +22,8 @@ import {
 import { Goal } from '../types';
 import { useI18n } from '../contexts/I18nContext';
 import { Button } from './Button';
+import { ModalWrapper } from './ModalWrapper';
+import { useCurrency } from '../hooks/useCurrency';
 
 interface GoalsManagementProps {
   isOpen: boolean;
@@ -34,8 +36,6 @@ interface GoalsManagementProps {
   availableBalance?: number;
 }
 
-import { useCurrency } from '../hooks/useCurrency';
-
 export const GoalsManagement: React.FC<GoalsManagementProps> = ({
   isOpen,
   onClose,
@@ -46,7 +46,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
   onUpdateGoal,
   availableBalance = 0
 }) => {
-  const { formatAmount, currencySymbol, currencyCode } = useCurrency();
+  const { formatAmount, parseAmount, currencySymbol, currencyCode } = useCurrency();
   const { language } = useI18n();
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [showContributionModal, setShowContributionModal] = useState(false);
@@ -146,7 +146,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
   const handleContribution = () => {
     if (!selectedGoal || !contributionAmount) return;
 
-    const amount = parseFloat(contributionAmount);
+    const amount = parseAmount(contributionAmount);
     if (isNaN(amount) || amount <= 0) return;
 
     const newAmount = contributionType === 'add'
@@ -211,9 +211,9 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <ModalWrapper isOpen={isOpen} onClose={onClose}>
       <div
-        className="bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+        className="bg-white dark:bg-slate-900 w-full max-w-2xl lg:max-w-3xl max-h-[85vh] mt-12 mb-8 rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-300"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -292,7 +292,7 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                     {/* Goal Header */}
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-${goal.color || 'indigo'}-100 dark:bg-${goal.color || 'indigo'}-900/30 text-${goal.color || 'indigo'}-600 dark:text-${goal.color || 'indigo'}-400`}>
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-${goal.color || 'indigo'}-100 dark: bg-${goal.color || 'indigo'}-900/30 text-${goal.color || 'indigo'}-600 dark: text-${goal.color || 'indigo'}-400`}>
                           <Target className="w-5 h-5" />
                         </div>
                         <div>
@@ -332,13 +332,13 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
                           {formatAmount(goal.currentAmount)}
                         </span>
-                        <span className={`text-sm font-bold text-${colorName}-600 dark:text-${colorName}-400`}>
+                        <span className={`text-sm font-bold text-${colorName}-600 dark: text-${colorName}-400`}>
                           {progress}%
                         </span>
                       </div>
                       <div className="h-3 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
                         <div
-                          className={`h-full bg-gradient-to-r from-${colorName}-400 to-${colorName}-500 dark:from-${colorName}-500 dark:to-${colorName}-400 rounded-full transition-all duration-500`}
+                          className={`h-full bg-gradient-to-r from -${colorName}-400 to-${colorName}-500 dark: from -${colorName}-500 dark: to-${colorName}-400 rounded-full transition-all duration-500`}
                           style={{ width: `${progress}%` }}
                         />
                       </div>
@@ -469,8 +469,8 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                       : 'text-amber-700 dark:text-amber-300'
                       }`}>
                       {(contributionType === 'add'
-                        ? formatAmount(selectedGoal.currentAmount + (parseFloat(contributionAmount) || 0))
-                        : formatAmount(Math.max(0, selectedGoal.currentAmount - (parseFloat(contributionAmount) || 0)))
+                        ? formatAmount(selectedGoal.currentAmount + (parseAmount(contributionAmount) || 0))
+                        : formatAmount(Math.max(0, selectedGoal.currentAmount - (parseAmount(contributionAmount) || 0)))
                       )}
                     </span>
                   </div>
@@ -487,8 +487,8 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
                 </button>
                 <button
                   onClick={handleContribution}
-                  disabled={!contributionAmount || parseFloat(contributionAmount) <= 0}
-                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${contributionType === 'add'
+                  disabled={!contributionAmount || parseAmount(contributionAmount) <= 0}
+                  className={`flex-1 py-2.5 px-4 rounded-xl font-semibold transition-colors disabled: opacity-50 disabled: cursor-not-allowed ${contributionType === 'add'
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                     : 'bg-amber-600 hover:bg-amber-700 text-white'
                     }`}
@@ -501,6 +501,6 @@ export const GoalsManagement: React.FC<GoalsManagementProps> = ({
           </div>
         )}
       </div>
-    </div>
+    </ModalWrapper>
   );
 };
