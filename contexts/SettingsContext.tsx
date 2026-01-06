@@ -63,7 +63,13 @@ const DEFAULT_SETTINGS: AppSettings = {
     displayMode: 'local',
     baseCode: 'USD'
   },
-  notifications: { enabled: true, billReminders: true, reminderLeadDays: 3, emailAlerts: false },
+  notifications: {
+    enabled: true,
+    billReminders: true,
+    reminderLeadDays: 3,
+    upcomingPaymentsThreshold: 15, // Default: 15 days
+    emailAlerts: false
+  },
   aiConfig: { enabled: true, level: 'medium', dataSharing: false }
 };
 

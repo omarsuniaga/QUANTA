@@ -239,6 +239,7 @@ export interface NotificationConfig {
   emailAlerts?: boolean;
   billReminders?: boolean;
   reminderLeadDays?: number;
+  upcomingPaymentsThreshold?: number; // Days ahead to show upcoming payments: 3, 7, 15 (default), or 30
 }
 
 export interface CurrencyConfig {

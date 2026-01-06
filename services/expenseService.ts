@@ -252,6 +252,9 @@ export const expenseService = {
     
     saveToLocal(LS_KEYS.EXPENSE_TEMPLATES, filtered);
     
+    // CRITICAL: Clear monthly docs cache so they regenerate without the deleted template
+    this.clearMonthlyDocsCache();
+    
     if (db && navigator.onLine) {
       try {
         await getUserRef(uid).collection('expense_fixed_templates').doc(templateId).delete();

@@ -3,8 +3,11 @@ import {
   ArrowDownRight, Zap, Calendar, AlertCircle, Coffee, ShoppingBag, Car, Home,
   Bell, Clock, Edit3, Trash2, Filter, Check, X, ChevronDown, ChevronUp,
   CreditCard, AlertTriangle, CalendarClock, History, Banknote, MoreVertical,
-  Info, ChevronLeft, ChevronRight, CheckCircle, Smartphone
+  Info, ChevronLeft, ChevronRight, CheckCircle, Smartphone, List
 } from 'lucide-react';
+import { PageHeader, PeriodSelector, StatsCard } from './base';
+import { colors } from '../styles/tokens';
+import { EditRecurringExpenseModal } from './modals/EditRecurringExpenseModal';
 import { Transaction, CustomCategory } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { useI18n } from '../contexts/I18nContext';
@@ -57,7 +60,22 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   const [showMonthExpenseInfo, setShowMonthExpenseInfo] = useState(false);
   const [editingAmountId, setEditingAmountId] = useState<string | null>(null);
   const [tempAmount, setTempAmount] = useState<string>('');
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null); // NEW: for dropdown menu
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<{ id: string, name: string, amount: number, templateId: string } | null>(null);
+
+  // Recent Expenses filters and sorting
+  const [expenseTypeFilter, setExpenseTypeFilter] = useState<'all' | 'recurring' | 'extras'>('all');
+  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
+
+  // Check if viewing current month
+  const isCurrentMonth = useMemo(() => {
+    const now = new Date();
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    return currentPeriod === current;
+  }, [currentPeriod]);
 
   // Load custom categories
   useEffect(() => {
@@ -83,12 +101,6 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     setCurrentPeriod(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
   };
 
-  const isCurrentMonth = useMemo(() => {
-    const now = new Date();
-    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    return currentPeriod === current;
-  }, [currentPeriod]);
-
   // --- DATA PROCESSING ---
 
   // 1. Recurring Items (from hook)
@@ -109,24 +121,35 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   }, [monthlyDoc, filter]);
 
   // 2. Quick Expenses (Transactions in this month that are NOT linked to recurring items)
-  const quickExpenses = useMemo(() => {
-    return transactions.filter(tx => {
+  // Recent Expenses: Show ALL expenses (recurring + extras) with filters
+  const recentExpenses = useMemo(() => {
+    let filtered = transactions.filter(tx => {
       if (tx.type !== 'expense') return false;
-      const txPeriod = tx.date.substring(0, 7); // YYYY-MM
+      const txPeriod = tx.date.substring(0, 7);
 
       // Must be in this period
       if (txPeriod !== currentPeriod) return false;
 
-      // Must NOT be a recurring payment (source='recurring' or isRecurring=true for legacy)
-      // Note: In new system, recurring payments have source='recurring'. 
-      // Legacy might just have isRecurring=true. 
-      // We want to show "Quick Expenses" here, which are one-off expenses.
-      if (tx.source === 'recurring') return false;
-      if (tx.isRecurring && !tx.source) return false; // Hide legacy recurring if migrated
+      // Type filter: recurring vs extras
+      if (expenseTypeFilter === 'recurring' && !tx.recurringMonthlyItemId) return false;
+      if (expenseTypeFilter === 'extras' && tx.recurringMonthlyItemId) return false;
 
       return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, currentPeriod]);
+    });
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'date-desc': return new Date(b.date).getTime() - new Date(a.date).getTime();
+        case 'date-asc': return new Date(a.date).getTime() - new Date(b.date).getTime();
+        case 'amount-desc': return b.amount - a.amount;
+        case 'amount-asc': return a.amount - b.amount;
+        default: return 0;
+      }
+    });
+
+    return filtered;
+  }, [transactions, currentPeriod, expenseTypeFilter, sortBy]);
 
   // --- HANDLERS ---
   const handlePay = async (itemId: string, defaultAmount: number) => {
@@ -140,37 +163,22 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
   return (
     <div className="flex-1 overflow-y-auto pb-20 bg-slate-50 dark:bg-slate-900">
 
-      {/* 1. STICKY HEADER (Design System Aligned) */}
-      <div className="bg-white dark:bg-slate-800 pb-6 pt-2 px-4 shadow-sm sticky top-0 z-10 transition-colors">
-        <div className="flex items-center justify-between mb-4 h-[40px]">
-          <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl">
-              <ArrowDownRight className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-            </div>
-            {language === 'es' ? 'Mis Gastos' : 'My Expenses'}
-          </h1>
-        </div>
+      {/* 1. STICKY HEADER      {/* Header (Design System) */}
+      <div className="bg-white dark:bg-slate-800 pb-6 pt-2 shadow-sm sticky top-0 z-10 transition-colors">
+        <PageHeader
+          title={language === 'es' ? 'Mis Gastos' : 'My Expenses'}
+          icon={ArrowDownRight}
+          iconColor="rose"
+        />
 
-        {/* Period Selector */}
-        <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1">
-          <button onClick={() => changeMonth('prev')} className="p-1 hover:bg-white dark:hover:bg-slate-600 rounded-md transition-colors">
-            <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-          </button>
-          <span className="font-bold text-slate-700 dark:text-slate-200 capitalize">
-            {(() => {
-              const [year, month] = currentPeriod.split('-').map(Number);
-              // Create date in LOCAL timezone by passing year, month (0-indexed), day
-              const date = new Date(year, month - 1, 1);
-              return date.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { month: 'long', year: 'numeric' });
-            })()}
-          </span>
-          <button
-            onClick={() => changeMonth('next')}
-            disabled={isCurrentMonth}
-            className={`p-1 rounded-md transition-colors ${isCurrentMonth ? 'opacity-30 cursor-not-allowed' : 'hover:bg-white dark:hover:bg-slate-600'}`}
-          >
-            <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-          </button>
+        <div className="px-4">
+          <PeriodSelector
+            currentPeriod={currentPeriod}
+            onPrevious={() => changeMonth('prev')}
+            onNext={() => changeMonth('next')}
+            isCurrentMonth={isCurrentMonth}
+            language={language as 'es' | 'en'}
+          />
         </div>
       </div>
 
@@ -325,39 +333,15 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
                           {/* Dropdown Menu */}
                           <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
                             <button
-                              onClick={async () => {
+                              onClick={() => {
                                 setMenuOpenId(null);
-                                // Update only this month's item amount (not the base template)
-                                const newAmount = prompt(
-                                  language === 'es'
-                                    ? `Nuevo monto para "${item.nameSnapshot}":`
-                                    : `New amount for "${item.nameSnapshot}":`,
-                                  item.amount.toString()
-                                );
-                                if (newAmount && !isNaN(parseFloat(newAmount))) {
-                                  try {
-                                    // Get current monthly doc and update the item
-                                    const doc = await import('../services/expenseService').then(m => m.expenseService.getMonthlyExpenses(currentPeriod));
-                                    const itemIndex = doc.fixedItems.findIndex(i => i.id === item.id);
-
-                                    if (itemIndex >= 0) {
-                                      doc.fixedItems[itemIndex].amount = parseFloat(newAmount);
-                                      await import('../services/expenseService').then(m => m.expenseService.saveMonthlyDoc(doc));
-                                      expenseActions.refresh();
-
-                                      toast.success(
-                                        language === 'es' ? 'Monto actualizado' : 'Amount updated',
-                                        language === 'es' ? 'Solo para este mes' : 'For this month only'
-                                      );
-                                    }
-                                  } catch (error) {
-                                    console.error('Error updating template:', error);
-                                    toast.error(
-                                      language === 'es' ? 'Error al actualizar' : 'Error updating',
-                                      error instanceof Error ? error.message : 'Unknown error'
-                                    );
-                                  }
-                                }
+                                setEditingItem({
+                                  id: item.id,
+                                  name: item.nameSnapshot,
+                                  amount: item.amount,
+                                  templateId: item.templateId
+                                });
+                                setEditModalOpen(true);
                               }}
                               className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                             >
@@ -477,13 +461,13 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         </div>
       </div>
 
-      {/* 4. QUICK EXPENSES HISTORY */}
+      {/* 4. RECENT EXPENSES (Últimos Gastos) */}
       <div className="px-4 mt-8">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <History className="w-5 h-5 text-slate-400" />
+            <List className="w-5 h-5 text-slate-400" />
             <h2 className="text-base font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">
-              {language === 'es' ? 'Gastos Rápidos / Extras' : 'Quick / Extra Expenses'}
+              {language === 'es' ? 'Últimos Gastos' : 'Recent Expenses'}
             </h2>
           </div>
           {isCurrentMonth && (
@@ -494,31 +478,103 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           )}
         </div>
 
+        {/* Filters & Sorting */}
+        <div className="flex gap-2 mb-3 items-center flex-wrap">
+          {/* Type Filter */}
+          <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1">
+            <button
+              onClick={() => setExpenseTypeFilter('all')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'all'
+                ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+            >
+              {language === 'es' ? 'Todos' : 'All'}
+            </button>
+            <button
+              onClick={() => setExpenseTypeFilter('recurring')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'recurring'
+                ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+            >
+              {language === 'es' ? 'Recurrentes' : 'Recurring'}
+            </button>
+            <button
+              onClick={() => setExpenseTypeFilter('extras')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'extras'
+                ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+                }`}
+            >
+              {language === 'es' ? 'Extras' : 'Extras'}
+            </button>
+          </div>
+
+          {/* Sort Dropdown */}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-none rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
+          >
+            <option value="date-desc">{language === 'es' ? '📅 Más reciente' : '📅 Most recent'}</option>
+            <option value="date-asc">{language === 'es' ? '📅 Más antiguo' : '📅 Oldest first'}</option>
+            <option value="amount-desc">{language === 'es' ? '💰 Mayor monto' : '💰 Highest amount'}</option>
+            <option value="amount-asc">{language === 'es' ? '💰 Menor monto' : '💰 Lowest amount'}</option>
+          </select>
+
+          {/* Active filters count */}
+          {(expenseTypeFilter !== 'all' || sortBy !== 'date-desc') && (
+            <button
+              onClick={() => {
+                setExpenseTypeFilter('all');
+                setSortBy('date-desc');
+              }}
+              className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            >
+              {language === 'es' ? 'Limpiar' : 'Clear'}
+            </button>
+          )}
+        </div>
+
         <div className="space-y-2">
-          {quickExpenses.length === 0 ? (
+          {recentExpenses.length === 0 ? (
             <div className="text-center py-6 text-slate-400 text-xs italic">
-              {language === 'es' ? 'No hay gastos extra registrados este mes.' : 'No extra expenses recorded this month.'}
+              {language === 'es' ? 'No hay gastos registrados este mes.' : 'No expenses recorded this month.'}
             </div>
           ) : (
-            quickExpenses.map(tx => (
-              <div key={tx.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-rose-50 dark:bg-rose-900/20 text-rose-500 rounded-full">
-                    {/* Here we could look up the category icon */}
+            recentExpenses.map(tx => (
+              <div key={tx.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className={`p-2 rounded-full ${tx.recurringMonthlyItemId
+                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                      : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
+                    }`}>
                     <ShoppingBag className="w-4 h-4" />
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 dark:text-white line-clamp-1">{tx.description}</p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(tx.date).toLocaleDateString()} • {getCategoryName(tx.category)}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
+                        {tx.description}
+                      </p>
+                      {tx.recurringMonthlyItemId && (
+                        <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">
+                          {language === 'es' ? 'Recurrente' : 'Recurring'}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {new Date(tx.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                        day: '2-digit',
+                        month: 'short'
+                      })} • {tx.category}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-rose-600">-{formatCurrency(tx.amount)}</p>
-                  {onEditTransaction && (
-                    <button onClick={() => onEditTransaction(tx)} className="text-[10px] text-slate-400 hover:text-blue-500">Ed.</button>
-                  )}
+                  <p className="text-base font-bold text-rose-600 dark:text-rose-400">
+                    {formatCurrency(tx.amount)}
+                  </p>
                 </div>
               </div>
             ))
@@ -564,6 +620,44 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           </div>
         </div>
       </ModalWrapper>
+
+      {/* Edit Recurring Expense Modal */}
+      {editModalOpen && editingItem && (
+        <EditRecurringExpenseModal
+          isOpen={editModalOpen}
+          itemName={editingItem.name}
+          currentAmount={editingItem.amount}
+          onClose={() => {
+            setEditModalOpen(false);
+            setEditingItem(null);
+          }}
+          onSave={async (newAmount) => {
+            if (!editingItem) return;
+
+            try {
+              // CRITICAL FIX: Update the template (not just the current month's item)
+              // This ensures future months get the new amount
+              await expenseActions.editTemplate(editingItem.templateId, {
+                defaultAmount: newAmount
+              });
+
+              toast.success(
+                language === 'es' ? 'Monto actualizado' : 'Amount updated',
+                language === 'es' ? 'Se aplicará a los meses pendientes' : 'Will apply to pending months'
+              );
+            } catch (error) {
+              console.error('Error updating template:', error);
+              toast.error(
+                language === 'es' ? 'Error al actualizar' : 'Error updating',
+                error instanceof Error ? error.message : 'Unknown error'
+              );
+            }
+
+            setEditModalOpen(false);
+            setEditingItem(null);
+          }}
+        />
+      )}
 
     </div>
   );
