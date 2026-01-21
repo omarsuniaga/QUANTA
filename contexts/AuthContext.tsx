@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from '../types';
 import { storageService } from '../services/storageService';
 import { auth } from '../firebaseConfig';
+import { cacheManager } from '../utils/cacheManager';
 
 interface AuthContextType {
   user: User | null;
@@ -69,6 +70,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return () => unsubscribe();
   }, []);
 
+  // Session Transition Listener (@Architect Proposal)
+  useEffect(() => {
+    if (user?.uid) {
+      cacheManager.handleUserSessionTransition(user.uid);
+    }
+  }, [user?.uid]);
+
   const login = async (email: string, password: string) => {
     const loggedInUser = await storageService.login(email, password);
     setUser(loggedInUser);
@@ -80,10 +88,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    await storageService.logout();
-    // Clear local data on logout
-    storageService.clearLocalData();
-    setUser(null);
+    try {
+      // @Architect & @CodeReviewer Rule: Clear all sensitive cache BEFORE firebase logout
+      await cacheManager.handleFullLogout();
+
+      await storageService.logout();
+      setUser(null);
+    } catch (error) {
+      console.error("[AuthContext] Error during logout:", error);
+      // Still set user to null to prevent UI stuck
+      setUser(null);
+    }
   };
 
   return (

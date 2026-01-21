@@ -7,6 +7,7 @@ interface CacheEntry<T> {
   data: T;
   timestamp: number;
   expiresAt: number;
+  userId: string; // @CodeReviewer Rule: Always track ownership
 }
 
 interface QueuedRequest<T> {
@@ -53,6 +54,7 @@ class APIRateLimiter {
    * Ejecuta una petición con rate limiting, cache y reintentos
    */
   async execute<T>(
+    userId: string, // REQUIRED for isolation
     cacheKey: string,
     requestFn: () => Promise<T>,
     options: {
@@ -76,7 +78,7 @@ class APIRateLimiter {
       
       // Intentar devolver del cache aunque esté expirado
       if (this.config.enableCache && !skipCache) {
-        const cached = this.getFromCache<T>(cacheKey, true); // allowExpired = true
+        const cached = this.getFromCache<T>(userId, cacheKey, true); // allowExpired = true
         if (cached !== null) {
           console.log(`[RateLimiter] Retornando cache expirado durante cooldown`);
           return cached;
@@ -88,7 +90,7 @@ class APIRateLimiter {
 
     // 2. Verificar cache
     if (this.config.enableCache && !skipCache && !forceRefresh) {
-      const cached = this.getFromCache<T>(cacheKey);
+      const cached = this.getFromCache<T>(userId, cacheKey);
       if (cached !== null) {
         console.log(`[RateLimiter] Cache hit: ${cacheKey.substring(0, 50)}...`);
         return cached;
@@ -109,7 +111,7 @@ class APIRateLimiter {
           const result = await requestFn();
           // Guardar en cache
           if (this.config.enableCache && !skipCache) {
-            this.setCache(cacheKey, result, cacheDurationMs);
+            this.setCache(userId, cacheKey, result, cacheDurationMs);
           }
           return result;
         },
@@ -268,12 +270,19 @@ class APIRateLimiter {
   }
 
   /**
-   * Obtiene un valor del cache
+   * Obtiene un valor del cache validando el usuario
    */
-  private getFromCache<T>(key: string, allowExpired = false): T | null {
+  private getFromCache<T>(userId: string, key: string, allowExpired = false): T | null {
     const entry = this.cache.get(key);
     
     if (!entry) return null;
+
+    // VALIDACIÓN CRÍTICA: Impedir acceso cruzado de datos
+    if (entry.userId !== userId) {
+      console.warn(`[RateLimiter] Bloqueado acceso cruzado: entrada de ${entry.userId} solicitada por ${userId}`);
+      this.cache.delete(key);
+      return null;
+    }
     
     if (!allowExpired && Date.now() > entry.expiresAt) {
       this.cache.delete(key);
@@ -284,14 +293,15 @@ class APIRateLimiter {
   }
 
   /**
-   * Guarda un valor en el cache
+   * Guarda un valor en el cache con ownership del usuario
    */
-  private setCache<T>(key: string, data: T, durationMs: number): void {
+  private setCache<T>(userId: string, key: string, data: T, durationMs: number): void {
     const now = Date.now();
     this.cache.set(key, {
       data,
       timestamp: now,
-      expiresAt: now + durationMs
+      expiresAt: now + durationMs,
+      userId
     });
     
     this.saveCacheToStorage();

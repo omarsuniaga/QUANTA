@@ -44,7 +44,8 @@ export const smartGoalsService = {
     transactions: Transaction[],
     currentGoals: Goal[],
     income: number,
-    apiKey: string
+    apiKey: string,
+    customCategories?: any[]
   ): Promise<SmartGoalSuggestion[]> {
     // Validation
     if (!transactions || !Array.isArray(transactions)) {
@@ -82,7 +83,8 @@ export const smartGoalsService = {
       patterns,
       opportunities,
       income,
-      apiKey
+      apiKey,
+      customCategories
     );
 
     return suggestions.slice(0, MAX_SUGGESTIONS);
@@ -224,7 +226,8 @@ export const smartGoalsService = {
     patterns: SpendingPattern[],
     opportunities: Array<{ type: string; category: string; reason: string }>,
     income: number,
-    apiKey: string
+    apiKey: string,
+    customCategories?: any[]
   ): Promise<SmartGoalSuggestion[]> {
     const prompt = `
 Eres un asesor financiero experto. Analiza estos patrones de gasto y genera ${MAX_SUGGESTIONS} sugerencias ESPECÍFICAS de metas de ahorro.
@@ -232,10 +235,10 @@ Eres un asesor financiero experto. Analiza estos patrones de gasto y genera ${MA
 ## Datos del Usuario
 - Ingreso mensual: $${income.toFixed(2)}
 - Patrones de gasto (últimos ${ANALYSIS_MONTHS} meses):
-${patterns.slice(0, 5).map(p => `  - ${p.category}: $${p.averageMonthly.toFixed(2)}/mes (${p.percentageOfIncome.toFixed(1)}% del ingreso, tendencia: ${p.trend})`).join('\n')}
+${patterns.slice(0, 5).map(p => `  - ${aiCoachService.getCategoryDisplayName(p.category, customCategories)}: $${p.averageMonthly.toFixed(2)}/mes (${p.percentageOfIncome.toFixed(1)}% del ingreso, tendencia: ${p.trend})`).join('\n')}
 
 ## Oportunidades Detectadas
-${opportunities.map(o => `- ${o.reason}`).join('\n')}
+${opportunities.map(o => `- ${o.reason.replace(o.category, aiCoachService.getCategoryDisplayName(o.category, customCategories))}`).join('\n')}
 
 ## Tarea
 Genera ${MAX_SUGGESTIONS} sugerencias de metas alcanzables con este formato JSON:
@@ -267,11 +270,18 @@ Reglas importantes:
 
     try {
       // Use existing aiCoachService infrastructure
-      const response = await aiCoachService.generateQuickTip(
-        [], // Not used for this custom prompt
+      const stateHash = `smartgoals_${income}_${patterns.length}`;
+      const response = await aiCoachService.generateRawAnalysis(
+        'smartgoals_suggestions_v1',
+        prompt,
+        stateHash,
         apiKey,
-        prompt
+        false
       );
+
+      if (!response) {
+        return this.generateFallbackSuggestions(patterns, income);
+      }
 
       // Parse with error handling
       let parsed;
@@ -298,7 +308,7 @@ Reglas importantes:
       return parsed.suggestions.map((s: any) => ({
         id: crypto.randomUUID(),
         type: s.type || 'reduce_spending',
-        category: s.category || 'Sin categoría',
+        category: aiCoachService.getCategoryDisplayName(s.category || 'Sin categoría', customCategories),
         currentAmount: Number(s.currentAmount) || 0,
         targetAmount: Number(s.targetAmount) || 0,
         timeframe: s.timeframe || 'monthly',

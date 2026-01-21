@@ -140,6 +140,7 @@ async function _executeAiCall<T>(
     try {
       // Execute via Rate Limiter
       const result = await geminiRateLimiter.execute<T | null>(
+        userId,
         key,
         apiCall,
         { priority, forceRefresh, cacheDurationMs: ttl }
@@ -196,20 +197,6 @@ function calculateMonthStats(transactions: Transaction[]): MonthlyStats {
     }));
   
   return { income, expense, balance, topCategories };
-}
-
-// Helper: Map category ID to name
-function getCategoryDisplayName(categoryId: string, customCategories?: any[]): string {
-  // Check custom categories first
-  if (customCategories) {
-    const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
-    if (customCat) {
-      return customCat.name?.es || customCat.name?.en || customCat.key || categoryId;
-    }
-  }
-  
-  // Fallback to ID if not found
-  return categoryId;
 }
 
 // Helper: Get month name in Spanish
@@ -274,6 +261,22 @@ export const CHALLENGE_TEMPLATES: ChallengeTemplate[] = [
 ];
 
 export const aiCoachService = {
+  /**
+   * Helper: Map category ID to name
+   */
+  getCategoryDisplayName(categoryId: string, customCategories?: any[]): string {
+    // Check custom categories first
+    if (customCategories) {
+      const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
+      if (customCat) {
+        return customCat.name?.es || customCat.name?.en || customCat.key || categoryId;
+      }
+    }
+    
+    // Fallback to ID if not found
+    return categoryId;
+  },
+
   async analyzeFinances(
     transactions: Transaction[],
     stats: DashboardStats,
@@ -463,7 +466,7 @@ export const aiCoachService = {
           categoryChangesText = '\n🔍 CAMBIOS SIGNIFICATIVOS POR CATEGORÍA (>10%):\n';
           categoryChanges.slice(0, 3).forEach(cc => {
             const changeSign = cc.change >= 0 ? '+' : '';
-            const categoryName = getCategoryDisplayName(cc.category, customCategories);
+            const categoryName = this.getCategoryDisplayName(cc.category, customCategories);
             categoryChangesText += `- ${categoryName}: ${changeSign}${cc.change.toFixed(1)}% (RD$ ${cc.previousAmount.toLocaleString('es-DO')} → RD$ ${cc.currentAmount.toLocaleString('es-DO')})\n`;
           });
         }
@@ -479,13 +482,13 @@ Mes Actual (${currentMonthName}):
 - Ingresos: RD$ ${currentStats.income.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Egresos: RD$ ${currentStats.expense.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Balance: RD$ ${currentStats.balance.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-- Top 3 Categorías de Gasto: ${currentStats.topCategories.slice(0, 3).map(c => `${getCategoryDisplayName(c.category, customCategories)} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
+- Top 3 Categorías de Gasto: ${currentStats.topCategories.slice(0, 3).map(c => `${this.getCategoryDisplayName(c.category, customCategories)} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
 
 Mes Anterior (${previousMonthName}):
 - Ingresos: RD$ ${previousStats.income.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Egresos: RD$ ${previousStats.expense.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Balance: RD$ ${previousStats.balance.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-- Top 3 Categorías de Gasto: ${previousStats.topCategories.slice(0, 3).map(c => `${getCategoryDisplayName(c.category, customCategories)} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
+- Top 3 Categorías de Gasto: ${previousStats.topCategories.slice(0, 3).map(c => `${this.getCategoryDisplayName(c.category, customCategories)} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
 
 📈 VARIACIONES:
 - Ingresos: ${incomeChange >= 0 ? '+' : ''}${incomeChange.toFixed(1)}%
@@ -764,5 +767,36 @@ FORMATO: Array JSON de 3 strings en ${language === 'es' ? 'español' : 'inglés'
         return JSON.parse(text);
       }
     });
+  },
+
+  /**
+   * Universal AI Execution: Generates raw text response for custom prompts
+   * Used by other services (like smartGoalsService)
+   */
+  async generateRawAnalysis(
+    serviceKey: string,
+    prompt: string,
+    stateHash: string,
+    apiKey: string,
+    forceRefresh: boolean = false
+  ): Promise<string> {
+    const userId = getUserId();
+    if (!userId) return '';
+    
+    const result = await _executeAiCall<string>({
+      userId,
+      key: serviceKey,
+      stateHash,
+      forceRefresh,
+      apiCall: async () => {
+        const genAI = aiGateway.getClient(apiKey);
+        const modelId = await resolveBestModel();
+        const model = genAI.getGenerativeModel({ model: modelId });
+        const result = await model.generateContent(prompt);
+        return result.response.text() || '';
+      }
+    });
+
+    return result || '';
   }
 };
