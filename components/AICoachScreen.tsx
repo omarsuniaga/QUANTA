@@ -139,7 +139,7 @@ export const AICoachScreen: React.FC<AICoachScreenProps> = ({
 
     setLoading(true);
     try {
-      const result = await aiCoachService.analyzeFinances(transactions, stats, goals, selectedPlanId, force);
+      const result = await aiCoachService.analyzeFinances(transactions, stats, goals, selectedPlanId, force, customCategories);
       if (result) {
         setAnalysis(result);
 

@@ -55,29 +55,41 @@ export const expenseService = {
    * @param period - YYYY-MM format
    * @param templatesFromCache - Optional: pre-loaded templates from localStorage to avoid Firestore latency
    */
-  async initializeMonth(period: string, templatesFromCache?: ExpenseFixedTemplate[]): Promise<ExpenseMonthlyDocument> {
+  async initializeMonth(period: string, templatesFromCache?: ExpenseFixedTemplate[], forceRegenerate?: boolean): Promise<ExpenseMonthlyDocument> {
     const uid = getUserId();
     const docId = period;
     
-    // 1. Try Local
-    const localDoc = getFromLocal<ExpenseMonthlyDocument | null>(`${LS_KEYS.EXPENSE_MONTHLY}${period}`, null);
-    
-    // 2. Try Cloud
-    if (db && navigator.onLine) {
-      try {
-        const docRef = getUserRef(uid).collection('expense_monthly').doc(docId);
-        const docSnap = await docRef.get();
+    // CRITICAL FIX: If forceRegenerate is true, skip ALL caches (localStorage AND Firestore)
+    // This is needed when converting existing expenses to recurring
+    if (!forceRegenerate) {
+      // CRITICAL FIX: If templates are provided from cache, SKIP local/cloud lookup
+      // This forces regeneration with the latest templates
+      if (!templatesFromCache) {
+        // 1. Try Local
+        const localDoc = getFromLocal<ExpenseMonthlyDocument | null>(`${LS_KEYS.EXPENSE_MONTHLY}${period}`, null);
         
-        if (docSnap.exists) {
-          const data = docSnap.data() as ExpenseMonthlyDocument;
-          saveToLocal(`${LS_KEYS.EXPENSE_MONTHLY}${period}`, data);
-          return data;
+        // 2. Try Cloud
+        if (db && navigator.onLine) {
+          try {
+            const docRef = getUserRef(uid).collection('expense_monthly').doc(docId);
+            const docSnap = await docRef.get();
+            
+            if (docSnap.exists) {
+              const data = docSnap.data() as ExpenseMonthlyDocument;
+              saveToLocal(`${LS_KEYS.EXPENSE_MONTHLY}${period}`, data);
+              return data;
+            }
+          } catch (e) {
+            console.warn("Error fetching monthly expense doc", e);
+          }
+        } else if (localDoc) {
+          return localDoc;
         }
-      } catch (e) {
-        console.warn("Error fetching monthly expense doc", e);
+      } else {
+        console.log('[initializeMonth] Templates provided - forcing regeneration');
       }
-    } else if (localDoc) {
-      return localDoc;
+    } else {
+      console.log('[initializeMonth] Force regenerate - skipping ALL caches');
     }
 
     // 3. Create New - Use provided templates or fetch
@@ -95,7 +107,10 @@ export const expenseService = {
     const newDoc: ExpenseMonthlyDocument = {
       period,
       fixedItems: activeTemplates.map(t => ({
-        id: db?.collection('_').doc().id || Math.random().toString(36).substr(2, 9),
+        // CRITICAL FIX: Use deterministic ID based on templateId + period
+        // This ensures the same item ID is generated every time for the same template+period
+        // Prevents "Item not found" errors when searching by templateId
+        id: `${t.id}_${period}`,
         templateId: t.id,
         nameSnapshot: t.name,
         amount: t.defaultAmount,
@@ -291,9 +306,12 @@ export const expenseService = {
     };
     
     console.log('[updateFixedTemplate] Updated template:', templates[index]);
-    
+
     saveToLocal(LS_KEYS.EXPENSE_TEMPLATES, templates);
-    
+
+    // CRITICAL: Clear monthly docs cache so future months use updated template
+    this.clearMonthlyDocsCache();
+
     if (db && navigator.onLine) {
       try {
         await getUserRef(uid).collection('expense_fixed_templates').doc(templateId).update({
@@ -314,7 +332,7 @@ export const expenseService = {
   async saveMonthlyDoc(doc: ExpenseMonthlyDocument): Promise<void> {
     const uid = getUserId();
     saveToLocal(`${LS_KEYS.EXPENSE_MONTHLY}${doc.period}`, doc);
-    
+
     if (db && navigator.onLine) {
       try {
         // Remove undefined fields for Firestore (it doesn't accept undefined values)
@@ -324,6 +342,30 @@ export const expenseService = {
         console.error("Error saving monthly expense doc", e);
       }
     }
+  },
+
+  /**
+   * Clears all cached monthly expense documents from localStorage.
+   * This forces regeneration of monthly docs with updated template data.
+   * Called after template create/update/delete operations.
+   */
+  clearMonthlyDocsCache(): void {
+    if (typeof window === 'undefined') return;
+
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(LS_KEYS.EXPENSE_MONTHLY)) {
+        keysToRemove.push(key);
+      }
+    }
+
+    console.log('[clearMonthlyDocsCache] Clearing cache:', {
+      count: keysToRemove.length,
+      keys: keysToRemove
+    });
+
+    keysToRemove.forEach(key => localStorage.removeItem(key));
   },
 
   async migrateLegacyData(): Promise<void> {

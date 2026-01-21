@@ -36,6 +36,7 @@ import { notificationService } from '../services/notificationService';
 import { storageService } from '../services/storageService';
 import { InsightCard } from './InsightCard';
 import { FinancialHealthCard } from './FinancialHealthCard';
+import { SmartGoalsSuggestions } from './SmartGoalsSuggestions';
 import { calculateFinancialHealthMetrics } from '../utils/financialMathCore';
 import { useI18n } from '../contexts/I18nContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -382,6 +383,9 @@ const DashboardComponent: React.FC<DashboardProps> = ({ stats, transactions, goa
           onManageSurplus={onManageSurplus}
         />
       </div>
+
+      {/* SMART GOALS SUGGESTIONS */}
+      <SmartGoalsSuggestions />
 
       {/* Notifications Banner */}
       {upcomingPayments.length > 0 && (

@@ -3,7 +3,7 @@ import {
   ArrowDownRight, Zap, Calendar, AlertCircle, Coffee, ShoppingBag, Car, Home,
   Bell, Clock, Edit3, Trash2, Filter, Check, X, ChevronDown, ChevronUp,
   CreditCard, AlertTriangle, CalendarClock, History, Banknote, MoreVertical,
-  Info, ChevronLeft, ChevronRight, CheckCircle, Smartphone, List
+  Info, ChevronLeft, ChevronRight, CheckCircle, Smartphone, List, RotateCcw, Search
 } from 'lucide-react';
 import { PageHeader, PeriodSelector, StatsCard } from './base';
 import { colors } from '../styles/tokens';
@@ -19,6 +19,8 @@ import { BudgetPeriodData } from '../hooks/useBudgetPeriod';
 import { ModalWrapper } from './ModalWrapper';
 import { useCurrency } from '../hooks/useCurrency';
 import { useExpenseManager } from '../hooks/useExpenseManager';
+import { useTransactionFilters } from '../hooks/useTransactionFilters';
+import { FilterBar, CategoryOption, SortOption, StatusOption } from './FilterBar';
 
 interface ExpensesScreenProps {
   transactions: Transaction[];
@@ -120,9 +122,30 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
     });
   }, [monthlyDoc, filter]);
 
-  // 2. Quick Expenses (Transactions in this month that are NOT linked to recurring items)
-  // Recent Expenses: Show ALL expenses (recurring + extras) with filters
-  const recentExpenses = useMemo(() => {
+  // 2. Recent Expenses: Show ALL expenses (recurring items from monthlyDoc + regular transactions)
+  const recentExpensesBase = useMemo(() => {
+    // If "Recurrentes" tab is selected, show items from monthlyDoc instead of transactions
+    if (expenseTypeFilter === 'recurring') {
+      // Return filtered recurring items from monthlyDoc
+      return filteredRecurringItems.map(item => ({
+        // Convert ExpenseMonthlyItem to Transaction-like object for rendering
+        id: item.id,
+        type: 'expense' as const,
+        amount: item.amount,
+        description: item.nameSnapshot,
+        category: item.category,
+        date: `${currentPeriod}-01`, // Use first day of month as placeholder
+        isRecurring: true,
+        recurringMonthlyItemId: item.id,
+        recurringTemplateId: item.templateId,
+        status: item.status,
+        // Add these for rendering compatibility
+        _isMonthlyItem: true, // Flag to identify it's from monthlyDoc
+        _monthlyItem: item, // Keep reference to original item
+      })) as any[];
+    }
+
+    // For "Todos" and "Extras", show regular transactions
     let filtered = transactions.filter(tx => {
       if (tx.type !== 'expense') return false;
       const txPeriod = tx.date.substring(0, 7);
@@ -130,26 +153,65 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
       // Must be in this period
       if (txPeriod !== currentPeriod) return false;
 
-      // Type filter: recurring vs extras
-      if (expenseTypeFilter === 'recurring' && !tx.recurringMonthlyItemId) return false;
+      // Type filter: extras only (no recurring)
       if (expenseTypeFilter === 'extras' && tx.recurringMonthlyItemId) return false;
 
       return true;
     });
 
-    // Apply sorting
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'date-desc': return new Date(b.date).getTime() - new Date(a.date).getTime();
-        case 'date-asc': return new Date(a.date).getTime() - new Date(b.date).getTime();
-        case 'amount-desc': return b.amount - a.amount;
-        case 'amount-asc': return a.amount - b.amount;
-        default: return 0;
-      }
-    });
-
     return filtered;
-  }, [transactions, currentPeriod, expenseTypeFilter, sortBy]);
+  }, [transactions, currentPeriod, expenseTypeFilter, filteredRecurringItems]);
+
+  // 3. Apply advanced filters using universal hook
+  const {
+    filteredItems: recentExpenses,
+    searchQuery,
+    setSearchQuery,
+    categoryFilter,
+    setCategoryFilter,
+    statusFilter,
+    setStatusFilter,
+    sortBy: filterSortBy,
+    setSortBy: setFilterSortBy,
+    clearFilters,
+    activeFiltersCount,
+    resultCount
+  } = useTransactionFilters(recentExpensesBase, {
+    enableStatusFilter: expenseTypeFilter === 'recurring',
+    defaultSort: sortBy
+  });
+
+  // Get unique categories with counts
+  const categoryOptions: CategoryOption[] = useMemo(() => {
+    const categoryCounts = recentExpensesBase.reduce((acc, tx) => {
+      acc[tx.category] = (acc[tx.category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return Object.entries(categoryCounts).map(([cat, count]) => ({
+      value: cat,
+      label: getCategoryName(cat),
+      count: count as number
+    }));
+  }, [recentExpensesBase, customCategories, language]);
+
+  // Sort options
+  const sortOptions: SortOption[] = [
+    { value: 'date-desc', label: language === 'es' ? '📅 Más reciente' : '📅 Most recent' },
+    { value: 'date-asc', label: language === 'es' ? '📅 Más antiguo' : '📅 Oldest first' },
+    { value: 'amount-desc', label: language === 'es' ? '💰 Mayor monto' : '💰 Highest amount' },
+    { value: 'amount-asc', label: language === 'es' ? '💰 Menor monto' : '💰 Lowest amount' },
+    { value: 'name-asc', label: language === 'es' ? '🔤 A-Z' : '🔤 A-Z' },
+    { value: 'name-desc', label: language === 'es' ? '🔤 Z-A' : '🔤 Z-A' },
+  ];
+
+  // Status options (for recurring items)
+  const statusOptions: StatusOption[] = [
+    { value: 'all', label: language === 'es' ? 'Todos los estados' : 'All statuses' },
+    { value: 'pending', label: language === 'es' ? 'Pendientes' : 'Pending' },
+    { value: 'paid', label: language === 'es' ? 'Pagados' : 'Paid' },
+    { value: 'skipped', label: language === 'es' ? 'Omitidos' : 'Skipped' },
+  ];
 
   // --- HANDLERS ---
   const handlePay = async (itemId: string, defaultAmount: number) => {
@@ -235,231 +297,7 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
         </div>
       </div>
 
-      {/* 3. RECURRING EXPENSES SECTION (Renamed & Refactored) */}
-      <div className="px-4 mt-6">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <CalendarClock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-            <h2 className="text-lg font-bold text-slate-800 dark:text-white">
-              {language === 'es' ? 'Gastos Recurrentes' : 'Recurring Expenses'}
-            </h2>
-          </div>
-          {/* Quick Filter */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-            <button onClick={() => setFilter('all')} className={`px-2 py-1 text-[10px] rounded-md font-bold transition-all ${filter === 'all' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>
-              {language === 'es' ? 'Todos' : 'All'}
-            </button>
-            <button onClick={() => setFilter('pending')} className={`px-2 py-1 text-[10px] rounded-md font-bold transition-all ${filter === 'pending' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500'}`}>
-              {language === 'es' ? 'Pendientes' : 'Pending'}
-            </button>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {managerLoading ? (
-            <div className="text-center py-4 text-slate-400 text-sm">Cargando...</div>
-          ) : filteredRecurringItems.length === 0 ? (
-            <div className="text-center py-6 bg-slate-50 border border-dashed border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 rounded-2xl">
-              <CheckCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm text-slate-500">
-                {language === 'es' ? 'No hay gastos recurrentes para este filtro.' : 'No recurring expenses found.'}
-              </p>
-            </div>
-          ) : (
-            filteredRecurringItems.map(item => (
-              <div key={item.id} className="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-slate-700 shadow-sm transition-all hover:shadow-md">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.status === 'paid' ? 'bg-emerald-100 text-emerald-600' :
-                      item.status === 'skipped' ? 'bg-slate-100 text-slate-400' :
-                        'bg-amber-100 text-amber-600'
-                      }`}>
-                      {item.status === 'paid' ? <CheckCircle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <h3 className={`font-bold text-slate-800 dark:text-white ${item.status === 'skipped' ? 'line-through opacity-60' : ''}`}>
-                        {item.nameSnapshot}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full ${item.status === 'paid' ? 'bg-emerald-50 text-emerald-600' :
-                          item.status === 'skipped' ? 'bg-slate-100 text-slate-500' :
-                            'bg-amber-50 text-amber-600'
-                          }`}>
-                          {item.status === 'paid' ? (language === 'es' ? 'PAGADO' : 'PAID') :
-                            item.status === 'skipped' ? (language === 'es' ? 'OMITIDO' : 'SKIPPED') :
-                              (language === 'es' ? 'PENDIENTE' : 'PENDING')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Amount & Actions Menu */}
-                  <div className="flex items-center gap-2">
-                    <div className="text-right">
-                      {editingAmountId === item.id ? (
-                        <div className="flex items-center gap-1 justify-end">
-                          <input
-                            type="number"
-                            autoFocus
-                            value={tempAmount}
-                            onChange={(e) => setTempAmount(e.target.value)}
-                            className="w-20 text-right text-sm border-b-2 border-indigo-500 bg-transparent outline-none font-bold text-slate-800 dark:text-white"
-                          />
-                        </div>
-                      ) : (
-                        <div className={`text-lg font-bold ${item.status === 'skipped' ? 'text-slate-400 line-through' : 'text-slate-800 dark:text-white'}`}>
-                          {formatCurrency(item.amount)}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Menu Dropdown for Edit/Delete */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)}
-                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4 text-slate-400" />
-                      </button>
-
-                      {menuOpenId === item.id && (
-                        <>
-                          {/* Backdrop to close menu */}
-                          <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setMenuOpenId(null)}
-                          />
-
-                          {/* Dropdown Menu */}
-                          <div className="absolute right-0 mt-1 w-40 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-20 overflow-hidden">
-                            <button
-                              onClick={() => {
-                                setMenuOpenId(null);
-                                setEditingItem({
-                                  id: item.id,
-                                  name: item.nameSnapshot,
-                                  amount: item.amount,
-                                  templateId: item.templateId
-                                });
-                                setEditModalOpen(true);
-                              }}
-                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                              {language === 'es' ? 'Editar Monto' : 'Edit Amount'}
-                            </button>
-                            <button
-                              onClick={async () => {
-                                setMenuOpenId(null);
-                                if (confirm(language === 'es'
-                                  ? `¿Eliminar "${item.nameSnapshot}"?\n\nEsto eliminará:\n• El template del gasto recurrente\n• Todos los items pendientes de meses futuros\n• NO afectará pagos ya realizados`
-                                  : `Delete "${item.nameSnapshot}"?\n\nThis will remove:\n• The recurring expense template\n• All pending items from future months\n• Will NOT affect already paid expenses`
-                                )) {
-                                  try {
-                                    await expenseActions.deleteTemplate(item.templateId);
-                                    toast.success(
-                                      language === 'es' ? 'Template eliminado' : 'Template deleted',
-                                      language === 'es' ? `"${item.nameSnapshot}" se eliminó correctamente` : `"${item.nameSnapshot}" was deleted successfully`
-                                    );
-                                  } catch (error) {
-                                    console.error('Error deleting template:', error);
-                                    toast.error(
-                                      language === 'es' ? 'Error al eliminar' : 'Error deleting',
-                                      error instanceof Error ? error.message : 'Unknown error'
-                                    );
-                                  }
-                                }
-                              }}
-                              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors border-t border-slate-100 dark:border-slate-700"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              {language === 'es' ? 'Eliminar' : 'Delete'}
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-slate-50 dark:border-slate-700">
-                  {item.status === 'pending' && (
-                    <>
-                      <button
-                        onClick={() => expenseActions.skipItem(item.id)}
-                        className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                        {language === 'es' ? 'Omitir' : 'Skip'}
-                      </button>
-
-                      {editingAmountId === item.id ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setEditingAmountId(null)}
-                            className="p-2 text-slate-400 hover:text-slate-600"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handlePay(item.id, item.amount)}
-                            className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm shadow-emerald-200"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            {language === 'es' ? 'Confirmar' : 'Confirm'}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            // If simple click, pay default. If long press or edit mode...
-                            // For now just pay default or toggle edit?
-                            // Let's toggle Edit mode as the "Action" to verify amount
-                            setTempAmount(item.amount.toString());
-                            setEditingAmountId(item.id);
-                          }}
-                          className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-lg shadow-indigo-200 dark:shadow-none transition-transform active:scale-95"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          {language === 'es' ? 'Pagar' : 'Pay'}
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {item.status === 'paid' && (
-                    <button
-                      onClick={() => expenseActions.undoPayItem(item.id)}
-                      className="text-xs text-rose-500 font-medium hover:underline"
-                    >
-                      {language === 'es' ? 'Deshacer pago' : 'Undo payment'}
-                    </button>
-                  )}
-
-                  {item.status === 'skipped' && (
-                    <button
-                      onClick={async () => {
-                        // Reactivate item to pending status
-                        const doc = await import('../services/expenseService').then(m => m.expenseService.getMonthlyExpenses(currentPeriod));
-                        const targetItem = doc.fixedItems.find(i => i.id === item.id);
-                        if (targetItem) {
-                          targetItem.status = 'pending';
-                          await import('../services/expenseService').then(m => m.expenseService.saveMonthlyDoc(doc));
-                          expenseActions.refresh();
-                        }
-                      }}
-                      className="text-xs text-indigo-500 font-medium hover:underline"
-                    >
-                      {language === 'es' ? 'Reactivar' : 'Reactivate'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      {/* 3. RECURRING EXPENSES SECTION - REMOVED (Now shown in "Recurrentes" tab below) */}
 
       {/* 4. RECENT EXPENSES (Últimos Gastos) */}
       <div className="px-4 mt-8">
@@ -478,106 +316,250 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
           )}
         </div>
 
-        {/* Filters & Sorting */}
-        <div className="flex gap-2 mb-3 items-center flex-wrap">
-          {/* Type Filter */}
-          <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1">
-            <button
-              onClick={() => setExpenseTypeFilter('all')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'all'
-                ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-                }`}
-            >
-              {language === 'es' ? 'Todos' : 'All'}
-            </button>
-            <button
-              onClick={() => setExpenseTypeFilter('recurring')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'recurring'
-                ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-                }`}
-            >
-              {language === 'es' ? 'Recurrentes' : 'Recurring'}
-            </button>
-            <button
-              onClick={() => setExpenseTypeFilter('extras')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'extras'
-                ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
-                }`}
-            >
-              {language === 'es' ? 'Extras' : 'Extras'}
-            </button>
-          </div>
-
-          {/* Sort Dropdown */}
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="px-3 py-1.5 text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border-none rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-500"
+        {/* Type Filter Tabs */}
+        <div className="flex gap-1 bg-slate-100 dark:bg-slate-700/50 rounded-lg p-1 mb-3">
+          <button
+            onClick={() => setExpenseTypeFilter('all')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'all'
+              ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+              }`}
           >
-            <option value="date-desc">{language === 'es' ? '📅 Más reciente' : '📅 Most recent'}</option>
-            <option value="date-asc">{language === 'es' ? '📅 Más antiguo' : '📅 Oldest first'}</option>
-            <option value="amount-desc">{language === 'es' ? '💰 Mayor monto' : '💰 Highest amount'}</option>
-            <option value="amount-asc">{language === 'es' ? '💰 Menor monto' : '💰 Lowest amount'}</option>
-          </select>
-
-          {/* Active filters count */}
-          {(expenseTypeFilter !== 'all' || sortBy !== 'date-desc') && (
-            <button
-              onClick={() => {
-                setExpenseTypeFilter('all');
-                setSortBy('date-desc');
-              }}
-              className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-            >
-              {language === 'es' ? 'Limpiar' : 'Clear'}
-            </button>
-          )}
+            {language === 'es' ? 'Todos' : 'All'}
+            <span className="ml-1.5 text-[10px] opacity-60">({transactions.filter(tx => tx.type === 'expense' && tx.date.substring(0, 7) === currentPeriod).length})</span>
+          </button>
+          <button
+            onClick={() => setExpenseTypeFilter('recurring')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'recurring'
+              ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+              }`}
+          >
+            {language === 'es' ? 'Recurrentes' : 'Recurring'}
+            <span className="ml-1.5 text-[10px] opacity-60">({filteredRecurringItems.length})</span>
+          </button>
+          <button
+            onClick={() => setExpenseTypeFilter('extras')}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${expenseTypeFilter === 'extras'
+              ? 'bg-white dark:bg-slate-600 text-slate-800 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
+              }`}
+          >
+            {language === 'es' ? 'Extras' : 'Extras'}
+            <span className="ml-1.5 text-[10px] opacity-60">({transactions.filter(tx => tx.type === 'expense' && tx.date.substring(0, 7) === currentPeriod && !tx.recurringMonthlyItemId).length})</span>
+          </button>
         </div>
+
+        {/* Advanced Filters */}
+        <FilterBar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder={language === 'es' ? 'Buscar gastos...' : 'Search expenses...'}
+          categoryFilter={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          categories={categoryOptions}
+          statusFilter={expenseTypeFilter === 'recurring' ? statusFilter : undefined}
+          onStatusChange={expenseTypeFilter === 'recurring' ? setStatusFilter : undefined}
+          statusOptions={expenseTypeFilter === 'recurring' ? statusOptions : undefined}
+          sortBy={filterSortBy}
+          onSortChange={(value) => setFilterSortBy(value as any)}
+          sortOptions={sortOptions}
+          onClearFilters={clearFilters}
+          activeFiltersCount={activeFiltersCount}
+          resultCount={resultCount}
+          totalCount={recentExpensesBase.length}
+        />
 
         <div className="space-y-2">
           {recentExpenses.length === 0 ? (
-            <div className="text-center py-6 text-slate-400 text-xs italic">
-              {language === 'es' ? 'No hay gastos registrados este mes.' : 'No expenses recorded this month.'}
+            <div className="text-center py-6 text-slate-400 text-xs italic bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+              {expenseTypeFilter === 'recurring'
+                ? (language === 'es' ? 'No hay gastos recurrentes registrados este mes.' : 'No recurring expenses recorded this month.')
+                : expenseTypeFilter === 'extras'
+                  ? (language === 'es' ? 'No hay gastos extras registrados este mes.' : 'No extra expenses recorded this month.')
+                  : (language === 'es' ? 'No hay gastos registrados este mes.' : 'No expenses recorded this month.')
+              }
             </div>
           ) : (
-            recentExpenses.map(tx => (
-              <div key={tx.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow">
-                <div className="flex items-center gap-3 flex-1">
-                  <div className={`p-2 rounded-full ${tx.recurringMonthlyItemId
+            recentExpenses.map(tx => {
+              // Check if this is a monthly item (from monthlyDoc) or a regular transaction
+              const isMonthlyItem = (tx as any)._isMonthlyItem;
+              const monthlyItem = (tx as any)._monthlyItem;
+
+              if (isMonthlyItem && monthlyItem) {
+                // Render as recurring item with UNIFIED design
+                return (
+                  <div key={tx.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow group">
+                    <div className="flex items-center gap-3 flex-1">
+                      {/* Icon with status color */}
+                      <div className={`p-2 rounded-full ${monthlyItem.status === 'paid'
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400'
+                        : monthlyItem.status === 'skipped'
+                          ? 'bg-slate-100 dark:bg-slate-700 text-slate-400'
+                          : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+                        }`}>
+                        {monthlyItem.status === 'paid' ? (
+                          <CheckCircle className="w-4 h-4" />
+                        ) : monthlyItem.status === 'skipped' ? (
+                          <X className="w-4 h-4" />
+                        ) : (
+                          <Clock className="w-4 h-4" />
+                        )}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className={`text-sm font-bold text-slate-800 dark:text-white truncate ${monthlyItem.status === 'skipped' ? 'line-through opacity-60' : ''
+                            }`}>
+                            {monthlyItem.nameSnapshot}
+                          </p>
+                          {/* Status badge */}
+                          <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${monthlyItem.status === 'paid'
+                            ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                            : monthlyItem.status === 'skipped'
+                              ? 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                              : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                            }`}>
+                            {monthlyItem.status === 'paid' ? (language === 'es' ? 'Pagado' : 'Paid') :
+                              monthlyItem.status === 'skipped' ? (language === 'es' ? 'Omitido' : 'Skipped') :
+                                (language === 'es' ? 'Pendiente' : 'Pending')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {getCategoryName(monthlyItem.category)} • {language === 'es' ? 'Recurrente' : 'Recurring'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Amount and Actions */}
+                    <div className="flex items-center gap-3">
+                      <p className={`text-base font-bold ${monthlyItem.status === 'skipped'
+                        ? 'text-slate-400 line-through'
+                        : 'text-rose-600 dark:text-rose-400'
+                        }`}>
+                        {formatCurrency(monthlyItem.amount)}
+                      </p>
+
+                      {/* Action buttons - show on hover or always for pending */}
+                      <div className={`flex items-center gap-1 ${monthlyItem.status === 'pending' ? '' : 'opacity-0 group-hover:opacity-100'
+                        } transition-opacity`}>
+                        {monthlyItem.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => expenseActions.skipItem(monthlyItem.id)}
+                              className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors"
+                              title={language === 'es' ? 'Omitir' : 'Skip'}
+                            >
+                              <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                            </button>
+                            <button
+                              onClick={() => handlePay(monthlyItem.id, monthlyItem.amount)}
+                              className="p-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 rounded-md transition-colors"
+                              title={language === 'es' ? 'Pagar' : 'Pay'}
+                            >
+                              <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            </button>
+                          </>
+                        )}
+
+                        {monthlyItem.status === 'paid' && (
+                          <button
+                            onClick={() => expenseActions.undoPayItem(monthlyItem.id)}
+                            className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/20 rounded-md transition-colors"
+                            title={language === 'es' ? 'Deshacer' : 'Undo'}
+                          >
+                            <RotateCcw className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                          </button>
+                        )}
+
+                        {monthlyItem.status === 'skipped' && (
+                          <button
+                            onClick={async () => {
+                              const doc = await import('../services/expenseService').then(m => m.expenseService.getMonthlyExpenses(currentPeriod));
+                              const targetItem = doc.fixedItems.find(i => i.id === monthlyItem.id);
+                              if (targetItem) {
+                                targetItem.status = 'pending';
+                                await import('../services/expenseService').then(m => m.expenseService.saveMonthlyDoc(doc));
+                                expenseActions.refresh();
+                              }
+                            }}
+                            className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 rounded-md transition-colors"
+                            title={language === 'es' ? 'Reactivar' : 'Reactivate'}
+                          >
+                            <RotateCcw className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Regular transaction rendering
+              return (
+                <div key={tx.id} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow group">
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className={`p-2 rounded-full ${tx.recurringMonthlyItemId
                       ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
                       : 'bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400'
-                    }`}>
-                    <ShoppingBag className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
-                        {tx.description}
+                      }`}>
+                      <ShoppingBag className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-bold text-slate-800 dark:text-white truncate">
+                          {tx.description}
+                        </p>
+                        {tx.recurringMonthlyItemId && (
+                          <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">
+                            {language === 'es' ? 'Recurrente' : 'Recurring'}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {new Date(tx.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                          day: '2-digit',
+                          month: 'short'
+                        })} • {getCategoryName(tx.category)}
                       </p>
-                      {tx.recurringMonthlyItemId && (
-                        <span className="flex-shrink-0 px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">
-                          {language === 'es' ? 'Recurrente' : 'Recurring'}
-                        </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <p className="text-base font-bold text-rose-600 dark:text-rose-400">
+                      {formatCurrency(tx.amount)}
+                    </p>
+                    {/* Action buttons - show on hover */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {onEditTransaction && (
+                        <button
+                          onClick={() => onEditTransaction(tx)}
+                          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md transition-colors"
+                          title={language === 'es' ? 'Editar' : 'Edit'}
+                        >
+                          <Edit3 className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                        </button>
+                      )}
+                      {onDeleteTransaction && (
+                        <button
+                          onClick={async () => {
+                            if (confirm(language === 'es'
+                              ? `¿Eliminar "${tx.description}"?`
+                              : `Delete "${tx.description}"?`)) {
+                              onDeleteTransaction(tx.id);
+                            }
+                          }}
+                          className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                          title={language === 'es' ? 'Eliminar' : 'Delete'}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500 dark:text-red-400" />
+                        </button>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {new Date(tx.date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
-                        day: '2-digit',
-                        month: 'short'
-                      })} • {tx.category}
-                    </p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-base font-bold text-rose-600 dark:text-rose-400">
-                    {formatCurrency(tx.amount)}
-                  </p>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -622,43 +604,45 @@ export const ExpensesScreen: React.FC<ExpensesScreenProps> = ({
       </ModalWrapper>
 
       {/* Edit Recurring Expense Modal */}
-      {editModalOpen && editingItem && (
-        <EditRecurringExpenseModal
-          isOpen={editModalOpen}
-          itemName={editingItem.name}
-          currentAmount={editingItem.amount}
-          onClose={() => {
-            setEditModalOpen(false);
-            setEditingItem(null);
-          }}
-          onSave={async (newAmount) => {
-            if (!editingItem) return;
+      {
+        editModalOpen && editingItem && (
+          <EditRecurringExpenseModal
+            isOpen={editModalOpen}
+            itemName={editingItem.name}
+            currentAmount={editingItem.amount}
+            onClose={() => {
+              setEditModalOpen(false);
+              setEditingItem(null);
+            }}
+            onSave={async (newAmount) => {
+              if (!editingItem) return;
 
-            try {
-              // CRITICAL FIX: Update the template (not just the current month's item)
-              // This ensures future months get the new amount
-              await expenseActions.editTemplate(editingItem.templateId, {
-                defaultAmount: newAmount
-              });
+              try {
+                // CRITICAL FIX: Update the template (not just the current month's item)
+                // This ensures future months get the new amount
+                await expenseActions.editTemplate(editingItem.templateId, {
+                  defaultAmount: newAmount
+                });
 
-              toast.success(
-                language === 'es' ? 'Monto actualizado' : 'Amount updated',
-                language === 'es' ? 'Se aplicará a los meses pendientes' : 'Will apply to pending months'
-              );
-            } catch (error) {
-              console.error('Error updating template:', error);
-              toast.error(
-                language === 'es' ? 'Error al actualizar' : 'Error updating',
-                error instanceof Error ? error.message : 'Unknown error'
-              );
-            }
+                toast.success(
+                  language === 'es' ? 'Monto actualizado' : 'Amount updated',
+                  language === 'es' ? 'Se aplicará a los meses pendientes' : 'Will apply to pending months'
+                );
+              } catch (error) {
+                console.error('Error updating template:', error);
+                toast.error(
+                  language === 'es' ? 'Error al actualizar' : 'Error updating',
+                  error instanceof Error ? error.message : 'Unknown error'
+                );
+              }
 
-            setEditModalOpen(false);
-            setEditingItem(null);
-          }}
-        />
-      )}
+              setEditModalOpen(false);
+              setEditingItem(null);
+            }}
+          />
+        )
+      }
 
-    </div>
+    </div >
   );
 };

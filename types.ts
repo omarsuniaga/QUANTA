@@ -315,6 +315,29 @@ export interface AIRecommendation {
   category?: string;
 }
 
+// --- SMART GOALS ---
+
+export interface SpendingPattern {
+  category: string;
+  averageMonthly: number;
+  trend: 'increasing' | 'stable' | 'decreasing';
+  percentageOfIncome: number;
+}
+
+export interface SmartGoalSuggestion {
+  id: string;
+  type: 'reduce_spending' | 'increase_savings' | 'pay_debt';
+  category?: string;
+  currentAmount: number;
+  targetAmount: number;
+  timeframe: 'weekly' | 'monthly' | 'yearly';
+  potentialSavings: number;
+  confidence: number; // 0-100
+  reasoning: string;
+  priority: 'high' | 'medium' | 'low';
+  createdAt: number;
+}
+
 // --- AI CACHE ISOLATION & SECURITY ---
 
 /**

@@ -13,7 +13,10 @@
       "Bash(timeout /t 5)",
       "Bash(ping:*)",
       "Bash(git push:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run dev)"
     ]
   }
 }

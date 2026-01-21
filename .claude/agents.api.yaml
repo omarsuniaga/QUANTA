@@ -1,0 +1,362 @@
+openapi: 3.0.3
+info:
+  title: QUANTA Multi-AI Agent Protocol
+  description: |
+    Standard protocol for AI assistants (Claude, Gemini, ChatGPT, etc.) to communicate with QUANTA's agent system.
+    
+    ## Purpose
+    This API defines a universal interface for any AI assistant to:
+    - Discover available agents
+    - Query agent capabilities
+    - Execute agent workflows
+    - Follow established patterns
+    
+    ## Compatibility
+    - ✅ Claude (Anthropic)
+    - ✅ Gemini (Google)
+    - ✅ ChatGPT (OpenAI)
+    - ✅ GitHub Copilot
+    - ✅ Any AI assistant that can read YAML/JSON
+    
+  version: 1.0.0
+  contact:
+    name: QUANTA Development Team
+  license:
+    name: MIT
+
+servers:
+  - url: file://.claude
+    description: Local agent system
+
+tags:
+  - name: Discovery
+    description: Discover available agents
+  - name: Consultation
+    description: Consult agents for guidance
+  - name: Execution
+    description: Execute agent workflows
+
+paths:
+  /agents:
+    get:
+      summary: List all available agents
+      description: Returns a list of all agents with their capabilities and triggers
+      tags:
+        - Discovery
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+              example:
+                - id: orchestrator
+                  name: Agent Orchestrator
+                  role: coordinator
+                  priority: 1
+                  capabilities:
+                    - task_routing
+                    - agent_coordination
+                  triggers:
+                    - "@orchestrator"
+                    - "coordinate"
+
+  /agents/{agentId}:
+    get:
+      summary: Get agent details
+      description: Returns detailed information about a specific agent
+      tags:
+        - Discovery
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+          example: orchestrator
+      responses:
+        '200':
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDetail'
+        '404':
+          description: Agent not found
+
+  /agents/{agentId}/consult:
+    post:
+      summary: Consult an agent
+      description: Request guidance from a specific agent
+      tags:
+        - Consultation
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - task
+              properties:
+                task:
+                  type: string
+                  description: The task or question for the agent
+                context:
+                  type: object
+                  description: Additional context
+      responses:
+        '200':
+          description: Agent guidance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentGuidance'
+
+  /workflows/{workflowType}:
+    get:
+      summary: Get workflow for task type
+      description: Returns the recommended workflow for a specific task type
+      tags:
+        - Execution
+      parameters:
+        - name: workflowType
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - new_feature
+              - bug_fix
+              - refactoring
+              - ui_change
+              - testing
+              - deployment
+              - documentation
+      responses:
+        '200':
+          description: Workflow steps
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+
+  /rules:
+    get:
+      summary: Get global rules
+      description: Returns the global rules that all AI assistants must follow
+      tags:
+        - Discovery
+      responses:
+        '200':
+          description: Global rules
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlobalRules'
+
+components:
+  schemas:
+    Agent:
+      type: object
+      required:
+        - id
+        - name
+        - role
+        - priority
+        - capabilities
+        - triggers
+      properties:
+        id:
+          type: string
+          description: Unique agent identifier
+          example: orchestrator
+        name:
+          type: string
+          description: Human-readable name
+          example: Agent Orchestrator
+        file:
+          type: string
+          description: Path to agent documentation
+          example: agents/orchestrator.md
+        role:
+          type: string
+          enum:
+            - coordinator
+            - developer
+            - designer
+            - analyst
+            - devops
+            - reviewer
+            - documenter
+            - tester
+            - architect
+        priority:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: Priority level (1=highest)
+        capabilities:
+          type: array
+          items:
+            type: string
+          example:
+            - task_routing
+            - agent_coordination
+        triggers:
+          type: array
+          items:
+            type: string
+          example:
+            - "@orchestrator"
+            - "coordinate"
+        dependencies:
+          type: array
+          items:
+            type: string
+          description: Agent IDs this agent depends on
+        context_files:
+          type: array
+          items:
+            type: string
+          description: Context files needed by this agent
+
+    AgentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Agent'
+        - type: object
+          properties:
+            documentation:
+              type: string
+              description: Full documentation content
+            examples:
+              type: array
+              items:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  code:
+                    type: string
+
+    AgentGuidance:
+      type: object
+      required:
+        - agent_id
+        - guidance
+      properties:
+        agent_id:
+          type: string
+        guidance:
+          type: object
+          properties:
+            checklist:
+              type: array
+              items:
+                type: string
+            patterns:
+              type: array
+              items:
+                type: string
+            examples:
+              type: array
+              items:
+                type: object
+            warnings:
+              type: array
+              items:
+                type: string
+
+    Workflow:
+      type: object
+      required:
+        - type
+        - steps
+      properties:
+        type:
+          type: string
+        description:
+          type: string
+        steps:
+          type: array
+          items:
+            type: object
+            required:
+              - order
+              - agent_id
+              - action
+            properties:
+              order:
+                type: integer
+              agent_id:
+                type: string
+              action:
+                type: string
+              required:
+                type: boolean
+
+    GlobalRules:
+      type: object
+      properties:
+        always_check_agents:
+          type: boolean
+          description: Must always consult agents before responding
+        agent_first_approach:
+          type: string
+          description: Description of agent-first methodology
+        mandatory_agent_review:
+          type: array
+          items:
+            type: string
+          description: Mandatory reviews by task type
+        consultation_priority:
+          type: array
+          items:
+            type: string
+          description: Priority order for consulting agents
+
+  examples:
+    NewFeatureWorkflow:
+      value:
+        type: new_feature
+        description: Workflow for implementing a new feature
+        steps:
+          - order: 1
+            agent_id: orchestrator
+            action: Plan and coordinate
+            required: true
+          - order: 2
+            agent_id: architect
+            action: Design architecture
+            required: true
+          - order: 3
+            agent_id: skills-developer
+            action: Implement feature
+            required: true
+          - order: 4
+            agent_id: ui-ux-designer
+            action: Design UI (if applicable)
+            required: false
+          - order: 5
+            agent_id: tester
+            action: Create tests
+            required: true
+          - order: 6
+            agent_id: code-reviewer
+            action: Review code
+            required: true
+          - order: 7
+            agent_id: documenter
+            action: Document feature
+            required: true

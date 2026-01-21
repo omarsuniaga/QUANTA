@@ -198,6 +198,20 @@ function calculateMonthStats(transactions: Transaction[]): MonthlyStats {
   return { income, expense, balance, topCategories };
 }
 
+// Helper: Map category ID to name
+function getCategoryDisplayName(categoryId: string, customCategories?: any[]): string {
+  // Check custom categories first
+  if (customCategories) {
+    const customCat = customCategories.find(c => c.id === categoryId || c.key === categoryId);
+    if (customCat) {
+      return customCat.name?.es || customCat.name?.en || customCat.key || categoryId;
+    }
+  }
+  
+  // Fallback to ID if not found
+  return categoryId;
+}
+
 // Helper: Get month name in Spanish
 function getMonthName(monthIndex: number): string {
   const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -265,7 +279,8 @@ export const aiCoachService = {
     stats: DashboardStats,
     goals: Goal[],
     selectedPlanId?: string,
-    forceRefresh: boolean = false
+    forceRefresh: boolean = false,
+    customCategories?: any[]
   ): Promise<FinancialAnalysis | null> {
     // CRITICAL: Get userId for isolation
     const userId = getUserId();
@@ -448,7 +463,8 @@ export const aiCoachService = {
           categoryChangesText = '\n🔍 CAMBIOS SIGNIFICATIVOS POR CATEGORÍA (>10%):\n';
           categoryChanges.slice(0, 3).forEach(cc => {
             const changeSign = cc.change >= 0 ? '+' : '';
-            categoryChangesText += `- ${cc.category}: ${changeSign}${cc.change.toFixed(1)}% (RD$ ${cc.previousAmount.toLocaleString('es-DO')} → RD$ ${cc.currentAmount.toLocaleString('es-DO')})\n`;
+            const categoryName = getCategoryDisplayName(cc.category, customCategories);
+            categoryChangesText += `- ${categoryName}: ${changeSign}${cc.change.toFixed(1)}% (RD$ ${cc.previousAmount.toLocaleString('es-DO')} → RD$ ${cc.currentAmount.toLocaleString('es-DO')})\n`;
           });
         }
         
@@ -463,13 +479,13 @@ Mes Actual (${currentMonthName}):
 - Ingresos: RD$ ${currentStats.income.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Egresos: RD$ ${currentStats.expense.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Balance: RD$ ${currentStats.balance.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-- Top 3 Categorías de Gasto: ${currentStats.topCategories.slice(0, 3).map(c => `${c.category} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
+- Top 3 Categorías de Gasto: ${currentStats.topCategories.slice(0, 3).map(c => `${getCategoryDisplayName(c.category, customCategories)} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
 
 Mes Anterior (${previousMonthName}):
 - Ingresos: RD$ ${previousStats.income.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Egresos: RD$ ${previousStats.expense.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
 - Balance: RD$ ${previousStats.balance.toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-- Top 3 Categorías de Gasto: ${previousStats.topCategories.slice(0, 3).map(c => `${c.category} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
+- Top 3 Categorías de Gasto: ${previousStats.topCategories.slice(0, 3).map(c => `${getCategoryDisplayName(c.category, customCategories)} (RD$ ${c.amount.toLocaleString('es-DO')})`).join(', ')}
 
 📈 VARIACIONES:
 - Ingresos: ${incomeChange >= 0 ? '+' : ''}${incomeChange.toFixed(1)}%

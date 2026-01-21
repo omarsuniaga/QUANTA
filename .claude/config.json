@@ -1,0 +1,217 @@
+{
+  "version": "1.0.0",
+  "project": "QUANTA Financial Management App",
+  "description": "Multi-agent system for AI-assisted development",
+  "agents": [
+    {
+      "id": "orchestrator",
+      "name": "Agent Orchestrator",
+      "file": "agents/orchestrator.md",
+      "role": "coordinator",
+      "priority": 1,
+      "capabilities": [
+        "task_routing",
+        "agent_coordination",
+        "conflict_resolution"
+      ],
+      "triggers": [
+        "@orchestrator",
+        "coordinate",
+        "which agent"
+      ]
+    },
+    {
+      "id": "skills-developer",
+      "name": "Skills Developer Agent",
+      "file": "agents/skills-developer.md",
+      "role": "developer",
+      "priority": 2,
+      "capabilities": [
+        "feature_development",
+        "hooks",
+        "services",
+        "components"
+      ],
+      "triggers": [
+        "@skills",
+        "new feature",
+        "implement",
+        "create hook",
+        "create service"
+      ]
+    },
+    {
+      "id": "ui-ux-designer",
+      "name": "UI/UX Designer Agent",
+      "file": "agents/ui-ux-designer.md",
+      "role": "designer",
+      "priority": 2,
+      "capabilities": [
+        "ui_components",
+        "styling",
+        "responsive_design",
+        "accessibility"
+      ],
+      "triggers": [
+        "@ui",
+        "@ux",
+        "design",
+        "component",
+        "layout",
+        "style"
+      ]
+    },
+    {
+      "id": "data-analyst",
+      "name": "Data Analytics Agent",
+      "file": "agents/data-analyst.md",
+      "role": "analyst",
+      "priority": 2,
+      "capabilities": [
+        "data_analysis",
+        "financial_insights",
+        "predictions",
+        "ai_integration"
+      ],
+      "triggers": [
+        "@analytics",
+        "analyze",
+        "insight",
+        "predict",
+        "financial analysis"
+      ]
+    },
+    {
+      "id": "devops-engineer",
+      "name": "DevOps Engineer Agent",
+      "file": "agents/devops-engineer.md",
+      "role": "devops",
+      "priority": 3,
+      "capabilities": [
+        "deployment",
+        "ci_cd",
+        "monitoring",
+        "performance",
+        "pwa"
+      ],
+      "triggers": [
+        "@devops",
+        "deploy",
+        "build",
+        "ci/cd",
+        "performance"
+      ]
+    },
+    {
+      "id": "code-reviewer",
+      "name": "Code Reviewer Agent",
+      "file": "agents/code-reviewer.md",
+      "role": "reviewer",
+      "priority": 2,
+      "capabilities": [
+        "code_review",
+        "security",
+        "best_practices",
+        "patterns"
+      ],
+      "triggers": [
+        "@review",
+        "review",
+        "check code",
+        "security",
+        "best practices"
+      ]
+    },
+    {
+      "id": "documenter",
+      "name": "Documentation Agent",
+      "file": "agents/documenter.md",
+      "role": "documenter",
+      "priority": 3,
+      "capabilities": [
+        "documentation",
+        "jsdoc",
+        "readme",
+        "architecture_docs"
+      ],
+      "triggers": [
+        "@docs",
+        "document",
+        "readme",
+        "explain",
+        "jsdoc"
+      ]
+    },
+    {
+      "id": "tester",
+      "name": "Testing Agent",
+      "file": "agents/tester.md",
+      "role": "tester",
+      "priority": 2,
+      "capabilities": [
+        "unit_tests",
+        "integration_tests",
+        "test_coverage",
+        "vitest"
+      ],
+      "triggers": [
+        "@test",
+        "test",
+        "coverage",
+        "vitest",
+        "testing"
+      ]
+    },
+    {
+      "id": "architect",
+      "name": "Software Architect Agent",
+      "file": "agents/architect.md",
+      "role": "architect",
+      "priority": 1,
+      "capabilities": [
+        "architecture",
+        "design_patterns",
+        "refactoring",
+        "scalability"
+      ],
+      "triggers": [
+        "@architect",
+        "architecture",
+        "refactor",
+        "design pattern",
+        "scalability"
+      ]
+    }
+  ],
+  "context_files": [
+    "project-context.md",
+    "context/architecture.md",
+    "context/design-system.md",
+    "context/coding-standards.md",
+    "context/tech-stack.md"
+  ],
+  "workflow": {
+    "default_agent": "orchestrator",
+    "collaboration_mode": "sequential",
+    "review_required": true,
+    "auto_agent_consultation": true,
+    "consultation_priority": [
+      "orchestrator",
+      "architect",
+      "code-reviewer"
+    ]
+  },
+  "global_rules": {
+    "always_check_agents": true,
+    "agent_first_approach": "Before responding to any user request, always review relevant agent documentation in .claude/agents/ to determine the best approach and ensure consistency with established patterns.",
+    "mandatory_agent_review": [
+      "For code changes: Check code-reviewer.md, architect.md, skills-developer.md",
+      "For new features: Check orchestrator.md, architect.md, skills-developer.md",
+      "For UI changes: Check ui-ux-designer.md, code-reviewer.md",
+      "For testing: Check tester.md",
+      "For deployment: Check devops-engineer.md",
+      "For documentation: Check documenter.md",
+      "For data analysis: Check data-analyst.md"
+    ]
+  }
+}

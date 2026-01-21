@@ -120,34 +120,21 @@ export function useTransactionHandlers({
           const txDate = data.date ? new Date(data.date) : new Date();
           const period = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
           
-          // CRITICAL FIX: Read templates DIRECTLY from localStorage
+          // CRITICAL FIX: Clear monthly doc cache to force regeneration
           const LS_PREFIX = 'quanta_';
-          const templatesKey = `${LS_PREFIX}expense_templates`;
-          const templatesRaw = localStorage.getItem(templatesKey);
-          const allTemplates = templatesRaw ? JSON.parse(templatesRaw) : [];
-          
-          console.log('[DEBUG] Templates from localStorage:', {
-            count: allTemplates.length,
-            templateIds: allTemplates.map((t: any) => t.id),
-            ourTemplateExists: allTemplates.some((t: any) => t.id === templateId)
-          });
-          
-          // Verify our template exists
-          if (!allTemplates.some((t: any) => t.id === templateId)) {
-            throw new Error('Template not found in localStorage - saveFixedTemplate failed');
-          }
-          
-          // Clear monthly doc cache
           localStorage.removeItem(`${LS_PREFIX}expense_monthly_${period}`);
           
-          // PASS templates directly to avoid Firestore latency
-          const monthlyDoc = await expenseService.initializeMonth(period, allTemplates);
+          console.log('[DEBUG] Monthly doc cache cleared for period:', period);
           
-          console.log('[DEBUG] Monthly doc created:', {
+          // CRITICAL FIX: Pass forceRegenerate=true to skip Firestore cache
+          // Let initializeMonth read fresh templates from localStorage
+          const monthlyDoc = await expenseService.initializeMonth(period, undefined, true);
+          
+          console.log('[DEBUG] Monthly doc regenerated:', {
             period,
             itemCount: monthlyDoc.fixedItems.length,
             itemTemplateIds: monthlyDoc.fixedItems.map(i => i.templateId),
-            ourItemExists: monthlyDoc.fixedItems.some(i => i.templateId === templateId)
+            ourTemplateExists: monthlyDoc.fixedItems.some(i => i.templateId === templateId)
           });
 
           // AUTO-PAY LOGIC
@@ -206,8 +193,109 @@ export function useTransactionHandlers({
       } else {
         // Manejar transacción normal (income/expense)
         if (transactionToEdit) {
-          // Editar transacción existente
-          await updateTransaction(transactionToEdit.id, data as TransactionUpdate);
+          // === EDITING EXISTING TRANSACTION ===
+          
+          // CRITICAL FIX: If user is marking an existing expense as recurring, create template
+          if (modalMode === 'expense' && data.isRecurring && !transactionToEdit.isRecurring) {
+            console.log('[CONVERT TO RECURRING] Starting conversion...', {
+              transactionId: transactionToEdit.id,
+              description: data.description || transactionToEdit.description
+            });
+            
+            try {
+              const { expenseService } = await import('../services/expenseService');
+              
+              // Generate ID for new template
+              const templateId = typeof crypto !== 'undefined' && crypto.randomUUID 
+                ? crypto.randomUUID() 
+                : `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              
+              console.log('[CONVERT TO RECURRING] Generated template ID:', templateId);
+              
+              const newTemplate: any = {
+                id: templateId,
+                name: data.description || transactionToEdit.description || 'Gasto Recurrente',
+                defaultAmount: data.amount || transactionToEdit.amount || 0,
+                category: data.category || transactionToEdit.category || 'Other',
+                active: true,
+                frequency: data.frequency || 'monthly',
+                dayOfMonth: data.date ? new Date(data.date).getDate() : new Date(transactionToEdit.date).getDate(),
+                createdAt: Date.now(),
+                updatedAt: Date.now()
+              };
+
+              console.log('[CONVERT TO RECURRING] Template to save:', newTemplate);
+
+              // Save template
+              await expenseService.saveFixedTemplate(newTemplate);
+              
+              console.log('[CONVERT TO RECURRING] Template saved successfully');
+              
+              // Determine period
+              const txDate = data.date ? new Date(data.date) : new Date(transactionToEdit.date);
+              const period = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+              
+              console.log('[CONVERT TO RECURRING] Period:', period);
+              
+              // Clear cache and reinitialize month
+              const LS_PREFIX = 'quanta_';
+              localStorage.removeItem(`${LS_PREFIX}expense_monthly_${period}`);
+              
+              console.log('[CONVERT TO RECURRING] Cache cleared, initializing month...');
+              
+              // CRITICAL FIX: Pass forceRegenerate=true to skip Firestore cache
+              const monthlyDoc = await expenseService.initializeMonth(period, undefined, true);
+              
+              console.log('[CONVERT TO RECURRING] Monthly doc initialized:', {
+                itemCount: monthlyDoc.fixedItems.length,
+                templateIds: monthlyDoc.fixedItems.map(i => i.templateId),
+                ourTemplateExists: monthlyDoc.fixedItems.some(i => i.templateId === templateId)
+              });
+              
+              // Find the item for this template
+              const item = monthlyDoc.fixedItems.find(i => i.templateId === templateId);
+              
+              if (item) {
+                console.log('[CONVERT TO RECURRING] Item found:', item.id);
+                
+                // Pay the item (since the transaction already exists)
+                await expenseService.payFixedItem(period, item.id, data.amount || transactionToEdit.amount);
+                
+                console.log('[CONVERT TO RECURRING] Item paid successfully');
+                
+                // Update the original transaction to link it to the recurring system
+                await updateTransaction(transactionToEdit.id, {
+                  ...data,
+                  recurringTemplateId: templateId,
+                  recurringMonthlyItemId: item.id,
+                  source: 'recurring'
+                } as TransactionUpdate);
+                
+                console.log('[CONVERT TO RECURRING] Transaction updated with recurring links');
+                
+                // Dispatch event to refresh
+                window.dispatchEvent(new CustomEvent('expenseRecurringCreated', { detail: { period } }));
+                
+                console.log('[CONVERT TO RECURRING] Event dispatched, conversion complete! ✅');
+                
+                toast.success('¡Convertido a recurrente!', `${data.description} ahora es un gasto recurrente`);
+              } else {
+                console.error('[CONVERT TO RECURRING] ❌ Item NOT found after template creation!', {
+                  searchedTemplateId: templateId,
+                  availableTemplateIds: monthlyDoc.fixedItems.map(i => i.templateId),
+                  fullMonthlyDoc: monthlyDoc
+                });
+                toast.error('Error al convertir a recurrente', 'El template se creó pero el item no se encontró');
+              }
+              
+            } catch (e: any) {
+              console.error('[CONVERT TO RECURRING] ❌ Error:', e);
+              toast.error('Error al convertir a recurrente', e.message || 'Revisa la consola');
+            }
+          } else {
+            // Normal edit (not converting to recurring)
+            await updateTransaction(transactionToEdit.id, data as TransactionUpdate);
+          }
         } else {
           // Crear nueva transacción
           await addTransaction(data as TransactionInput);

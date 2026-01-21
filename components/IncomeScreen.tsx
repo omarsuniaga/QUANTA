@@ -14,6 +14,8 @@ import { getPeriodLabel } from '../hooks/useBudgetPeriod';
 import { ModalWrapper } from './ModalWrapper';
 import { ActionModal } from './ActionModal';
 import { parseLocalDate } from '../utils/dateHelpers';
+import { useTransactionFilters } from '../hooks/useTransactionFilters';
+import { FilterBar, CategoryOption, SortOption } from './FilterBar';
 
 interface IncomeScreenProps {
   transactions: Transaction[];
@@ -86,6 +88,43 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
     if (filter === 'all') return hookMonthData.fixedItems;
     return hookMonthData.fixedItems.filter(i => i.status !== 'received');
   }, [hookMonthData, filter]);
+
+  // Convert extras to filterable format and apply filters
+  const extrasAsFilterable = useMemo(() => {
+    if (!hookMonthData?.extras) return [];
+    return hookMonthData.extras.map(item => ({
+      id: item.id,
+      description: item.description,
+      amount: item.amount,
+      category: 'extra',
+      date: new Date(item.date).toISOString().split('T')[0], // Convert to YYYY-MM-DD
+      status: 'received'
+    }));
+  }, [hookMonthData?.extras]);
+
+  // Apply filters to extras
+  const {
+    filteredItems: filteredExtras,
+    searchQuery: extrasSearchQuery,
+    setSearchQuery: setExtrasSearchQuery,
+    sortBy: extrasSortBy,
+    setSortBy: setExtrasSortBy,
+    clearFilters: clearExtrasFilters,
+    activeFiltersCount: extrasActiveFiltersCount,
+    resultCount: extrasResultCount
+  } = useTransactionFilters(extrasAsFilterable, {
+    defaultSort: 'date-desc'
+  });
+
+  // Sort options for extras
+  const extrasSortOptions: SortOption[] = useMemo(() => [
+    { value: 'date-desc', label: '📅 Más reciente' },
+    { value: 'date-asc', label: '📅 Más antiguo' },
+    { value: 'amount-desc', label: '💰 Mayor monto' },
+    { value: 'amount-asc', label: '💰 Menor monto' },
+    { value: 'name-asc', label: '🔤 A-Z' },
+    { value: 'name-desc', label: '🔤 Z-A' },
+  ], []);
 
   // === HANDLERS ===
   const handlePrevMonth = () => hookActions.changePeriod(-1);
@@ -382,31 +421,61 @@ export const IncomeScreen: React.FC<IncomeScreenProps> = ({
             </button>
           </div>
 
-          <div className="grid gap-3">
-            {hookMonthData?.extras.map(item => (
-              <div key={item.id} className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 flex justify-between items-center group">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-500 flex items-center justify-center">
-                    <DollarSign className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-slate-800 dark:text-white">{item.description}</h4>
-                    <span className="text-xs text-slate-400">{new Date(item.date).toLocaleDateString()}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(item.amount, currencyCode)}</span>
-                  <button
-                    onClick={() => hookActions.deleteExtra(item.id)}
-                    className="p-2 bg-slate-50 dark:bg-slate-700 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors opacity-0 group-hover:opacity-100"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+          {/* Filters for extras */}
+          {extrasAsFilterable.length > 0 && (
+            <FilterBar
+              searchQuery={extrasSearchQuery}
+              onSearchChange={setExtrasSearchQuery}
+              searchPlaceholder="Buscar ingresos extras..."
+              categoryFilter="all"
+              onCategoryChange={() => { }}
+              categories={[]}
+              sortBy={extrasSortBy}
+              onSortChange={(value) => setExtrasSortBy(value as any)}
+              sortOptions={extrasSortOptions}
+              onClearFilters={clearExtrasFilters}
+              activeFiltersCount={extrasActiveFiltersCount}
+              resultCount={extrasResultCount}
+              totalCount={extrasAsFilterable.length}
+            />
+          )}
 
-            {(!hookMonthData?.extras || hookMonthData.extras.length === 0) && (
+          <div className="grid gap-3">
+            {filteredExtras.map(item => {
+              const originalItem = hookMonthData?.extras.find(e => e.id === item.id);
+              if (!originalItem) return null;
+
+              return (
+                <div key={item.id} className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 flex justify-between items-center group">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-500 flex items-center justify-center">
+                      <DollarSign className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-800 dark:text-white">{originalItem.description}</h4>
+                      <span className="text-xs text-slate-400">{new Date(originalItem.date).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(originalItem.amount, currencyCode)}</span>
+                    <button
+                      onClick={() => hookActions.deleteExtra(originalItem.id)}
+                      className="p-2 bg-slate-50 dark:bg-slate-700 rounded-full text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {filteredExtras.length === 0 && extrasAsFilterable.length > 0 && (
+              <div className="text-center p-8 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
+                <p className="text-slate-400 text-sm">No se encontraron resultados.</p>
+              </div>
+            )}
+
+            {extrasAsFilterable.length === 0 && (
               <div className="text-center p-8 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700">
                 <p className="text-slate-400 text-sm">No hay ingresos extras este mes.</p>
               </div>
